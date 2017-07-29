@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<!--
+ *  Copyright 2017 Unify Software and Solutions GmbH & Co.KG.
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ -->
+<html lang="en">
+  <head>
+    <title>Circuit JS-SDK</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        font-size: 14px;
+      }
+      section { padding-top: 20px; }
+      input { margin-right: 10px; }
+      button {
+        margin-right: 10px;
+      }
+      pre {padding: 5px; margin: 5px; }
+      .string { color: green; }
+      .number { color: darkorange; }
+      .boolean { color: blue; }
+      .null { color: magenta; }
+      .key { color: red; }
+      .error { color: red; }
+      #output span { color: blue; }
+      #errorMessage {
+        margin-top: 10px;
+        color: red;
+      }
+      .hide { display: none;}
+    </style>
+  </head>
+
+  <body>
+    <h3>Group Call with video and screenshare</h3>
+    <div>
+      This example shows how to:
+      <ul>
+        <li>fetch conversations and list their title</li>
+        <li>add injector to create conversation title</li>
+        <li>start, join and leave a conference call</li>
+        <li>toggle video</li>
+        <li>pulling a call on a different device</li>
+        <li>record session and download recording (recording is also posted to conversation)</li>
+        <li>toggle screenshare (requires <a href="https://github.com/circuit/screenshare-chrome-extension" target="_blank">Circuit SDK Chrome Extension</a>)</li>
+        <li>listen to various events such as callStatus and callEnded</li>
+        <li>display call state, media state, conv and call ID</li>
+      </ul>
+    </div>
+    <div id="mainWrapper" style="display: none">
+      <section id="connectSection">
+        <button id="logon" onclick="logon()" style="">Logon</button>
+        <button id="logout" onclick="logout()" style="display: none">Logout</button>
+        <span>(<span id="logonState">Disconnected</span>)</span>
+      </section>
+      <section>
+        <select id="convList" onchange="onConversationSelected()"></select>
+      </section>
+      <section>
+        <button onclick="start()" id="startButton" class="hide">Start Conference</button>
+        <button onclick="join()" id="joinButton" class="hide">Join Conference</button>
+        <button onclick="leave()" id="leaveButton" class="hide">Leave Conference</button>
+        <button onclick="pull()" id="pullButton" class="hide">Pull Call</button>
+      </section>
+      <section>
+      <hr>
+        <input id="enableVideo" type="checkbox" onclick="onVideoChange(this)"/>Enable Video, or
+        <input id="enableScreenShare" type="checkbox" onclick="onScreenShareChange(this)"/>Enable ScreenShare
+        <div><input id="enableRecording" type="checkbox" onclick="onRecordingChange(this)"/>Record Session</div>
+      </section>
+      <section>
+        <a id="download" download href="">Download recording</a>
+      </section>
+      <section id="output">
+        <div>Call state: <span id="callState"></span></div>
+        <div>Media: <span id="media"></span></div>
+        <div>Conversation ID: <span id="convId"></span></div>
+        <div>Call ID: <span id="callId"></span></div>
+        <div>
+          <video id="localVideo" width="200px" autoplay="true"></video>
+          <video id="remoteVideo1" width="200px" autoplay="true"></video>
+          <video id="remoteVideo2" width="200px" autoplay="true"></video>
+        </div>
+      </section>
+    </div>
+    <span id="errorMessage" style="display: none"></span>
+    <audio id="remoteAudio" autoplay="autoplay"></audio>
+
+    <script src="https://circuitsandbox.net/circuit.js"></script>
+
+    <script>
+      var _client;
+      var _localUser;
+      var _conversations = {};  // Hashtable of converastions with convId as key
+      var _calls = {};          // Hashtable of calls with convId as key
+
+      var $logonButton = document.getElementById('logon');
+      var $logoutButton = document.getElementById('logout');
+      var $logonState = document.getElementById('logonState');
+      var $mediaType = document.getElementById('mediaType');
+      var $localVideo = document.getElementById('localVideo');
+      var $remoteVideo1 = document.getElementById('remoteVideo1');
+      var $remoteVideo2 = document.getElementById('remoteVideo2');
+      var $remoteAudio = document.getElementById('remoteAudio');
+      var $enableVideo = document.getElementById('enableVideo');
+      var $enableScreenShare = document.getElementById('enableScreenShare');
+      var $enableRecording = document.getElementById('enableRecording');
+      var $startButton = document.getElementById('startButton');
+      var $joinButton = document.getElementById('joinButton');
+      var $leaveButton = document.getElementById('leaveButton');
+      var $pullButton = document.getElementById('pullButton');
+      var $convList = document.getElementById('convList');
+      var $callState = document.getElementById('callState');
+      var $media = document.getElementById('media');
+      var $convId = document.getElementById('convId');
+      var $callId = document.getElementById('callId');
+      var $errorMessage = document.getElementById('errorMessage');
+      var $download = document.getElementById('download');
+
+      if (typeof Circuit === 'undefined') {
+        $errorMessage.textContent = "Could not load SDK (circuit.js).";
+        $errorMessage.style.display = 'block';
+      } else if (!Circuit.isCompatible()) {
+        $errorMessage.textContent = "Sorry, your browser is not supported. Chrome works :)";
+        $errorMessage.style.display = 'block';
+      } else {
+        document.getElementById('mainWrapper').style.display = 'block';
+      }
+
+      // Displays SDK internal logs in console
+      // Circuit.logger.setLevel(Circuit.Enums.LogLevel.Debug);
+
+      // Helper function to get the list element
+      function getListOption(convId) {
+        for (var i = 0; i < $convList.options.length; i++) {
+          if ($convList.options[i].value === convId) {
+            return $convList.options[i];
+          }
+        }
+      }
+
+      // Reset the UI for the call section
+      function resetCallUI() {
+        updateButtons();
+        $callState.textContent = '';
+        $media.textContent = '';
+        $callId.textContent = '';
+        $convId.textContent = '';
+        $localVideo.src = '';
+        $remoteVideo1.src = '';
+        $remoteVideo2.src = '';
+        $remoteAudio.src = '';
+        $enableVideo.checked = false;
+        $enableVideo.disabled = true;
+        $enableScreenShare.checked = false;
+        $enableScreenShare.disabled = true;
+        $enableRecording.checked = false;
+        $enableRecording.disabled = true;
+        $download.style.display = 'none';
+      }
+
+      // Update the UI call section for the selected call
+      function setCallUI() {
+        updateButtons();
+        var convId = document.getElementById('convList').value;
+        if (!_conversations[convId]) {
+          return;
+        }
+        var call = _calls[convId];
+        $convId.textContent = call.convId;
+        $callState.textContent = call.state;
+        $callId.textContent = call.callId;
+        call.activeMediaType && ($media.textContent = (call.activeMediaType.audio ? 'audio' : '') + (call.activeMediaType.video ? '+video' : ''));
+        $callId.textContent = call.callId;
+        $convList.disabled = !call.isRemote && call.isEstablished;
+        $enableVideo.disabled = !(!call.isRemote && call.isEstablished);
+        $enableScreenShare.disabled = !(!call.isRemote && call.isEstablished);
+        $enableRecording.disabled = !(!call.isRemote && call.isEstablished);
+
+        // Set local video stream
+        $localVideo.src = call.localVideoUrl || '';
+
+        // Enable video checkbox
+        if (call.isEstablished) {
+          $remoteAudio.src = call.remoteAudioUrl;
+          // Set remote video streams (up to two in this example)
+          if (call.participants && call.participants.length > 0) {
+            $remoteVideo1.src = call.participants[0].videoUrl;
+          }
+          if (call.participants && call.participants.length > 1) {
+            $remoteVideo2.src = call.participants[1].videoUrl;
+          }
+        } else {
+          $remoteAudio.src = '';
+          $remoteVideo1.src = '';
+          $remoteVideo2.src = '';
+        }
+      }
+
+      // Show correct button based on selected conversation's call state
+      function updateButtons() {
+        $startButton.classList.add('hide');
+        $joinButton.classList.add('hide');
+        $leaveButton.classList.add('hide');
+        $pullButton.classList.add('hide');
+
+        var convId = document.getElementById('convList').value;
+        if (!_conversations[convId]) {
+          return;
+        }
+        var call = _calls[convId];
+
+        if (!call) {
+          $startButton.classList.remove('hide');
+        } else if (call.state === Circuit.Enums.CallStateName.Started) {
+          $joinButton.classList.remove('hide');
+        } else if (call.state === Circuit.Enums.CallStateName.ActiveRemote) {
+          $pullButton.classList.remove('hide');
+        } else {
+          $leaveButton.classList.remove('hide');
+        }
+      }
+
+      // Register event listeners
+      function addClientEventListeners() {
+        if (_client) {
+          _client.addEventListener('connectionStateChanged', function onConnectionStateChanged(evt) {
+            console.log('Received connectionStateChanged event - state = ', evt.state)
+            $logonState.textContent = evt.state;
+            if (evt.state === Circuit.Enums.ConnectionState.Disconnected) {
+              resetCallUI();
+            }
+          });
+
+          _client.addEventListener('callStatus', function (evt) {
+            var call = _calls[evt.call.convId];
+            if (!call || call.callId === evt.call.callId) {
+              console.log('Received callStatus event. state: ' + evt.call.state + ', reason: ' + evt.reason, evt.call);
+              _calls[evt.call.convId] = evt.call;
+              updateList(evt.call);
+              setCallUI();
+            }
+          });
+
+          _client.addEventListener('callEnded', function (evt) {
+            var call = _calls[evt.call.convId];
+            if (call && call.callId === evt.call.callId) {
+              console.log('Received callEnded event. state: ' + evt.call.state, evt.call);
+              delete _calls[evt.call.convId];
+              updateList(evt.call);
+              resetCallUI();
+            }
+          });
+
+          _client.addEventListener('itemAdded', function (evt) {
+            var item = evt.item;
+            if (item.rtc && item.rtc.type === 'ENDED' && item.attachments && item.attachments.length) {
+              console.log('Received itemAdded event with a recording');
+            }
+          });
+
+          _client.addEventListener('itemUpdated', function (evt) {
+            var item = evt.item;
+            if (item.rtc && item.rtc.type === 'ENDED' && item.attachments && item.attachments.length) {
+              console.log('Received itemUpdated event with a recording');
+              $download.style.display = 'block';
+              $download.href = item.attachments[0].url;
+            } else {
+              $download.style.display = 'none';
+            }
+          });
+        }
+      }
+
+      // Update call state in list for a call
+      function updateList(call) {
+        if (call.state === Circuit.Enums.CallStateName.Terminated) {
+          getListOption(call.convId).textContent = _conversations[call.convId].title;
+        } else {
+          getListOption(call.convId).textContent = _conversations[call.convId].title + ' (' + call.state + ')';
+        }
+      }
+
+      // Start a conference
+      function start() {
+        if (!_client || !_localUser) { return alert('Caller is not logged in'); }
+
+        var mediaType = {audio: true, video: enableVideo.checked};
+        var selectedConvId = $convList.options[$convList.selectedIndex].value;
+
+        _client.startConference(selectedConvId, mediaType)
+        .then(setCallUI)
+        .catch(function (err) {
+          alert('Error starting conference. ' + err);
+          console.error(err);
+        });
+      }
+
+      // Join a conference
+      function join() {
+        if (!_client || !_localUser) { return alert('Caller is not logged in'); }
+
+        var mediaType = {audio: true, video: enableVideo.checked};
+        var selectedConvId = $convList.options[$convList.selectedIndex].value;
+        var call = _calls[selectedConvId];
+
+        _client.joinConference(call.callId, mediaType)
+        .catch(function (err) {
+          return alert('Failed to join the call: ' + err);
+          console.error(err);
+        });
+      }
+
+      // Leave a conference
+      function leave() {
+        if (!_client || !_localUser) { return alert('Caller is not logged in'); }
+
+        var mediaType = {audio: true, video: enableVideo.checked};
+        var selectedConvId = $convList.options[$convList.selectedIndex].value;
+        var call = _calls[selectedConvId];
+
+        _client.leaveConference(call.callId);
+      }
+
+      // Pull a remote call
+      function pull() {
+        if (!_client || !_localUser) { return alert('Caller is not logged in'); }
+
+        var selectedConvId = $convList.options[$convList.selectedIndex].value;
+        var call = _calls[selectedConvId];
+
+        _client.pullRemoteCall(call.callId);
+      }
+
+      function cacheCalls(calls) {
+        _calls = {};
+        calls.forEach(function(call) {
+          _calls[call.convId] = call;
+        });
+      }
+
+      function logon() {
+        _client = new Circuit.Client({
+          client_id: '78cafde2f6854ad5ad80a67c532687bc',
+          scope: 'ALL' // Asking for ALL permissions because all these examples use the same domain
+        });
+
+        addClientEventListeners();
+
+        _client.logon().then(function (user) {
+          _localUser = user;
+          $logonButton.style.display = 'none';
+          $logoutButton.style.display = '';
+        })
+        .then(() => _client.getConversations({direction: 'BEFORE'}))
+        .then(populateDropdown)
+        .then(_client.getCalls)
+        .then(cacheCalls)
+        .catch(function (e) {
+          console.error(e);
+          alert('Unable to logon. Error: ' + e);
+          _client.removeAllListeners();
+          _client = null;
+        });
+      }
+
+      function logout() {
+        if (!_client) {
+          return;
+        }
+        _client.logout().then(_client.removeAllListeners);
+
+        _client = null;
+        _localUser = null;
+        _conversations = {};
+        _calls = {};
+
+        $convList.options.length = 0;
+        $logonButton.style.display = '';
+        $logoutButton.style.display = 'none';
+        $logonState.textContent = 'Disconnected';
+      }
+
+      function onVideoChange() {
+        var selectedConvId = $convList.options[$convList.selectedIndex].value;
+        var call = _calls[selectedConvId];
+
+        if (call && call.localMediaType.video !== enableVideo.checked) {
+          _client.toggleVideo(call.callId).then(function () {
+            console.log('Local video was successfully toggled');
+          }).catch(function (err) {
+            console.error('Failed to toggle video. ', err);
+          })
+        }
+      }
+
+      function onScreenShareChange() {
+        var selectedConvId = $convList.options[$convList.selectedIndex].value;
+        var call = _calls[selectedConvId];
+
+        if (call && call.localMediaType.desktop !== enableScreenShare.checked) {
+          _client.toggleScreenShare(call.callId).then(function () {
+            console.log('Screenshare was successfully toggled');
+          }).catch(function (err) {
+            console.error('Failed to toggle screenshare. ', err);
+          })
+        }
+      }
+
+      function onRecordingChange() {
+        var selectedConvId = $convList.options[$convList.selectedIndex].value;
+        var call = _calls[selectedConvId];
+
+        if (!enableRecording.checked) {
+          _client.stopRecording(call.callId).then(function () {
+            console.log('Recording stopped');
+          }).catch(function (err) {
+            console.error('Failed to stop recording. ', err);
+          })
+        } else {
+          _client.startRecording(call.callId, true).then(function () {
+            console.log('Recording started');
+          }).catch(function (err) {
+            console.error('Failed to record session. ', err);
+          })
+        }
+      }
+
+      function onConversationSelected() {
+        var convId = document.getElementById('convList').value;
+        var call = _calls[convId];
+
+        if (call) {
+          setCallUI();
+        } else {
+          resetCallUI();
+        }
+      }
+
+      function populateDropdown(conversations) {
+        _conversations = {};
+        conversations.reverse().filter(function (c) {
+          if (c && c.type === Circuit.Enums.ConversationType.GROUP) {
+            _conversations[c.convId] = c;
+            return true;
+          }
+          return false;
+        }).forEach(function (c) {
+          if (c.type !== 'DIRECT') {
+            $convList.options[$convList.options.length] = new Option(c.title, c.convId);
+          }
+        });
+        $convList.size = Math.min($convList.options.length, 5);
+        $convList.selectedIndex = -1;
+      }
+
+      Circuit.Injectors.conversationInjector = function (conversation) {
+        return new Promise(function (resolve, reject) {
+          var userIds = conversation.participants.filter(function (p) {
+            return p !== _client.loggedOnUser.userId;
+          });
+          _client.getUsersById(userIds).then(function (users) {
+            // Set conversation.otherUsers
+            conversation.otherUsers = users;
+
+            // Set conversation.title
+            if (conversation.type === 'DIRECT') {
+              conversation.title = conversation.otherUsers[0].displayName;
+            } else {
+              conversation.title = conversation.topic || conversation.otherUsers.map(function (u) {
+                return u.firstName;
+              }).join(', ');
+            }
+
+            // Find telephony conversation to be excluded
+            var telephonyConv = conversation.otherUsers.find(function (user) {
+              return user.roles && user.roles.indexOf(Circuit.Enums.UserRole.VIRTUAL_TELEPHONY_CONNECTOR) !== -1;
+            });
+
+            resolve(telephonyConv ? null : conversation);
+          }, function (err) {
+            reject(err);
+          });
+        });
+      }
+
+      resetCallUI();
+    </script>
+  </body>
+</html>
+

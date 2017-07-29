@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<!--
+ *  Copyright 2017 Unify Software and Solutions GmbH & Co.KG.
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ -->
+<html lang="en">
+  <head>
+    <title>Circuit JS-SDK</title>
+    <style>
+      body { font-family: sans-serif; font-size: 14px;}
+      section { padding-top: 20px; }
+      input { margin-left: 10px; }
+      pre { padding: 5px; margin: 5px; }
+      #error { color: red; }
+      .string { color: green; }
+      .number { color: darkorange; }
+      .boolean { color: blue; }
+      .null { color: magenta; }
+      .key { color: red; }
+    </style>
+    <script src="https://circuitsandbox.net/circuit.js"></script>
+  </head>
+
+  <body>
+    <h3>Circuit JS SDK - Introduction example</h3>
+    <div>
+      This example shows how to:
+      <ul>
+        <li>logon using OAuth2</li>
+        <li>read the most recent conversation</li>
+        <li>setup injectors to enhance the conversation, item and user data objects recevied from the server</li>
+        <li>fetch the most recent conversation again, but this time with the injector</li>
+        <li>listen to various events such as conversationCreated</li>
+      </ul>
+    </div>
+
+    <button onclick="run()">Fetch most recent conversation</button>
+    <section id="output"></section>
+
+    <script>
+      if (typeof Circuit === 'undefined') {
+        alert('Could not load SDK (circuit.js).');
+      } else if (!Circuit.isCompatible()) {
+        alert('Sorry, your browser is not supported. Use Chrome or Firefox.');
+      }
+
+      // Displays SDK internal logs in console
+      // Circuit.logger.setLevel(Circuit.Enums.LogLevel.Debug);
+
+      // Create a new Circuit SDK client. Pass the OAuth2 client_id for this app
+      var client = new Circuit.Client({
+        domain: 'circuitsandbox.net',
+        client_id: '78cafde2f6854ad5ad80a67c532687bc',
+        scope: 'ALL' // Asking for ALL permissions because all these examples use the same domain
+      });
+
+      // Logon using OAuth2, then fetch the most recent conversation and print the conversation
+      // object. Then add the injectors and fetch the most recent conversation again. You will
+      // see the additional attribute add the the conversation object by the injectors.
+      function run() {
+        client.logon()
+        .then(user => output(`>>> Logged in as ${user.displayName}`))
+        .then(getMostRecentConversation)
+        .then(conversations => output('>>> Most recent conversation (prior to injector):', conversations[0]))
+        .then(addConversationAndItemInjectors)
+        .then(getMostRecentConversation)
+        .then(conversations => output('>>> Most recent conversation (after to injector):', conversations[0]))
+        .catch(error);
+      }
+
+      var getMostRecentConversation = client.getConversations.bind(client, {direction: 'BEFORE', numberOfConversations: 1});
+
+      // Circuit.Injectors functions are called by the SDK when a conversation is
+      // returned from the server, whether its for responses or events.
+      // These injectors are optional. When defined, they can be regular synchroneous
+      // functions, or promises like in conversation injector example below.
+      function addConversationAndItemInjectors() {
+
+        // The conversation injector example needs to be asynchroneous since the
+        // user lookup is an API call.
+        Circuit.Injectors.conversationInjector = conversation => {
+          return new Promise((resolve, reject) => {
+            // Get user objects for participant userIds other than mine,
+            // then set the 'otherUsers', 'creator' and 'topLevelItem.creator'
+            // attributes. Then also set the 'title' attribute.
+            var userIds = conversation.participants.filter(p => {
+              return p !== client.loggedOnUser.userId;
+            });
+            client.getUsersById(userIds).then(users => {
+              // Set conversation.otherUsers
+              conversation.otherUsers = users;
+
+              // Set conversation.creator
+              if (conversation.creatorId === client.loggedOnUser.userId) {
+                conversation.creator = client.loggedOnUser;
+              } else {
+                conversation.creator = users.find(u => u.userId === conversation.creatorId);
+              }
+
+              // Set conversation.topLevelItem.creator
+              if (conversation.topLevelItem) {
+                if (conversation.topLevelItem.creatorId === client.loggedOnUser.userId) {
+                  conversation.topLevelItem.creator = client.loggedOnUser;
+                } else {
+                  conversation.topLevelItem.creator = users.find(u => {
+                    return u.userId === conversation.topLevelItem.creatorId;
+                  });
+                }
+              }
+
+              // Set conversation.title
+              if (conversation.type === 'DIRECT') {
+                conversation.title = conversation.otherUsers[0].displayName;
+              } else {
+                conversation.title = conversation.topic || conversation.otherUsers.map(u => {
+                  return u.displayName;
+                }).join(', ');
+              }
+
+              resolve(conversation);
+            }, err => reject);
+          });
+        }
+
+        // Define a item injector to create a teaser text
+        Circuit.Injectors.itemInjector = item => {
+          if (item.type === 'TEXT') {
+            // Create item.teaser attribute with replacing br and hr tags with a space
+            item.teaser = item.text.content.replace(/<(br[\/]?|\/li|hr[\/]?)>/gi, ' ');
+          } else {
+            item.teaser = item.type;
+          }
+        };
+      }
+
+      // Define a user injector to override the avatar if user does not have one.
+      // This injector does not need to be async, so a regular function can be used.
+      Circuit.Injectors.userInjector = user => {
+        if (!user.smallImageUri) {
+          user.avatar = 'http://www.aceshowbiz.com/images/photo/chuck_norris.jpg';
+          user.avatarLarge = 'http://www.aceshowbiz.com/images/photo/chuck_norris.jpg';
+        }
+      };
+
+      // Example for listening to different events
+      client.addEventListener('itemAdded', item => output('itemAdded event received:', item));
+      client.addEventListener('itemUpdated', item => output('itemUpdated event received:', item));
+      client.addEventListener('conversationCreated', conv => output('conversationCreated event received:', conv));
+      client.addEventListener('conversationUpdated', conv => output('conversationUpdated event received:', conv));
+
+      // This event requires a presence subscription via subscribePresence(userIDs)
+      client.addEventListener('userPresenceChanged', presence => output('userPresenceChanged event received:', presence));
+
+      // Event is only dispatched to my own other clients to keep them in sync.
+      // At this time there is no event for other user updates other than the
+      // userPresenceChanged event above
+      client.addEventListener('userUpdated', user => output('user event received:'));
+
+      /* Comment out to keep the log clean
+          client.addEventListener('connectionStateChanged', state => output('connectionStateChanged event received:', state));
+      */
+
+      // Helper methods for displaying results
+      function error(e) {
+        console.log(e);
+        output(e.message);
+      }
+
+      function output(msg, obj) {
+        var el = document.getElementById('output');
+        if (msg) {
+          el.appendChild(document.createElement('pre')).innerText = msg + '\n';
+        }
+        if (obj) {
+          if (typeof(obj) === 'object') {
+            obj = JSON.stringify(obj, undefined, 4);
+            obj = syntaxHighlight(obj);
+          }
+          el.appendChild(document.createElement('pre')).innerHTML = obj;
+        }
+      }
+
+      function syntaxHighlight(json) {
+        json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, match => {
+          var cls = 'number';
+          if (/^"/.test(match)) {
+            if (/:$/.test(match)) {
+              cls = 'key';
+            } else {
+              cls = 'string';
+            }
+          } else if (/true|false/.test(match)) {
+            cls = 'boolean';
+          } else if (/null/.test(match)) {
+            cls = 'null';
+          }
+          return '<span class="' + cls + '">' + match + '</span>';
+        });
+      }
+    </script>
+  </body>
+</html>
+

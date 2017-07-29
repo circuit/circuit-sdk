@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<!--
+ *  Copyright 2017 Unify Software and Solutions GmbH & Co.KG.
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ -->
+<html lang="en">
+  <head>
+    <title>Circuit JS-SDK</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        font-size: 14px;
+      }
+      section { padding-top: 20px; }
+      input { margin-right: 10px; }
+      button {
+        margin-right: 10px;
+      }
+      pre {padding: 5px; margin: 5px; }
+      .string { color: green; }
+      .number { color: darkorange; }
+      .boolean { color: blue; }
+      .null { color: magenta; }
+      .key { color: red; }
+      .error { color: red; }
+      #errorMessage {
+        margin-top: 10px;
+        color: red;
+      }
+    </style>
+  </head>
+
+  <body>
+    <h2>Circuit JS-SDK examples</h2>
+    <h3>Share HTML Canvas as MediaStream</h3>
+    <div>
+      This example shows a schematic in a HTML5 canvas and allows drawing on top of it and shares the combined image in the call.<br>
+      The application can use the new HTMLCanvasElement.captureStream API available in Chrome and Firefox to capture a stream from a canvas.<br>
+      Note that Chrome has an issue with compression which causes WebRTC to reduce the resolution, or not even show the drawing.<br>
+      Use <a href="https://www.mozilla.org/en-US/firefox/new/">FireFox</a> in the meantime.<br>
+    </div>
+    <div id="mainWrapper" style="display: none">
+      <section id="connectSection">
+        <button id="logon" onclick="logon()" style="">Logon</button>
+        <button id="logout" onclick="logout()" style="display: none">Logout</button>
+        <span>(<span id="logonState">Disconnected</span>)</span>
+      </section>
+      <section>
+        <input type="email" id="peerUser" placeholder="Callee's Circuit email" value="circuitsdk02@gmail.com"/>
+        <button onclick="call()" id="callButton">Call</button>
+        <button onclick="endCall()" id="endCallButton" style="display: none">End call</button>
+        <span>(<span id="callState">Idle</span>)</span>
+      </section>
+      <section id="share">
+        <button onclick="share()">Share image</button>
+        <span>then can draw on the image to point out the problem :)</span>
+      </section>
+      <section id="container" style="height: 600px;width:800px">
+        <div id="paint" style="background-color: white;">
+          <canvas id="canvas"></canvas>
+        </div>
+      </section>
+    </div>
+    <span id="errorMessage" style="display: none"></span>
+    <audio id="remoteAudio" autoplay="autoplay"></audio>
+
+    <script src="https://circuitsandbox.net/circuit.js"></script>
+
+    <script>
+      var DOMAIN = 'circuitsandbox.net';
+      var _client;
+      var _localUser;
+      var _conversation;
+      var _call;
+
+      var $peerUser = document.getElementById('peerUser');
+      var $logonButton = document.getElementById('logon');
+      var $logoutButton = document.getElementById('logout');
+      var $logonState = document.getElementById('logonState');
+      var $mediaType = document.getElementById('mediaType');
+      var $callState = document.getElementById('callState');
+      var $remoteAudio = document.getElementById('remoteAudio');
+      var $callButton = document.getElementById('callButton');
+      var $endCallButton = document.getElementById('endCallButton');
+      var $errorMessage = document.getElementById('errorMessage');
+      var $share = document.getElementById('share');
+      var $container = document.getElementById('container');
+      var canvas = document.getElementById('canvas');
+
+      if (typeof Circuit === 'undefined') {
+        $errorMessage.textContent = "Could not load SDK (circuit.js). Make sure Circuit is running on https://circuitsandbox.net.";
+        $errorMessage.style.display = 'block';
+      } else if (!Circuit.isCompatible()) {
+        $errorMessage.textContent = "Sorry, your browser is not supported. Chrome works :)";
+        $errorMessage.style.display = 'block';
+      } else {
+        document.getElementById('mainWrapper').style.display = 'block';
+      }
+
+      function loadImage() {
+          var ctx = canvas.getContext('2d');
+          var img = new Image();
+          img.onload = function () {
+              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          }
+          // Needs to be the same domain (origin) to keep canvas origin clean
+          img.src = 'diagram.png';
+      }
+
+      function setupDrawing() {
+          var ctx = canvas.getContext('2d');
+
+          var paint_style = getComputedStyle(container);
+          canvas.width = parseInt(paint_style.getPropertyValue('width'));
+          canvas.height = parseInt(paint_style.getPropertyValue('height'));
+
+          var mouse = {x: 0, y: 0};
+
+          canvas.addEventListener('mousemove', function(e) {
+            mouse.x = e.pageX - this.offsetLeft;
+            mouse.y = e.pageY - this.offsetTop;
+          }, false);
+
+          ctx.lineWidth = 3;
+          ctx.lineJoin = 'round';
+          ctx.lineCap = 'round';
+          ctx.strokeStyle = 'FUCHSIA';
+
+          canvas.addEventListener('mousedown', function(e) {
+              ctx.beginPath();
+              ctx.moveTo(mouse.x, mouse.y);
+              canvas.addEventListener('mousemove', onPaint, false);
+          }, false);
+
+          canvas.addEventListener('mouseup', function() {
+              canvas.removeEventListener('mousemove', onPaint, false);
+          }, false);
+
+          var onPaint = function() {
+              ctx.lineTo(mouse.x, mouse.y);
+              ctx.stroke();
+          };
+      }
+
+      function share() {
+          // Capture stream with 25fps
+          var stream = canvas.captureStream(25);
+
+          // Add the MediaStream to the current call
+          _client.toggleMediaStream(_call.callId, stream).then(() => {
+            $container.style.display = '';
+          });
+      }
+
+      function resetCallUI() {
+        $callState.textContent = 'Idle';
+        $callButton.style.display = '';
+        $endCallButton.style.display = 'none';
+        $share.style.display = 'none';
+        $container.style.display = 'none';
+        $remoteAudio.src = '';
+      }
+
+      function setCallUI(call) {
+        _call = call;
+        $callState.textContent = _call.state;
+        $callButton.style.display = 'none';
+        $endCallButton.style.display = '';
+
+        if (call.isEstablished) {
+          $share.style.display = '';
+          loadImage();
+          setupDrawing();
+        }
+      }
+
+      function addClientEventListeners() {
+        if (_client) {
+          _client.addEventListener('connectionStateChanged', function onConnectionStateChanged(evt) {
+            console.log('Received connectionStateChanged event - state = ', evt.state)
+            $logonState.textContent = evt.state;
+          });
+
+          _client.addEventListener('callStatus', function (evt) {
+            if (_call && _call.callId === evt.call.callId) {
+              console.log('Received callStatus event - call = ', evt.call)
+              setCallUI(evt.call);
+            }
+          });
+
+          _client.addEventListener('callEnded', function (evt) {
+            if (_call && _call.callId === evt.call.callId) {
+              console.log('Received callEnded event - call = ', evt.call)
+              _call = null;
+              resetCallUI();
+            }
+          });
+        }
+      }
+
+      function logon() {
+        if (_client) {
+          return;
+        }
+        _client = new Circuit.Client({
+          domain: DOMAIN,
+          client_id: '78cafde2f6854ad5ad80a67c532687bc',
+          scope: 'ALL' // Asking for ALL permissions because all these examples use the same domain
+        });
+        addClientEventListeners();
+
+        _client.logon().then(function (user) {
+          _localUser = user;
+          $logonButton.style.display = 'none';
+          $logoutButton.style.display = '';
+        }).catch(function (e) {
+          console.error(e);
+          alert('Unable to logon. Error: ' + e);
+          _client.removeAllListeners();
+          _client = null;
+        });
+      }
+
+      function logout() {
+        if (!_client) {
+          return;
+        }
+        _localUser = null;
+        _client.logout();
+        _client.removeAllListeners();
+        _client = null;
+
+        $logonButton.style.display = '';
+        $logoutButton.style.display = 'none';
+        $logonState.textContent = 'Disconnected';
+      }
+
+      function call() {
+        if (_call) {
+          return;
+        }
+
+        if (!_client || !_localUser) { return alert('Caller is not logged in'); }
+        if (!$peerUser.value) { return alert('Callee email missing'); }
+
+        var mediaType = {audio: true, video: false, desktop: false};
+        _client.makeCall($peerUser.value, mediaType)
+        .then(setCallUI)
+        .catch(function (err) {
+          alert('Error initiating a call with ' + $peerUser.value + '. ' + err);
+          console.error(err);
+        });
+      }
+
+      function endCall() {
+        if (_call) {
+          _client.endCall(_call.callId).then(function () {
+            console.log('Successfully ended call');
+            _call = null;
+            resetCallUI();
+          });
+        }
+      }
+
+      resetCallUI();
+    </script>
+  </body>
+</html>

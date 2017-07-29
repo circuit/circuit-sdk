@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<!--
+ *  Copyright 2017 Unify Software and Solutions GmbH & Co.KG.
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ -->
+<html lang="en">
+  <head>
+    <title>Circuit JS-SDK</title>
+    <style>
+      body { font-family: sans-serif; font-size: 14px;}
+      section { padding-top: 20px; }
+      pre { padding: 2px; margin: 2px; }
+      #error { color: red; }
+      .string { color: green; }
+      .number { color: darkorange; }
+      .boolean { color: blue; }
+      .null { color: magenta; }
+      .key { color: red; }
+    </style>
+    <script src="https://circuitsandbox.net/circuit.js"></script>
+  </head>
+
+  <body>
+    <h3>Circuit JS SDK - Add participant to call</h3>
+    <div>
+      This example shows how to:
+      <ul>
+        <li>logon using OAuth and logout</li>
+        <li>start a conference call</li>
+        <li>dial out a PSTN user to be added to the call</li>
+        <li>dial out a Circuit user to be added to the call</li>
+        <li>ring out all conversation members</li>
+        <li>handle callStatus and callEnded events</li>
+      </ul>
+    </div>
+
+    <section>
+      <button id="logon" onclick="logon()">Logon</button>
+      <button id="logout" onclick="logout()" disabled>Logout</button>
+      <span>(<span id="connState">Disconnected</span>)</span>
+    </section>
+
+    <section id="mainSection">
+      <div>
+        <select id="convList" size="10" style="width:300px"></select><br><br>
+        <button id="startConfBtn" onclick="startConf()" disabled>Start conference</button>
+        <button id="endConfBtn" onclick="endConf()" disabled>Leave</button><br><br>
+      </div>
+      <div>
+        <input id="to" type="text" placeholder="Number or email" disabled>
+        <input id="toName" type="text" placeholder="Name (optional)" disabled>
+        <button onclick="dial()" disabled>Dial out</button> or <button onclick="ringAll()" disabled>Ring all</button>
+      </div>
+    </section>
+
+    <section id="output"></section>
+
+    <script>
+      var logonBtn = document.getElementById('logon');
+      var logoutBtn = document.getElementById('logout');
+      var connState = document.getElementById('connState');
+      var mainSection = document.getElementById('mainSection');
+      var convList = document.getElementById('convList');
+      var startConfBtn = document.getElementById('startConfBtn');
+      var endConfBtn = document.getElementById('endConfBtn');
+      var to = document.getElementById('to');
+      var toName = document.getElementById('toName');
+      var call;
+      var conversation;
+
+      if (typeof Circuit === 'undefined') {
+        alert('Could not load SDK (circuit.js).');
+      } else if (!Circuit.isCompatible()) {
+        alert('Sorry, your browser is not supported. Use Chrome or Firefox on the desktop.');
+      }
+
+      // Displays SDK internal logs in console
+      // Circuit.logger.setLevel(Circuit.Enums.LogLevel.Debug);
+
+      // Create a new Circuit SDK client for OAuth
+      var client = new Circuit.Client({
+        domain: 'circuitsandbox.net',
+        client_id: '78cafde2f6854ad5ad80a67c532687bc',
+        scope: 'ALL' // Asking for ALL permissions because all these examples use the same domain
+      });
+
+      // Listen for connectionState change events
+      client.addEventListener('connectionStateChanged', evt => {
+        output(`connectionStateChanged event received: ${evt.state}`);
+        logonBtn.disabled = (evt.state !== 'Disconnected');
+        logoutBtn.disabled = (evt.state !== 'Connected');
+        connState.innerText = evt.state;
+        enableNodes(mainSection, evt.state !== 'Connected');
+      });
+
+      // Listen for callStatus events
+      client.addEventListener('callStatus', evt => {
+        if (!call || call.callId === evt.call.callId) {
+          output(`callStatus event received. reason: ${evt.reason}, state: ${evt.call.state}`);
+          call = evt.call;
+        }
+      });
+
+      // Listen for callEnded event
+      client.addEventListener('callEnded', evt => {
+        if (call && call.callId === evt.call.callId) {
+          output(`callEnded event received: ${evt.call.state}`);
+          call = null;
+          conversation = null;
+        }
+      });
+
+      function logon() {
+        client.logon()
+        .then(user => output(`Logged in as ${user.displayName}`))
+        .then(getMostRecentConversations)
+        .then(listConversations)
+        .catch(error);
+      }
+
+      function logout() {
+        client.logout()
+        .then(() => output('Logged out'))
+        .cleanup()
+        .catch(error);
+      }
+
+      function cleanup() {
+        convList.options.length = 0;
+        enableNodes(mainSection, false);
+        endConf();
+      }
+
+      var getMostRecentConversations = client.getConversations.bind(client, {direction: 'BEFORE', numberOfConversations: 20});
+
+      function listConversations(conversations) {
+        // Only show group conversations
+        conversations
+        .reverse()
+        .filter(c => {return c.type === Circuit.Enums.ConversationType.GROUP})
+        .forEach(c => convList.options[convList.options.length] = new Option(c.title, c.convId));
+        convList.selectedIndex = -1;
+      }
+
+      function startConf() {
+        if (call) {
+          alert('Conference already in progress.');
+          return;
+        }
+        var mediaType = {audio: true, video: false};
+        conversation = convList.options[convList.selectedIndex].value;
+        client.startConference(conversation, mediaType).catch(error);
+      }
+
+      function endConf() {
+        call && client.leaveConference(call.callId).catch(error);
+      }
+
+      // Dial out number finally. This is what this whole example is about :)
+      function dial() {
+        if (!call) {
+          alert('Start a conference first.');
+          return;
+        }
+
+        if (validEmail(to.value)) {
+          client.addParticipantToCall(call.callId, {email: to.value}).catch(error);
+        } else {
+          client.addParticipantToCall(call.callId, {number: to.value, displayName: toName.value}).catch(error);
+        }
+      }
+
+      // Ring out all conversation members
+      function ringAll() {
+        var selectedConvId = convList.options[convList.selectedIndex].value;
+        client.getConversationById(conversation).then(c => {
+          c.participants.forEach(p => client.addParticipantToCall(call.callId, {userId: p}));
+        }).catch(error);
+      }
+
+      // Define conversation injector to create a title for each conversation
+      Circuit.Injectors.conversationInjector = function (conversation) {
+        return new Promise(function (resolve, reject) {
+          var userIds = conversation.participants.filter(function (p) {
+            return p !== client.loggedOnUser.userId;
+          });
+          client.getUsersById(userIds).then(function (users) {
+            // Set conversation.otherUsers
+            conversation.otherUsers = users;
+
+            // Set conversation.title
+            if (conversation.type === 'DIRECT') {
+              conversation.title = conversation.otherUsers[0].displayName;
+            } else {
+              conversation.title = conversation.topic || conversation.otherUsers.map(function (u) {
+                return u.firstName;
+              }).join(', ');
+            }
+
+            // Find telephony conversation to be excluded
+            var telephonyConv = conversation.otherUsers.find(function (user) {
+              return user.roles && user.roles.indexOf(Circuit.Enums.UserRole.VIRTUAL_TELEPHONY_CONNECTOR) !== -1;
+            });
+
+            resolve(telephonyConv ? null : conversation);
+          }, function (err) {
+            reject(err);
+          });
+        });
+      }
+
+      // Helper methods
+      function enableNodes(node, enable) {
+        node.disabled = !!enable;
+        node.childNodes.forEach(n => enableNodes(n, enable));
+      }
+
+      function validEmail(email) {
+        var re = /^(([^<>()[\]\\.,;:\s@\"]+(\.[^<>()[\]\\.,;:\s@\"]+)*)|(\".+\"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
+        return re.test(email);
+      }
+
+      function error(e) {
+        console.log(e);
+        output(e.message);
+      }
+
+      function output(msg, obj) {
+        var el = document.getElementById('output');
+        if (msg) {
+          el.appendChild(document.createElement('pre')).innerText = new Date().toLocaleTimeString() + ': ' + msg + '\n';
+        }
+        if (obj) {
+          if (typeof(obj) === 'object') {
+            obj = JSON.stringify(obj, undefined, 4);
+            obj = syntaxHighlight(obj);
+          }
+          el.appendChild(document.createElement('pre')).innerHTML = obj;
+        }
+      }
+
+      function syntaxHighlight(json) {
+        json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, match => {
+          var cls = 'number';
+          if (/^"/.test(match)) {
+            if (/:$/.test(match)) {
+              cls = 'key';
+            } else {
+              cls = 'string';
+            }
+          } else if (/true|false/.test(match)) {
+            cls = 'boolean';
+          } else if (/null/.test(match)) {
+            cls = 'null';
+          }
+          return '<span class="' + cls + '">' + match + '</span>';
+        });
+      }
+    </script>
+  </body>
+</html>
+
