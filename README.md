@@ -63,7 +63,7 @@ Example apps: [node-linkify](https://github.com/circuit/node-linkify) or [circui
      domain: 'circuitsandbox.net'
    });
    client.logon()
-     .then(user => console.log('Logged on as bot: ' + user.email))
+     .then(user => console.log('Logged on as bot: ' + user.emailAddress))
    ```
 
 
