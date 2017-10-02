@@ -13,10 +13,10 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- *  @version: 1.2.1800
+ *  @version: 1.2.1801
  */
 
-var Circuit = {}; Object.defineProperty(Circuit, 'version', { value: '1.2.1800'});
+var Circuit = {}; Object.defineProperty(Circuit, 'version', { value: '1.2.1801'});
 
 // Define external globals for JSHint
 /*global Buffer, clearInterval, clearTimeout, process, require, setInterval, setTimeout*/
@@ -679,11 +679,6 @@ var Circuit = (function (circuit) {
         }
 
         try {
-            // Keep content only between 'StartFragment' and 'EndFragment'
-            // See details at https://msdn.microsoft.com/en-us/library/windows/desktop/ms649015(v=vs.85).aspx
-            content = content.replace(/^[\s\S]*<!--StartFragment-->/gi, '');
-            content = content.replace(/<!--EndFragment-->[\s\S]*$/gi, '');
-
             // Angular sanitize does not allow style tags, so replace it with a class.
             // NOTE: If the class name changes, be sure to also change in ConversationItemMessageCell.m for iOS client.
             // Used for post messages
@@ -716,16 +711,9 @@ var Circuit = (function (circuit) {
             // or emoji ones
             content = content.replace(/<img(?![^>]*class="(emoticon-icon|emojione-icon))[^>]*>/gi, '');
 
-            // Leave content only inside body tag if it exists
-            if (content.indexOf('<body') !== -1) {
-                content = content.replace(/^([\s\S]*)<body[^>]*>[^<]*/gi, '');
-                content = content.replace(/[^>]*<\/body([\s\S]*)$/gi, '');
-            }
-
-            // Remove empty space between tags
-            content = content.replace(/(<[^>]*>)\s*/gi, function (match, p1) {
-                return p1;
-            });
+            // Remove <title> tag because sanitize extracts title content as text, which can't be identified and
+            // removed later and can't be pasted inside content as well.
+            content = content.replace(/<title[^>]*>([\s\S]*?)<\/title>/gi, '');
 
             // It also does not like the shortcut attribute used for emoticons. Replace 'shortcut' tag with 'abbr'
             // (Needed for backward compatibility)
@@ -6657,7 +6645,7 @@ var Circuit = (function (circuit) {
             }
 
             if (!suppressStateChange) {
-                if (!Utils.isMobile()) {
+                if (window.removeEventListener) {
                     window.removeEventListener('online', handleOnlineEvent);
                     window.removeEventListener('offline', handleOfflineEvent);
                 }
@@ -6702,7 +6690,7 @@ var Circuit = (function (circuit) {
 
             if (_state !== ConnectionState.Disconnected) {
                 setState(ConnectionState.Connected);
-                if (!Utils.isMobile()) {
+                if (window.addEventListener) {
                     window.addEventListener('offline', handleOfflineEvent);
                     window.removeEventListener('online', handleOnlineEvent);
                 }
@@ -6794,7 +6782,9 @@ var Circuit = (function (circuit) {
                 return;
             }
 
-            if (!Utils.isMobile() && window.navigator.onLine === false) {
+            if (window.navigator.onLine === false) {
+                // Only for browser clients that support window.navigator.onLine,
+                // non-browser clients (e.g. mobile, node) will have window.navigator.onLine as 'undefind'
                 logger.debug('[CONN]: Client is offline. Retry connection later.');
                 retryConnection();
                 return;
@@ -26016,9 +26006,16 @@ var Circuit = (function (circuit) {
             }
         }
 
+        function publishConversationUpdate(conversation) {
+            if (conversation) {
+                LogSvc.debug('[CircuitCallControlSvc]: Publish /conversation/update event. convId = ', conversation.convId);
+                PubSubSvc.publish('/conversation/update', [conversation]);
+            }
+        }
+
         function publishCallState(call) {
             if (call && call.state !== Enums.CallState.Terminated) {
-                LogSvc.debug('[CircuitCallControlSvc]: Publish /call/state event. state = ', call.state.name);
+                LogSvc.debug('[CircuitCallControlSvc]: Publish /call/state event. callId = ' + call.callId + ', state = ' + call.state.name);
                 PubSubSvc.publish('/call/state', [call]);
             }
         }
@@ -26088,8 +26085,7 @@ var Circuit = (function (circuit) {
                 }
 
                 ConversationSvc.updateLastCallTime(conversation);
-                LogSvc.debug('[CircuitCallControlSvc]: Publish /conversation/update event');
-                PubSubSvc.publish('/conversation/update', [conversation]);
+                publishConversationUpdate(conversation);
             }
 
             // If there are no more calls, cancel the activeSpeakerPromise timer
@@ -26432,8 +26428,7 @@ var Circuit = (function (circuit) {
                     addCallToList(_primaryLocalCall);
                     conversation.call = _primaryLocalCall;
 
-                    LogSvc.debug('[CircuitCallControlSvc]: Publish /conversation/update event');
-                    PubSubSvc.publish('/conversation/update', [conversation]);
+                    publishConversationUpdate(conversation);
                 }
                 hadRemoteCall = true;
                 terminateCall(call);
@@ -26608,9 +26603,7 @@ var Circuit = (function (circuit) {
                         if (!conversation.call || (!conversation.call.isRemote && !options.handover)) {
                             addCallToList(_primaryLocalCall);
                             conversation.call = _primaryLocalCall;
-
-                            LogSvc.debug('[CircuitCallControlSvc]: Publish /conversation/update event');
-                            PubSubSvc.publish('/conversation/update', [conversation]);
+                            publishConversationUpdate(conversation);
 
                             if (!_primaryLocalCall.conferenceCall) {
                                 LogSvc.debug('[CircuitCallControlSvc]: Publish /call/outgoing event');
@@ -26804,10 +26797,7 @@ var Circuit = (function (circuit) {
             }
 
             conversation.call = remoteCall;
-
-            LogSvc.debug('[CircuitCallControlSvc]: Publish /conversation/update event');
-            PubSubSvc.publish('/conversation/update', [conversation]);
-
+            publishConversationUpdate(conversation);
             publishCallState(remoteCall);
 
             return remoteCall;
@@ -28294,16 +28284,13 @@ var Circuit = (function (circuit) {
             oldConversation.call = null;
 
             // Update old conversation
-            LogSvc.debug('[CircuitCallControlSvc]: Publish /conversation/update event');
-            PubSubSvc.publish('/conversation/update', [oldConversation]);
+            publishConversationUpdate(oldConversation);
 
             call.updateCall(newConversation);
             newConversation.call = call;
 
             // Update new conversation
-            LogSvc.debug('[CircuitCallControlSvc]: Publish /conversation/update event');
-            PubSubSvc.publish('/conversation/update', [newConversation]);
-
+            publishConversationUpdate(newConversation);
             publishCallState(call);
 
             // Inform the UI that call has been moved
@@ -28522,8 +28509,7 @@ var Circuit = (function (circuit) {
                         PubSubSvc.publish('/atccall/replace', [incomingCall, oldCallId]);
                     } else {
                         // Show new incoming call
-                        LogSvc.debug('[CircuitCallControlSvc]: Publish /conversation/update event');
-                        PubSubSvc.publish('/conversation/update', [conversation]);
+                        publishConversationUpdate(conversation);
                     }
 
                     if (replaces) {
@@ -28954,22 +28940,30 @@ var Circuit = (function (circuit) {
         ///////////////////////////////////////////////////////////////////////////////////////
         // PubSubSvc Event Handlers
         ///////////////////////////////////////////////////////////////////////////////////////
-        PubSubSvc.subscribe('/conversation/update', function (conv) {
+        PubSubSvc.subscribe('/conversation/update', function (conv, data) {
+            if (!data) {
+                // Event was not triggered by a Conversation.UPDATE event
+                return;
+            }
             var localCall = findLocalCallByCallId(conv.rtcSessionId);
             if (!localCall || localCall.isDirect) {
                 // Event is not applicable
                 return;
             }
-            LogSvc.debug('[CircuitCallControlSvc]: Received /conversation/update event. convId: ', conv.convId);
+            LogSvc.debug('[CircuitCallControlSvc]: Received /conversation/update event');
 
-            // If the client is involved in a Group Call and a new participant is added, the client
-            // may need to initiate a media renegotiation to increase the number of extra video channels.
-            checkAndAddExtraChannels(conv);
+            if (data.addedParticipants) {
+                // If the client is involved in a Group Call and a new participant is added, the client
+                // may need to initiate a media renegotiation to increase the number of extra video channels.
+                checkAndAddExtraChannels(conv);
+            }
 
-            // Update the participant actions in case the conversation moderation has been toggled
-            localCall.participants.forEach(function (p) {
-                p.setActions(conv, $rootScope.localUser);
-            });
+            if (data.isModerated !== undefined) {
+                // Update the participant actions in case the conversation moderation has been toggled
+                localCall.participants.forEach(function (p) {
+                    p.setActions(conv, $rootScope.localUser);
+                });
+            }
         });
 
         PubSubSvc.subscribe('/conversation/upgrade', function (oldConversation, newConversation) {
@@ -31041,8 +31035,7 @@ var Circuit = (function (circuit) {
                     var conversation = ConversationSvc.getConversationByRtcSession(callId);
                     if (conversation && conversation.call) {
                         conversation.call = null;
-                        LogSvc.debug('[CircuitCallControlSvc]: Publish /conversation/update event');
-                        PubSubSvc.publish('/conversation/update', [conversation]);
+                        publishConversationUpdate(conversation);
                     }
 
                     cb && cb('Call not found');
@@ -31658,9 +31651,7 @@ var Circuit = (function (circuit) {
                     }
                     var conversation = getConversation(_primaryLocalCall.convId);
                     conversation.call = _primaryLocalCall;
-
-                    LogSvc.debug('[CircuitCallControlSvc]: Publish /conversation/update event');
-                    PubSubSvc.publish('/conversation/update', [conversation]);
+                    publishConversationUpdate(conversation);
                     cb();
                 }
             });
@@ -36108,7 +36099,7 @@ var Circuit = (function (circuit) {
         }
 
         function publishCallState(call) {
-            LogSvc.debug('[CallControlSvc]: Publish /call/state event. state = ', call.state.name);
+            LogSvc.debug('[CallControlSvc]: Publish /call/state event. callId = ' + call.callId + ', state = ' + call.state.name);
             PubSubSvc.publish('/call/state', [call]);
         }
 
@@ -36137,6 +36128,13 @@ var Circuit = (function (circuit) {
                 }
             }
             return null;
+        }
+
+        function publishConversationUpdate(conversation) {
+            if (conversation) {
+                LogSvc.debug('[CallControlSvc]: Publish /conversation/update event. convId = ', conversation.convId);
+                PubSubSvc.publish('/conversation/update', [conversation]);
+            }
         }
 
         function handleAtcCallInfo(call) {
@@ -36215,9 +36213,7 @@ var Circuit = (function (circuit) {
                 break;
             }
             if (call.state !== CallState.Idle && call.state !== CallState.Terminated && call.state !== CallState.Started) {
-                LogSvc.debug('[CallControlSvc]: Publish /conversation/update event');
-                PubSubSvc.publish('/conversation/update', [conversation]);
-
+                publishConversationUpdate(conversation);
                 publishCallState(call);
                 // Set presence to busy if there is an active ATC remote call
                 if (call.state !== CallState.Ringing) {
@@ -36241,8 +36237,7 @@ var Circuit = (function (circuit) {
                     }
 
                 }
-                LogSvc.debug('[CallControlSvc]: Publish /conversation/update event');
-                PubSubSvc.publish('/conversation/update', [conversation]);
+                publishConversationUpdate(conversation);
             }
         }
 
@@ -36255,8 +36250,7 @@ var Circuit = (function (circuit) {
                 removeAtcRemoteCallFromList(oldCall);
                 if (conversation && conversation.call) {
                     conversation.call = call;
-                    LogSvc.debug('[CallControlSvc]: Publish /conversation/update event');
-                    PubSubSvc.publish('/conversation/update', [conversation]);
+                    publishConversationUpdate(conversation);
                 }
             }
         }
@@ -36265,8 +36259,7 @@ var Circuit = (function (circuit) {
             ConversationSvc.getTelephonyConversation(function (err, conversation) {
                 if (!err && conversation && conversation.call && conversation.call.atcCallInfo.getCstaCallId() === callId) {
                     conversation.call = null;
-                    LogSvc.debug('[CallControlSvc]: Publish /conversation/update event');
-                    PubSubSvc.publish('/conversation/update', [conversation]);
+                    publishConversationUpdate(conversation);
                 }
             });
         }
@@ -36346,8 +36339,7 @@ var Circuit = (function (circuit) {
                 if (conversation && conversation.isTelephonyConv && !conversation.call) {
                     conversation.call = findActiveAtcRemoteCall() || findRingingAtcRemoteCall();
                     if (conversation.call) {
-                        LogSvc.debug('[CallControlSvc]: Publish /conversation/update event');
-                        PubSubSvc.publish('/conversation/update', [conversation]);
+                        publishConversationUpdate(conversation);
                     }
                 }
                 if (!call.isRemote && !CircuitCallControlSvc.getActiveCall()) {
