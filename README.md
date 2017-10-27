@@ -54,7 +54,9 @@ Example apps: [node-linkify](https://github.com/circuit/node-linkify) or [circui
      .then(user => console.log('Logged on as ' + user.displayName))
    ```
 
-3. **Bots** use the [Node.js SDK](https://www.npmjs.com/package/circuit-sdk) or the [REST API](https://circuitsandbox.net/rest/v2/swagger/ui/index.html) and use the [OAuth 2.0 Client Credentials Grant](https://circuit.github.io/oauth.html#client_credentials). Bots are a special type of user; they don't login on behalf of a regular user, hence no OAuth popup asking for a user`s credentials and permissions.<br>Example apps: [xlator-bot](https://github.com/circuit/xlator-bot) or [node-sdk-example](https://github.com/circuit/node-sdk-example)
+3. **Bots** use the [Node.js SDK](https://www.npmjs.com/package/circuit-sdk) or the [REST API](https://circuitsandbox.net/rest/v2/swagger/ui/index.html) and use the [OAuth 2.0 Client Credentials Grant](https://circuit.github.io/oauth.html#client_credentials). Bots are a special type of user; they don't login on behalf of a regular user, hence no OAuth popup asking for a user`s credentials and permissions.<br>
+Example bots: [xlator-bot](https://github.com/circuit/xlator-bot) or [node-sdk-example](https://github.com/circuit/node-sdk-example)<br>
+Example electron bots: [webrtc-bot-example](https://github.com/circuit/webrtc-bot-example) or [live-cam-bot](https://github.com/circuit/live-cam-bot)
    ```javascript
    const Circuit = require('circuit-sdk');
    let client = new Circuit.Client({
