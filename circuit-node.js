@@ -13,10 +13,10 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- *  @version: 1.2.2100
+ *  @version: 1.2.2200
  */
 
-var Circuit = {}; Object.defineProperty(Circuit, 'version', { value: '1.2.2100'});
+var Circuit = {}; Object.defineProperty(Circuit, 'version', { value: '1.2.2200'});
 
 // Define external globals for JSHint
 /*global Buffer, clearInterval, clearTimeout, process, require, setInterval, setTimeout*/
@@ -1825,19 +1825,6 @@ var Circuit = (function (circuit) {
     };
 
     /**
-     * Extends the destination object `dst` by copying own enumerable properties from the `src` object
-     */
-    Utils.extend = function (dst, src) {
-        if (!dst || !src || (typeof dst !== 'object') || (typeof src !== 'object')) {
-            return;
-        }
-
-        Object.keys(src).forEach(function (name) {
-            dst[name] = src[name];
-        });
-    };
-
-    /**
      * Returns the normalized locale string ('en-US' to 'EN_US' or 'de-DE' to 'DE_DE' or 'DE_DE' to 'DE_DE') or
      * undefined if the parameter is not valid
      */
@@ -2694,7 +2681,7 @@ var Circuit = (function (circuit) {
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////
     //
-    // New APIs for Object
+    // Polyfills for Object
     //
     ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -2730,62 +2717,156 @@ var Circuit = (function (circuit) {
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////
     //
+    // Polyfills for String objects
+    //
+    ///////////////////////////////////////////////////////////////////////////////////////////////////
+
+    // Simplified polyfill for ECMAScript 2015 String.prototype.includes().
+    if (!String.prototype.startsWith) {
+        Object.defineProperty(String.prototype, 'startsWith', {
+            value: function (searchString, position) {
+                if (searchString === null || searchString === undefined) {
+                    return false;
+                }
+                searchString = searchString.toString();
+                position = Math.floor(position) || 0;
+                return this.substr(position, searchString.length) === searchString;
+            }
+        });
+    }
+
+    // Simplified polyfill for ECMAScript 2015 String.prototype.includes().
+    if (!String.prototype.endsWith) {
+        Object.defineProperty(String.prototype, 'endsWith', {
+            value: function (searchString, position) {
+                if (searchString === null || searchString === undefined) {
+                    return false;
+                }
+                if (position === undefined) {
+                    position = this.length;
+                } else {
+                    position = Math.min(Math.floor(position) || 0, this.length);
+                }
+                searchString = searchString.toString();
+                position -= searchString.length;
+                if (position < 0) {
+                    return false;
+                }
+                return this.substr(position, searchString.length) === searchString;
+            }
+        });
+    }
+
+    // Simplified polyfill for ECMAScript 2015 String.prototype.includes().
+    if (!String.prototype.includes) {
+        Object.defineProperty(String.prototype, 'includes', {
+            value: function (value) {
+                return this.indexOf(value) !== -1;
+            }
+        });
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////////
+    //
     // New APIs for String objects
     //
     ///////////////////////////////////////////////////////////////////////////////////////////////////
 
     // Equivalent of C# String.Format method
-    String.prototype.format = function () {
-        var args = arguments;
-        return this.replace(/{(\d+)}/g, function (match, index) {
-            return args[index] || match;
-        });
-    };
+    Object.defineProperty(String.prototype, 'format', {
+        value: function () {
+            var args = arguments;
+            return this.replace(/{(\d+)}/g, function (match, index) {
+                return args[index] || match;
+            });
+        }
+    });
 
-    if (!String.prototype.startsWith) {
-        String.prototype.startsWith = function (searchString, position) {
-            if (searchString === null || searchString === undefined) {
-                return false;
-            }
-            searchString = searchString.toString();
-            position = Math.floor(position) || 0;
-            return this.substr(position, searchString.length) === searchString;
-        };
-    }
-
-    if (!String.prototype.endsWith) {
-        String.prototype.endsWith = function (searchString, position) {
-            if (searchString === null || searchString === undefined) {
-                return false;
-            }
-            if (position === undefined) {
-                position = this.length;
-            } else {
-                position = Math.min(Math.floor(position) || 0, this.length);
-            }
-            searchString = searchString.toString();
-            position -= searchString.length;
-            if (position < 0) {
-                return false;
-            }
-            return this.substr(position, searchString.length) === searchString;
-        };
-    }
 
     // Replaces character at given index
-    String.prototype.replaceAt = function (index, character) {
-        return this.substr(0, index) + character + this.substr(index + character.length);
-    };
+    Object.defineProperty(String.prototype, 'replaceAt', {
+        value: function (index, character) {
+            return this.substr(0, index) + character + this.substr(index + character.length);
+        }
+    });
 
-    String.prototype.randomCharacter = function () {
-        return this[Math.floor(this.length * Math.random())];
-    };
+    Object.defineProperty(String.prototype, 'randomCharacter', {
+        value: function () {
+            return this[Math.floor(this.length * Math.random())];
+        }
+    });
 
-    // Simplified polyfill for ECMAScript 2015 String.prototype.includes().
-    if (!String.prototype.includes) {
-        String.prototype.includes = function (value) {
-            return this.indexOf(value) !== -1;
-        };
+    ///////////////////////////////////////////////////////////////////////////////////////////////////
+    //
+    // Polyfills for Array objects
+    //
+    ///////////////////////////////////////////////////////////////////////////////////////////////////
+
+    // Simplified polyfill for ECMAScript 2016 Array.prototype.includes().
+    if (!Array.prototype.includes) {
+        Object.defineProperty(Array.prototype, 'includes', {
+            value: function (value) {
+                return this.indexOf(value) !== -1;
+            }
+        });
+    }
+
+
+
+    // Polyfill for ECMAScript 2015 (ES6) Array.prototype.find().
+    // See https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/find
+    if (!Array.prototype.find) {
+        Object.defineProperty(Array.prototype, 'find', {
+            value: function (predicate) {
+                if (this === null || this === undefined) {
+                    throw new TypeError('Array.prototype.find called on null or undefined');
+                }
+                if (typeof predicate !== 'function') {
+                    throw new TypeError('predicate must be a function');
+                }
+                var list = Object(this);
+                // eslint-disable-next-line no-bitwise
+                var length = list.length >>> 0;
+                var thisArg = arguments[1];
+                var value;
+
+                for (var i = 0; i < length; i++) {
+                    value = list[i];
+                    if (predicate.call(thisArg, value, i, list)) {
+                        return value;
+                    }
+                }
+                return undefined;
+            }
+        });
+    }
+
+    // Polyfill for ECMAScript 2015 (ES6) Array.prototype.findIndex().
+    // See https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/findIndex
+    if (!Array.prototype.findIndex) {
+        Object.defineProperty(Array.prototype, 'findIndex', {
+            value: function (predicate) {
+                if (this === null || this === undefined) {
+                    throw new TypeError('Array.prototype.findIndex called on null or undefined');
+                }
+                if (typeof predicate !== 'function') {
+                    throw new TypeError('predicate must be a function');
+                }
+                var list = Object(this);
+                // eslint-disable-next-line no-bitwise
+                var length = list.length >>> 0;
+                var thisArg = arguments[1];
+                var value;
+
+                for (var i = 0; i < length; i++) {
+                    value = list[i];
+                    if (predicate.call(thisArg, value, i, list)) {
+                        return i;
+                    }
+                }
+                return -1;
+            }
+        });
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2793,203 +2874,140 @@ var Circuit = (function (circuit) {
     // New APIs for Array objects
     //
     ///////////////////////////////////////////////////////////////////////////////////////////////////
-
-    // isEmpty
-    if (!Array.prototype.isEmpty) {
-        Array.prototype.isEmpty = function () {
+    Object.defineProperty(Array.prototype, 'isEmpty', {
+        value: function () {
             return this.length === 0;
-        };
-    }
+        }
+    });
 
-    // last element
-    if (!Array.prototype.last) {
-        Array.prototype.last = function () {
+    Object.defineProperty(Array.prototype, 'last', {
+        value: function () {
             if (this.length > 0) {
                 return this[this.length - 1];
             }
-        };
-    }
-
-    Array.prototype.shuffle = function () {
-        var l = this.length;
-        for (var i = 0; i < l; i++) {
-            var r = Math.floor(Math.random() * l);
-            var o = this[r];
-            this[r] = this[i];
-            this[i] = o;
         }
-        return this;
-    };
+    });
 
-    Array.prototype.randomCopy = function (numElems) {
-        var copy = this.slice(0);
-        copy.shuffle();
-        return copy.splice(0, numElems);
-    };
-
-    // move one element from old position to new position
-    Array.prototype.move = function (oldPos, newPos) {
-        if (oldPos === undefined || newPos === undefined) {
-            return;
-        }
-        if (newPos >= this.length) {
-            var k = newPos - this.length;
-            while ((k--) + 1) {
-                this.push(undefined);
+    Object.defineProperty(Array.prototype, 'shuffle', {
+        value: function () {
+            var l = this.length;
+            for (var i = 0; i < l; i++) {
+                var r = Math.floor(Math.random() * l);
+                var o = this[r];
+                this[r] = this[i];
+                this[i] = o;
             }
+            return this;
         }
-        this.splice(newPos, 0, this.splice(oldPos, 1)[0]);
-    };
+    });
 
-    // remove a single object from an array
-    Array.prototype.remove = function (obj) {
-        if (typeof obj !== 'undefined' && obj) {
-            var index = this.indexOf(obj);
-            if (index > -1) {
-                this.splice(index, 1);
+    Object.defineProperty(Array.prototype, 'randomCopy', {
+        value: function (numElems) {
+            var copy = this.slice(0);
+            copy.shuffle();
+            return copy.splice(0, numElems);
+        }
+    });
+
+    // Move one element from old position to new position
+    Object.defineProperty(Array.prototype, 'move', {
+        value: function (oldPos, newPos) {
+            if (oldPos === undefined || newPos === undefined) {
+                return;
             }
+            if (newPos >= this.length) {
+                var k = newPos - this.length;
+                while ((k--) + 1) {
+                    this.push(undefined);
+                }
+            }
+            this.splice(newPos, 0, this.splice(oldPos, 1)[0]);
         }
-    };
-
-    // Simplified polyfill for ECMAScript 2016 Array.prototype.includes().
-    if (!Array.prototype.includes) {
-        Array.prototype.includes = function (value) {
-            return this.indexOf(value) !== -1;
-        };
-    }
+    });
 
     // Thanks to the BinarySearch from http://oli.me.uk/2013/06/08/searching-javascript-arrays-with-a-binary-search/
     // This function finds the right position and inserts the searchElement.
     // It works even when the array is empty.
-    Array.prototype.binaryInsert = function (searchElement, compareFunction) {
-        if (typeof compareFunction !== 'function') {
-            // no compare function supplied
+    Object.defineProperty(Array.prototype, 'binaryInsert', {
+        value: function (searchElement, compareFunction) {
+            if (typeof compareFunction !== 'function') {
+                // no compare function supplied
+                return false;
+            }
+
+            var minIndex = 0;
+            var maxIndex = this.length - 1;
+            var currentIndex;
+            var currentElement;
+            var found = false;
+
+            while (minIndex <= maxIndex) {
+                currentIndex = Math.floor((minIndex + maxIndex) / 2);
+                currentElement = this[currentIndex];
+
+                if (compareFunction(currentElement, searchElement) < 0) {
+                    minIndex = currentIndex + 1;
+                } else if (compareFunction(currentElement, searchElement) > 0) {
+                    maxIndex = currentIndex - 1;
+                } else {
+                    found = true;
+                    break;
+                }
+            }
+
+            var indexToInsert = found ? currentIndex + 1 : minIndex;
+            if (indexToInsert >= 0) {
+                this.splice(indexToInsert, 0, searchElement);
+                return true;
+            }
+
             return false;
         }
+    });
 
-        var minIndex = 0;
-        var maxIndex = this.length - 1;
-        var currentIndex;
-        var currentElement;
-        var found = false;
-
-        while (minIndex <= maxIndex) {
-            currentIndex = Math.floor((minIndex + maxIndex) / 2);
-            currentElement = this[currentIndex];
-
-            if (compareFunction(currentElement, searchElement) < 0) {
-                minIndex = currentIndex + 1;
-            } else if (compareFunction(currentElement, searchElement) > 0) {
-                maxIndex = currentIndex - 1;
-            } else {
-                found = true;
-                break;
+    // Remove a single object from an array
+    if (!Array.prototype.remove) {
+        Object.defineProperty(Array.prototype, 'remove', {
+            value: function (obj) {
+                if (typeof obj !== 'undefined' && obj) {
+                    var index = this.indexOf(obj);
+                    if (index > -1) {
+                        this.splice(index, 1);
+                    }
+                }
             }
-        }
-
-        var indexToInsert = found ? currentIndex + 1 : minIndex;
-        if (indexToInsert >= 0) {
-            this.splice(indexToInsert, 0, searchElement);
-            return true;
-        }
-
-        return false;
-    };
+        });
+    }
 
     // Empties an array. The most performant way to achieve this.
     if (!Array.prototype.empty) {
-        Array.prototype.empty = function () {
-            while (this.length > 0) {
-                this.pop();
+        Object.defineProperty(Array.prototype, 'empty', {
+            value: function () {
+                while (this.length > 0) {
+                    this.pop();
+                }
             }
-        };
+        });
     }
 
     // Resets the current array and copies all elements from source
     // array to the current array.
     if (!Array.prototype.copy) {
-        Array.prototype.copy = function (srcArray) {
-            this.empty();
-            this.push.apply(this, srcArray);
-        };
+        Object.defineProperty(Array.prototype, 'copy', {
+            value: function (srcArray) {
+                this.empty();
+                Array.prototype.push.apply(this, srcArray);
+            }
+        });
     }
 
     // Array difference.
     if (!Array.prototype.diff) {
-        Array.prototype.diff = function (someArray) {
-            return this.filter(function (i) { return !someArray.includes(i); });
-        };
-    }
-
-    // Finds and removes the first array object that satisfied the given predicate
-    Array.prototype.findAndRemove = function (cb) {
-        if (typeof cb !== 'function') {
-            return undefined;
-        }
-
-        for (var i = 0; i < this.length; i++) {
-            if (cb(this[i])) {
-                return this.splice(i, 1);
+        Object.defineProperty(Array.prototype, 'diff', {
+            value: function (someArray) {
+                return this.filter(function (i) { return !someArray.includes(i); });
             }
-        }
-
-        return undefined;
-    };
-
-    // Polyfill for ECMAScript 2015 (ES6) Array.prototype.find().
-    // See https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/find
-    if (!Array.prototype.find) {
-        /*jshint bitwise: false*/
-        Array.prototype.find = function (predicate) {
-            if (this === null || this === undefined) {
-                throw new TypeError('Array.prototype.find called on null or undefined');
-            }
-            if (typeof predicate !== 'function') {
-                throw new TypeError('predicate must be a function');
-            }
-            var list = Object(this);
-            // eslint-disable-next-line no-bitwise
-            var length = list.length >>> 0;
-            var thisArg = arguments[1];
-            var value;
-
-            for (var i = 0; i < length; i++) {
-                value = list[i];
-                if (predicate.call(thisArg, value, i, list)) {
-                    return value;
-                }
-            }
-            return undefined;
-        };
-        /*jshint bitwise: true*/
-    }
-
-    // Polyfill for ECMAScript 2015 (ES6) Array.prototype.findIndex().
-    // See https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/findIndex
-    if (!Array.prototype.findIndex) {
-        /*jshint bitwise: false*/
-        Array.prototype.findIndex = function (predicate) {
-            if (this === null || this === undefined) {
-                throw new TypeError('Array.prototype.findIndex called on null or undefined');
-            }
-            if (typeof predicate !== 'function') {
-                throw new TypeError('predicate must be a function');
-            }
-            var list = Object(this);
-            // eslint-disable-next-line no-bitwise
-            var length = list.length >>> 0;
-            var thisArg = arguments[1];
-            var value;
-
-            for (var i = 0; i < length; i++) {
-                value = list[i];
-                if (predicate.call(thisArg, value, i, list)) {
-                    return i;
-                }
-            }
-            return -1;
-        };
-        /*jshint bitwise: true*/
+        });
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -3562,7 +3580,8 @@ var Circuit = (function (circuit) {
             CHANGE_MEDIA_REJECT: 'CHANGE_MEDIA_REJECT',
             PREPARE: 'PREPARE',
             RENEW_TURN_CREDENTIALS: 'RENEW_TURN_CREDENTIALS',
-            SEND_PROGRESS: 'SEND_PROGRESS'
+            SEND_PROGRESS: 'SEND_PROGRESS',
+            SUBMIT_RTC_QUALITY_RATING: 'SUBMIT_RTC_QUALITY_RATING'
         },
 
         ///////////////////////////////////////////////////////////////////////////
@@ -3577,7 +3596,8 @@ var Circuit = (function (circuit) {
             CHANGE_MEDIA_TYPE_REQUESTED: 'CHANGE_MEDIA_TYPE_REQUESTED',
             PROGRESS: 'PROGRESS',
             CHANGE_MEDIA_TYPE_FORCED: 'CHANGE_MEDIA_TYPE_FORCED',
-            ICE_CANDIDATES: 'ICE_CANDIDATES'
+            ICE_CANDIDATES: 'ICE_CANDIDATES',
+            RTC_QUALITY_RATING_EVENT: 'RTC_QUALITY_RATING_EVENT'
         },
 
         ///////////////////////////////////////////////////////////////////////////
@@ -3824,13 +3844,33 @@ var Circuit = (function (circuit) {
         },
 
         RtcClientInfoType: {
-            OFFLINE_JOIN_FAILURE: 'OFFLINE_JOIN_FAILURE'
+            OFFLINE_JOIN_FAILURE: 'OFFLINE_JOIN_FAILURE',
+            DEVICE_DIAGNOSTICS: 'DEVICE_DIAGNOSTICS'
+        },
+
+        RtcActionInfoType: {
+            REQUEST_RESPONSE: 'REQUEST_RESPONSE',
+            EVENT: 'EVENT'
+        },
+
+        RtcDiagnosticsAction: {
+            // REQUEST_RESPONSE
+            RENEW_TURN_CREDENTIALS: 'RENEW_TURN_CREDENTIALS',
+            PREPARE: 'PREPARE',
+            JOIN: 'JOIN',
+            ICE_CANDIDATES: 'ICE_CANDIDATES',
+
+            // EVENT
+            SDP_CONNECTED: 'SDP_CONNECTED',
+            SDP_ANSWER: 'SDP_ANSWER',
+            REMOTE_ICE_CANDIDATES: 'REMOTE_ICE_CANDIDATES'
         },
 
         RtcClientInfoReason: {
             DISCONNECTED: 'DISCONNECTED',
             FAILED_TO_SEND: 'FAILED_TO_SEND',
-            REQUEST_TIMEOUT: 'REQUEST_TIMEOUT'
+            REQUEST_TIMEOUT: 'REQUEST_TIMEOUT',
+            JOIN_DELAY: 'JOIN_DELAY'
         },
 
         ///////////////////////////////////////////////////////////////////////////
@@ -4112,7 +4152,13 @@ var Circuit = (function (circuit) {
             MOBILE: 'MOBILE',
             HOME: 'HOME',
             FAX: 'FAX',
-            OTHER: 'OTHER'
+            OTHER: 'OTHER',
+            UCAAS: 'UCAAS'
+        },
+
+        PhoneNumberNpi: {
+            PUBLIC: 'PUBLIC',
+            PRIVATE: 'PRIVATE'
         },
 
         EmailAddressType: {
@@ -4226,6 +4272,12 @@ var Circuit = (function (circuit) {
             CLIENT_CREDENTIALS: 'CLIENT_CREDENTIALS',
             RESOURCE_OWNER_CREDENTIALS: 'RESOURCE_OWNER_CREDENTIALS',
             RESOURCE_OWNER: 'RESOURCE_OWNER'
+        },
+
+        MessageNotificationsSetting: {
+            ALL: 0,
+            DIRECT_AND_MENTIONS: 1,
+            NONE: 2
         },
 
         ///////////////////////////////////////////////////////////////////////////
@@ -4666,7 +4718,8 @@ var Circuit = (function (circuit) {
             ROLE_MEETING_POINT: 'ROLE_MEETING_POINT',
             MOBILE_BREAKOUT: 'MOBILE_BREAKOUT',
             UCAAS: 'UCAAS',
-            DEVELOPER_CONSOLE_ACCESS: 'DEVELOPER_CONSOLE_ACCESS'
+            DEVELOPER_CONSOLE_ACCESS: 'DEVELOPER_CONSOLE_ACCESS',
+            S4B_INTEGRATION: 'S4B_INTEGRATION'
         },
 
         PermissionType: {
@@ -4744,20 +4797,20 @@ var Circuit = (function (circuit) {
         // Feature Names
         ///////////////////////////////////////////////////////////////////////////
         LabFeatureName: {
+            ACTIVE_CALL_NOTIFICATION: 'ACTIVE_CALL_NOTIFICATION',
             AUTHENTICATION_SETTINGS: 'AUTHENTICATION_SETTINGS',
             BRIDGE_NUMBER_SELECTION: 'BRIDGE_NUMBER_SELECTION',
             CLOUD_TELEPHONY: 'CLOUD_TELEPHONY',
             COLOR_CONTRAST: 'COLOR_CONTRAST',
+            CONVERSATION_FILES_SECTION: 'CONVERSATION_FILES_SECTION',
             DEVELOPER_CONSOLE: 'DEVELOPER_CONSOLE',
-            ENHANCED_CALL_LOG: 'ENHANCED_CALL_LOG',
-            ENHANCED_SEARCH: 'ENHANCED_SEARCH',
             EXPORT_USER_DATA: 'EXPORT_USER_DATA',
             FILTER_BY_LABEL: 'FILTER_BY_LABEL',
             FIREBASE_PUSH_NOTIFICATIONS: 'FIREBASE_PUSH_NOTIFICATIONS',
             INCOMING_CALL_ROUTING: 'INCOMING_CALL_ROUTING',
             IMPROVED_NOTIFICATION: 'IMPROVED_NOTIFICATION',
+            IMPROVED_TOPIC_POSTING: 'IMPROVED_TOPIC_POSTING',
             LEAK_CANARY: 'LEAK_CANARY',
-            NEW_CALL_SCREEN: 'NEW_CALL_SCREEN',
             OPEN_XCHANGE: 'OPEN_XCHANGE',
             ORGANISE_CONTENT: 'ORGANISE_CONTENT',
             PARTICIPANT_DRAWING: 'PARTICIPANT_DRAWING',
@@ -5057,6 +5110,9 @@ var Circuit = (function (circuit) {
                     break;
                 case Constants.RTCCallEventType.ICE_CANDIDATES:
                     evtData = event.rtcCall.iceCandidates;
+                    break;
+                case Constants.RTCCallEventType.RTC_QUALITY_RATING_EVENT:
+                    evtData = event.rtcCall.ratingEvent;
                     break;
                 }
                 evtData.sessionId = event.rtcCall.sessionId;
@@ -7998,7 +8054,13 @@ var Circuit = (function (circuit) {
                 },
                 getAudioOptions: getDefaultAudioOptions,
                 getVideoOptions: getDefaultVideoOptions,
-                getDesktopOptions: function () { return false; },
+                getDesktopOptions: function () {
+                    return {
+                        mandatory: {
+                            androidMediaSource: 'screen'
+                        }
+                    };
+                },
                 audioOutputSelectionSupported: false,
                 groupPeerConnectionsSupported: false,
                 getMediaSourcesSupported: false,
@@ -9185,8 +9247,8 @@ var Circuit = (function (circuit) {
     });
 
     var AgentState = Object.freeze({
-        Ready: {name: 'ready'},
-        NotReady: {name: 'notReady'}
+        Ready: 'ready',
+        NotReady: 'notReady'
     });
 
     function AtcCallInfo() {
@@ -11331,7 +11393,7 @@ var Circuit = (function (circuit) {
             injectTemasysSvc: function () {}
         };
 
-        if (Utils.isMobile()) {
+        if (window.navigator.platform === 'iOS') {
             return _api;
         }
 
@@ -11498,6 +11560,13 @@ var Circuit = (function (circuit) {
                  * version will increase.
                  */
                 return parseInt(_browser.version, 10) >= SCREENSHARE_SUPPORT_VERSION;
+            };
+        } else if (window.navigator.platform === 'Android') {
+            _api.getScreen = function (successCb, errorCb, getUserMediaDesktop, screenConstraint) {
+                getUserMediaDesktop(successCb, errorCb, null, screenConstraint);
+            };
+            _api.isScreensharingAvailable = function () {
+                return true;
             };
         }
 
@@ -13238,6 +13307,7 @@ var Circuit = (function (circuit) {
                 delete pc.relayRtpCandidateTimeout;
             }
             candidates.push({candidate: 'a=end-of-candidates\r\n'});
+            candidates.isEnd = true;
             sendIceCandidates(candidates);
         }
 
@@ -14024,7 +14094,7 @@ var Circuit = (function (circuit) {
                 _pendingChangeMedia = null;
             } else if (_pendingRemoteSdp) {
                 logger.info('[RtcSessionController]: Process the pending remote description');
-                _that.setRemoteDescription(_pendingRemoteSdp);
+                _that.setRemoteDescription(_pendingRemoteSdp.sdp, _pendingRemoteSdp.cb);
                 _pendingRemoteSdp = null;
             }
         }
@@ -15175,7 +15245,10 @@ var Circuit = (function (circuit) {
 
             if (_sdpStatus === SdpStatus.AnswerReceived) {
                 logger.info('[RtcSessionController]: Still processing the previous answer remote description. Queue the new one');
-                _pendingRemoteSdp = remoteSdp;
+                _pendingRemoteSdp = {
+                    sdp: remoteSdp,
+                    cb: cb
+                };
                 return;
             }
 
@@ -15212,10 +15285,10 @@ var Circuit = (function (circuit) {
                     setSdpStatus(SdpStatus.AnswerReceived);
                     _renegotiationInProgress && renegotiationSuccessful();
                     waitConnectedState();
-                    sendAsyncCallback(cb);
-                    return;
+                } else {
+                    setRemoteDescription(remoteSdp);
                 }
-                setRemoteDescription(remoteSdp);
+                sendAsyncCallback(cb);
             }
         };
 
@@ -16158,7 +16231,7 @@ var Circuit = (function (circuit) {
         function getUrl() {
             var obj = {};
             _accessToken && (obj.accessToken = _accessToken);
-            _clientInfo && Utils.extend(obj, _clientInfo);
+            _clientInfo && Object.assign(obj, _clientInfo);
             return 'wss://' + _server + _url + (Object.keys(obj).length ? '?' + Utils.toQS(obj) : '');
         }
 
@@ -16587,11 +16660,10 @@ var Circuit = (function (circuit) {
         ///////////////////////////////////////////////////////////////////////////
         // Constants
         ///////////////////////////////////////////////////////////////////////////
-        var SP80_API_VERSION = 2090031; // 2.9.31-x
-        var SP81_API_VERSION = 2090033; // 2.9.33-x
         var SP82_API_VERSION = 2090035; // 2.9.35-x
         var SP83_API_VERSION = 2090040; // 2.9.40-x
         var SP84_API_VERSION = 2090043; // 2.9.43-x
+        var SP85_API_VERSION = 2090045; // 2.9.45-x
 
         var NOP = function () {};
 
@@ -16828,15 +16900,17 @@ var Circuit = (function (circuit) {
             sendRequest(Constants.ContentType.USER, request, function (err, rsp) {
                 if (isResponseValid(err, rsp, cb)) {
                     var stuff = rsp.user.getStuff;
-                    stuff.user.userPresenceState = stuff.userPresenceState;
-                    stuff.user.accounts = stuff.accounts || [];
+                    if (types.includes(Constants.GetStuffType.USER)) {
+                        stuff.user.userPresenceState = stuff.userPresenceState;
+                        stuff.user.accounts = stuff.accounts || [];
 
-                    // Update with API version returned in GET_STUFF
-                    _clientApiVersion = Utils.convertVersionToNumber(stuff.user.apiVersion);
+                        // Update with API version returned in GET_STUFF
+                        _clientApiVersion = Utils.convertVersionToNumber(stuff.user.apiVersion);
 
-                    // Save the connected clientId and userId
-                    _clientId = stuff.user.clientId;
-                    _userId = stuff.user.userId;
+                        // Save the connected clientId and userId
+                        _clientId = stuff.user.clientId;
+                        _userId = stuff.user.userId;
+                    }
 
                     cb(null, stuff);
                 }
@@ -16948,14 +17022,6 @@ var Circuit = (function (circuit) {
             _connHandler.on(msgType, cb, keysToOmitFromEvent);
         };
 
-        this.isGetApplicationsListSupported = function () {
-            return _clientApiVersion > SP80_API_VERSION;
-        };
-
-        this.isFilteredConversationIdsSupported = function () {
-            return _clientApiVersion > SP80_API_VERSION;
-        };
-
         this.isSkype4BAdminSupported = function () {
             return _clientApiVersion > SP82_API_VERSION;
         };
@@ -16970,6 +17036,14 @@ var Circuit = (function (circuit) {
 
         this.isImprovedNotificationsSupported = function () {
             return _clientApiVersion > SP84_API_VERSION;
+        };
+
+        this.isDeviceDiagnosticsSupported = function () {
+            return _clientApiVersion > SP85_API_VERSION;
+        };
+
+        this.isUpdateOpenScapeSiteSupported = function () {
+            return _clientApiVersion > SP85_API_VERSION;
         };
 
         ///////////////////////////////////////////////////////////////////////////////
@@ -17638,7 +17712,7 @@ var Circuit = (function (circuit) {
         ///////////////////////////////////////////////////////////////////////////////
         // Public Search related interfaces
         ///////////////////////////////////////////////////////////////////////////////
-        this.startBasicSearch = function (searchTerms, priorizedConvs, cb, useEnhancedSearch) {
+        this.startBasicSearch = function (searchTerms, priorizedConvs, cb) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: startBasicSearch...');
             var request = {
@@ -17646,7 +17720,7 @@ var Circuit = (function (circuit) {
                 startBasicSearch: {
                     searchTerm: searchTerms,
                     priorizedConvs: priorizedConvs || undefined,
-                    newSearch: useEnhancedSearch || undefined
+                    newSearch: true
                 }
             };
             sendRequest(Constants.ContentType.SEARCH, request, function (err, rsp) {
@@ -18647,13 +18721,10 @@ var Circuit = (function (circuit) {
                     conversationsFilter: data.filterConnector,
                     timestamp: data.timestamp || undefined,
                     number: data.number,
-                    numberOfParticipants: data.numberOfParticipants
+                    numberOfParticipants: data.numberOfParticipants,
+                    retrieveAction: data.retrieveAction || undefined
                 }
             };
-
-            if (this.isFilteredConversationIdsSupported()) {
-                request.getConversationsByFilter.retrieveAction = data.retrieveAction || undefined;
-            }
 
             var keysToOmitFromResponse = [
                 'response.conversation.getConversationsByFilterResult.conversations'
@@ -19548,6 +19619,29 @@ var Circuit = (function (circuit) {
                 }
             };
 
+            sendRequest(Constants.ContentType.RTC_CALL, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null);
+                }
+            });
+        };
+
+        this.submitCallQualityRating = function (data, cb) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: submitCallQualityRating...');
+
+            if (_clientApiVersion <= SP85_API_VERSION) {
+                logger.warn('[ClientApiHandler]: The submitCallQualityRating operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ThirdPartyError.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            var request = {
+                type: Constants.RTCCallActionType.SUBMIT_RTC_QUALITY_RATING,
+                submitRtcQualityRating: {
+                    rating: data
+                }
+            };
             sendRequest(Constants.ContentType.RTC_CALL, request, function (err, rsp) {
                 if (isResponseValid(err, rsp, cb)) {
                     cb(null);
@@ -20921,12 +21015,6 @@ var Circuit = (function (circuit) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: createOpenScapeSite...');
 
-            if (_clientApiVersion <= SP80_API_VERSION) {
-                logger.warn('[ClientApiHandler]: The createOpenScapeSite operation is not supported by the backend');
-                sendAsyncResp(cb, Constants.ThirdPartyError.OPERATION_NOT_SUPPORTED);
-                return;
-            }
-
             if (!openScapeSite) {
                 logger.warn('[ClientApiHandler]: No site data were provided');
                 sendAsyncResp(cb, Constants.ReturnCode.INVALID_MESSAGE);
@@ -20950,12 +21038,6 @@ var Circuit = (function (circuit) {
         this.getOpenScapeSite = function (siteId, cb) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: getOpenScapeSite...');
-
-            if (_clientApiVersion <= SP81_API_VERSION) {
-                logger.warn('[ClientApiHandler]: The getOpenScapeSite operation is not supported by the backend');
-                sendAsyncResp(cb, Constants.ThirdPartyError.OPERATION_NOT_SUPPORTED);
-                return;
-            }
 
             if (!siteId) {
                 logger.warn('[ClientApiHandler]: No siteId was provided');
@@ -20981,7 +21063,7 @@ var Circuit = (function (circuit) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: updateOpenScapeSite...');
 
-            if (_clientApiVersion <= SP80_API_VERSION) {
+            if (_clientApiVersion <= SP85_API_VERSION) {
                 logger.warn('[ClientApiHandler]: The updateOpenScapeSite operation is not supported by the backend');
                 sendAsyncResp(cb, Constants.ThirdPartyError.OPERATION_NOT_SUPPORTED);
                 return;
@@ -21029,12 +21111,6 @@ var Circuit = (function (circuit) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: deleteOpenScapePublicRange...');
 
-            if (_clientApiVersion <= SP81_API_VERSION) {
-                logger.warn('[ClientApiHandler]: The deleteOpenScapePublicRange operation is not supported by the backend');
-                sendAsyncResp(cb, Constants.ThirdPartyError.OPERATION_NOT_SUPPORTED);
-                return;
-            }
-
             var request = {
                 type: Constants.AdministrationActionType.DELETE_PUBLIC_NUMBER_RANGE,
                 deletePublicNumberRange: {
@@ -21053,12 +21129,6 @@ var Circuit = (function (circuit) {
         this.deleteOpenScapePrivateRange = function (siteId, rangeId, cb) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: deleteOpenScapePrivateRange...');
-
-            if (_clientApiVersion <= SP81_API_VERSION) {
-                logger.warn('[ClientApiHandler]: The deleteOpenScapePrivateRange operation is not supported by the backend');
-                sendAsyncResp(cb, Constants.ThirdPartyError.OPERATION_NOT_SUPPORTED);
-                return;
-            }
 
             var request = {
                 type: Constants.AdministrationActionType.DELETE_PRIVATE_NUMBER_RANGE,
@@ -21136,12 +21206,6 @@ var Circuit = (function (circuit) {
         this.getApplicationsList = function (tenantId, cb) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: getApplicationsList...');
-
-            if (!this.isGetApplicationsListSupported()) {
-                logger.warn('[ClientApiHandler]: The getApplicationsList operation is not supported by the backend');
-                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
-                return;
-            }
 
             var request = {
                 type: Constants.AdministrationActionType.GET_CUSTOM_APPS,
@@ -21826,6 +21890,29 @@ var Circuit = (function (circuit) {
             }, null, keysToOmitFromResponse);
         };
 
+        /**
+         * Get account by user id
+         * @param user id
+         * @param cb
+         */
+        this.getAccountByUserId = function (userId, cb) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: getAccountByUserId...');
+
+            var request = {
+                type: Constants.AccountActionType.GET_ACCOUNT_BY_USER_ID,
+                getAccountByUserId: {
+                    userId: userId
+                }
+            };
+
+            sendRequest(Constants.ContentType.ACCOUNT, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null, rsp.account.getAccountByUserId.account);
+                }
+            });
+        };
+
         this.migrateAccount = function (params, cb) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: migrateAccount...');
@@ -22073,7 +22160,8 @@ var Circuit = (function (circuit) {
     var AtcMessage = Object.freeze({
         CSTA: 'CSTA',
         PRIMARYCLIENT: 'PRIMARYCLIENT',
-        INFO: 'INFO'
+        INFO: 'INFO',
+        SETTINGS: 'SETTINGS'
     });
 
     var AtcInfoMessage = Object.freeze({
@@ -22861,6 +22949,9 @@ var Circuit = (function (circuit) {
                 parsedResp.staticOndDN = data.extn.pDa.prvt.zsOD;
                 parsedResp.staticOndActive = data.extn.pDa.prvt.zsOA === 'true';
                 parsedResp.voicemailActive = data.extn.pDa.prvt.zvMA === 'true';
+                if (data.extn.pDa.prvt.zoP) {
+                    parsedResp.overrideProfile = data.extn.pDa.prvt.zoP === 'true';
+                }
                 if (data.extn.pDa.prvt.zvMRD) {
                     parsedResp.voicemailRingDuration = parseInt(data.extn.pDa.prvt.zvMRD, 10);
                 }
@@ -22875,6 +22966,9 @@ var Circuit = (function (circuit) {
                 }
                 if (data.extn.pDa.prvt.hasOwnProperty('zcPN')) {
                     parsedResp.alternativeNumber = data.extn.pDa.prvt.zcPN;
+                }
+                if (data.extn.pDa.prvt.hasOwnProperty('zrTCN')) {
+                    parsedResp.routeToCell = data.extn.pDa.prvt.zrTCN === 'true';
                 }
             }
             return parsedResp;
@@ -23048,8 +23142,8 @@ var Circuit = (function (circuit) {
             logger.debug('[CstaParser]: Received CSTA GetAgentState response', rs);
             var data = rs.GASR;
             return {
-                loggedOnState: (data.aSL && data.aSL.aSE && data.aSL.aSE.lOS) || false,
-                agentState: (data.aSL && data.aSL.aSE && data.aSL.aSE.aIo && data.aSL.aSE.aIo.aII.aS) || null
+                loggedOnState: (data.aSL && data.aSL.aSE && data.aSL.aSE.lOS === 'true'),
+                agentState: (data.aSL && data.aSL.aSE && data.aSL.aSE.aIo && data.aSL.aSE.aIo.aII.aS === 'agentReady' ? 'ready' : 'notReady')
             };
         }
 
@@ -23151,6 +23245,7 @@ var Circuit = (function (circuit) {
                 connection: data.cnncn,
                 divertingDevice: data.dvD.dIr || '',
                 newDestination: data.nD.dIr || '',
+                callingDevice: data.caD.dIr || '',
                 localConnectionInfo: data.lCI,
                 cause: data.cs
             };
@@ -23223,6 +23318,9 @@ var Circuit = (function (circuit) {
                 if (data.extn.pDa.prvt.zvMA) {
                     parsedEvent.voicemailActive = data.extn.pDa.prvt.zvMA === 'true';
                 }
+                if (data.extn.pDa.prvt.zoP) {
+                    parsedEvent.overrideProfile = data.extn.pDa.prvt.zoP === 'true';
+                }
                 if (data.extn.pDa.prvt.zvMRD) {
                     parsedEvent.voicemailRingDuration = parseInt(data.extn.pDa.prvt.zvMRD, 10);
                 }
@@ -23237,6 +23335,9 @@ var Circuit = (function (circuit) {
                 }
                 if (data.extn.pDa.prvt.hasOwnProperty('zcPN')) {
                     parsedEvent.alternativeNumber = data.extn.pDa.prvt.zcPN;
+                }
+                if (data.extn.pDa.prvt.hasOwnProperty('zrTCN')) {
+                    parsedEvent.routeToCell = data.extn.pDa.prvt.zrTCN === 'true';
                 }
             }
             return parsedEvent;
@@ -23679,6 +23780,9 @@ var Circuit = (function (circuit) {
                 if (data.alternativeNumber !== undefined) {
                     prvt.zcPN = data.alternativeNumber;
                 }
+                if (data.routeToCell !== undefined) {
+                    prvt.zrTCN = data.routeToCell ? 'true' : 'false';
+                }
             }
             if (Object.keys(prvt).length > 0) {
                 shortTagJson.SF.extn = {
@@ -23862,7 +23966,7 @@ var Circuit = (function (circuit) {
 })(Circuit);
 
 // Define external globals for JSHint
-/*global CustomEvent, document, window*/
+/*global BgExchangeConnectorHandler, CustomEvent, document, setTimeout, window*/
 
 var Circuit = (function (circuit) {
     'use strict';
@@ -23889,6 +23993,103 @@ var Circuit = (function (circuit) {
         var _reqCallbacks = {};
         var _reqId = 0;
         var _extInitialized = false;
+
+        // Variables used by electron in order to communicate directly with the Exchange connector code
+        var _bgExchangeResponder;
+        var _bgExchangeConnectorHandler;
+
+        ///////////////////////////////////////////////////////////////////////////
+        // Electron initializations
+        ///////////////////////////////////////////////////////////////////////////
+        if (circuit.isElectron) {
+            // For DA call BgExchangeConnectorHandler directly since both are
+            // running in the main renderer
+            _bgExchangeConnectorHandler = BgExchangeConnectorHandler.getInstance();
+
+            var handleBgMessage = function (msg) {
+                if (msg.data && msg.data.keysToOmitFromLogging) {
+                    msg.keysToOmitFromLogging = msg.data.keysToOmitFromLogging.map(function (key) {
+                        return 'data.' + key;
+                    });
+                    delete msg.data.keysToOmitFromLogging;
+                }
+                onMessage(msg);
+            };
+
+            // For Electron define the responder object and chrome.storage.local proxy.
+            // The responder provides the same interface as the "Tab" object in the Chrome extension.
+            _bgExchangeResponder = Object.create(logger, {
+                sendResponse: {
+                    value: function (reqId, data, suppressLog) {
+                        var msg = {
+                            type: ChromeExtension.BgMsgType.RESPONSE,
+                            reqId: reqId,
+                            suppressLog: !!suppressLog,
+                            data: data
+                        };
+                        handleBgMessage(msg);
+                    }
+                },
+                sendInternalEvent: {
+                    value: function (data) {
+                        logger.error('[ExtensionConnHandler]: Unexpected internal event: ', data);
+                    }
+                },
+                sendExchangeConnEvent: {
+                    value: function (data, suppressLog) {
+                        var msg = {
+                            type: ChromeExtension.BgMsgType.EVENT,
+                            target: ChromeExtension.BgTarget.EXCHANGE_CONNECTOR,
+                            suppressLog: !!suppressLog,
+                            data: data
+                        };
+                        handleBgMessage(msg);
+                    }
+                }
+            });
+
+            // Local storage proxy for bgExchangeConnectorHandler
+            var EXCHANGE_KEY = 'exchange';
+            window.chrome = {
+                storage: {
+                    local: {
+                        set: function (obj, cb) {
+                            window.localStorage.setItem(EXCHANGE_KEY, JSON.stringify(obj, function (key, value) {
+                                // Object has circular structure, we should remove it.
+                                var val = value;
+                                if (typeof key === 'string' && key.charAt(0) === '$') {
+                                    val = undefined;
+                                }
+                                return val;
+                            }));
+                            cb && cb();
+                        },
+                        get: function (request, cb) {
+                            cb(JSON.parse(window.localStorage.getItem(EXCHANGE_KEY)));
+                        }
+                    }
+                },
+                runtime: {},
+                // Window creation is used for permission request. We don't need it.
+                windows: {
+                    create: function () {}
+                },
+                // Providing permission for any host as electron can send requests to any.
+                permissions: {
+                    contains: function (perm, cb) {
+                        cb(true);
+                    }
+                }
+            };
+
+            setTimeout(function () {
+                logger.info('[ExtensionConnHandler]: Raise extensionInitialized');
+                _extInitialized = true;
+                var evt = _that.createEvent('extensionInitialized');
+                evt.data = {version: 'electron'};
+                _that.dispatch(evt);
+            }, 1000);
+        }
 
         ///////////////////////////////////////////////////////////////////////////
         // Internal functions
@@ -24034,6 +24235,18 @@ var Circuit = (function (circuit) {
             }
             data.suppressLog = suppressLog;
 
+            // For electron the exchange connector is running in the same renderer, so
+            // call it directly, passing the responder object for responses and events.
+            if (circuit.isElectron &&
+                data.type === ChromeExtension.BgMsgType.REQUEST &&
+                data.target === ChromeExtension.BgTarget.EXCHANGE_CONNECTOR) {
+
+                window.setTimeout(function () {
+                    _bgExchangeConnectorHandler.onWebClientMsg(_bgExchangeResponder, data, circuit.__server);
+                }, 0);
+                return data.reqId;
+            }
+
             var msg = new CustomEvent(ChromeExtension.DOMEvent.TO_EXTENSION, {detail: JSON.stringify(data)});
             try {
                 document && document.dispatchEvent(msg);
@@ -24055,15 +24268,7 @@ var Circuit = (function (circuit) {
         ///////////////////////////////////////////////////////////////////////////
         // Event handlers
         ///////////////////////////////////////////////////////////////////////////
-        function onMessage(msg) {
-            var msgObj = null;
-            try {
-                msgObj = JSON.parse(msg.detail);
-            } catch (e) {
-                logger.warning('[ExtensionConnHandler]: Error parsing JSON object', e);
-                return;
-            }
-
+        function onMessage(msgObj) {
             if (msgObj.target === ChromeExtension.BgTarget.LOG) {
                 logger.logMsg(msgObj.data.log.level, msgObj.data.log.messages);
                 return;
@@ -24084,6 +24289,19 @@ var Circuit = (function (circuit) {
             default:
                 logger.msgRcvd('[ExtensionConnHandler]: Unexpected message type: ', msgObj.type);
                 break;
+            }
+        }
+
+        function onExtensionMessage(msg) {
+            if (!msg || !msg.detail) {
+                return;
+            }
+            try {
+                var msgObj = JSON.parse(msg.detail);
+                onMessage(msgObj);
+            } catch (e) {
+                logger.error('[ExtensionConnHandler]: Error parsing JSON object. ', e);
+                return;
             }
         }
 
@@ -24351,7 +24569,7 @@ var Circuit = (function (circuit) {
 
         if (Utils.getBrowserInfo().chrome) {
             // Register for events from Chrome extension
-            document && document.addEventListener(ChromeExtension.DOMEvent.FROM_EXTENSION, onMessage);
+            document && document.addEventListener(ChromeExtension.DOMEvent.FROM_EXTENSION, onExtensionMessage);
         }
     }
 
@@ -25985,7 +26203,7 @@ var Circuit = (function (circuit) {
 
         // This defines the minimum extension version supported by the webclient.
         // Update this as old extension versions no longer work with the webclient.
-        var MIN_EXTENSION_VERSION_STR = '1.1.6500';
+        var MIN_EXTENSION_VERSION_STR = '1.1.9000';
         var MIN_EXTENSION_VERSION = Utils.convertVersionToNumber(MIN_EXTENSION_VERSION_STR);
 
         // Desktop app has extension emulation. To skip validation of the emulator we use ELECTRON_KEY.
@@ -26124,7 +26342,7 @@ var Circuit = (function (circuit) {
             if (_inlineInstallInProgress || _inlineInstallFailed) {
                 // Something went wrong: the extension has been just installed and hasn't sent the init message yet.
                 LogSvc.warn('[ExtensionSvc]: The first extension installation attempt failed. Redirect the user to web store page. Url: ', _extensionUrl);
-                if (showErrorPopup) {
+                if (showErrorPopup && PopupSvc) {
                     PopupSvc.error({message: 'res_ExtensionCannotBeInstalled', messageParams: [_extensionUrl]});
                 }
                 return _inlineInstallInProgress ? ExtensionInstallErrorCodes.INSTALL_ALREADY_IN_PROGRESS :
@@ -26134,7 +26352,7 @@ var Circuit = (function (circuit) {
             // Check if the extension needs to be updated
             if (!_extensionVersionSupported) {
                 LogSvc.warn('[ExtensionSvc]: We are running an outdated extension:', _extensionVersion);
-                if (showErrorPopup) {
+                if (showErrorPopup && PopupSvc) {
                     PopupSvc.error({message: 'res_UnsupportedExtensionVersion'});
                 }
                 return ExtensionInstallErrorCodes.UNSUPPORTED_EXT_VERSION;
@@ -26391,24 +26609,15 @@ var Circuit = (function (circuit) {
                 // Assume the feature will be supported once the user installs the Chrome extension
                 return !!($rootScope.browser && $rootScope.browser.chrome);
             }
-            // getAppointments API was added in version 1.1.7800
-            return _extensionVersion === ELECTRON_KEY || Utils.convertVersionToNumber(_extensionVersion) >= 1017800;
+            return true;
         };
 
         this.supportsExchangeAutodiscover = function () {
-            if (!_self.isExtensionRunning()) {
-                return false;
-            }
-            // Autodiscovery support was added in version 1.1.7903
-            return _extensionVersion === ELECTRON_KEY || Utils.convertVersionToNumber(_extensionVersion) >= 1017903;
+            return _self.isExtensionRunning();
         };
 
         this.supportsExchangeAutodiscoverSvc = function () {
-            if (!_self.isExtensionRunning()) {
-                return false;
-            }
-            // AutodiscoverySvc support was added in version 1.1.9000
-            return _extensionVersion === ELECTRON_KEY || Utils.convertVersionToNumber(_extensionVersion) >= 1019000;
+            return _self.isExtensionRunning();
         };
 
         /******************************************************
@@ -26480,7 +26689,6 @@ var Circuit = (function (circuit) {
         // Constants
         ///////////////////////////////////////////////////////////////////////////////////////
         var ATC_REGISTRATION_RETRY_TIMER = 10000; // Retry timer in milliseconds
-        var CALL_LOG_STATUS_TIMER = 2000; // Call log status wait timer in milliseconds
 
         ///////////////////////////////////////////////////////////////////////////////////////
         // Internal Variables
@@ -26495,8 +26703,6 @@ var Circuit = (function (circuit) {
         var _presenceSubscribedTrunkId = null;
         var _telephonyTrunkSubscriptions = {};
         var _retryTimer = null;
-        var _callLogStatusTimer = null;
-        var _callLogStatusReceived = false;
 
         // Telephony Data (state and default caller ID)
         var _telephonyData = {
@@ -26560,6 +26766,7 @@ var Circuit = (function (circuit) {
                     ondHash: $rootScope.localUser.ondSipAuthenticationHash || undefined,
                     routeToDesk: $rootScope.localUser.selectedRoutingOption === RoutingOptions.DeskPhone.name,
                     tcPool: $rootScope.localUser.associatedTelephonyTrunkGroupId,
+                    pbxCallLog: true,
                     deviceType: _deviceType
                 },
                 destUserId: $rootScope.localUser.associatedTelephonyUserID,
@@ -26579,6 +26786,8 @@ var Circuit = (function (circuit) {
             _atcRegistrationData.onsSipAuthenticationHash = $rootScope.localUser.onsSipAuthenticationHash;
             _atcRegistrationData.ondSipAuthenticationHash = $rootScope.localUser.ondSipAuthenticationHash;
             _savedRoutingOption = $rootScope.localUser.selectedRoutingOption;
+            // Initialize to false when registering
+            $rootScope.localUser.noCallLog = false;
 
             setAtcState(AtcRegistrationState.Registering);
 
@@ -26616,6 +26825,9 @@ var Circuit = (function (circuit) {
                         $rootScope.localUser.isOSV = registerResult.configurationData.pbx && registerResult.configurationData.pbx === 'OSV';
                         $rootScope.localUser.PBXCallLogSupported = _atcRegistrationData.capabilities && _atcRegistrationData.capabilities.includes(Constants.AtcCapabilities.PBX_CALL_LOG);
                         setAtcState(AtcRegistrationState.Registered);
+                        if ($rootScope.localUser.PBXCallLogSupported && !$rootScope.localUser.noCallLog) {
+                            sendEnablePBXCallLogToATC(true);
+                        }
                         LogSvc.debug('[AtcRegistrationSvc]: Registration refresh will be handled by access server');
 
                     } else {
@@ -26880,13 +27092,6 @@ var Circuit = (function (circuit) {
             };
             // Send request
             _userToUserHandler.sendAtcRequest(data);
-            _callLogStatusReceived = false;
-            _callLogStatusTimer = $timeout(function () {
-                if (!_callLogStatusReceived) {
-                    $rootScope.circuitLabs.ENHANCED_CALL_LOG = false;
-                }
-                _callLogStatusTimer = null;
-            }, CALL_LOG_STATUS_TIMER);
         }
 
         ///////////////////////////////////////////////////////////////////////////////////////
@@ -26955,12 +27160,6 @@ var Circuit = (function (circuit) {
             }
         });
 
-        PubSubSvc.subscribe('/feature/state/changed', function (feature, value) {
-            if (feature === Constants.LabFeatureName.ENHANCED_CALL_LOG) {
-                sendEnablePBXCallLogToATC(value);
-            }
-        });
-
         ///////////////////////////////////////////////////////////////////////////////////////
         // Client API Event Handlers
         ///////////////////////////////////////////////////////////////////////////////////////
@@ -27015,9 +27214,6 @@ var Circuit = (function (circuit) {
         _userToUserHandler.on('ATC.INFO', function (data) {
             LogSvc.debug('[AtcRegistrationSvc]: Received ATC.INFO with data = ', data);
             if (data.hasOwnProperty('pbxCallLogStatus')) {
-                _callLogStatusReceived = true;
-                $timeout.cancel(_callLogStatusTimer);
-                _callLogStatusTimer = null;
                 $rootScope.localUser.noCallLog = !!data.pbxCallLogStatus;
             }
         });
@@ -27142,6 +27338,278 @@ var Circuit = (function (circuit) {
 })(Circuit);
 
 // Define global variables for JSHint
+/*global DeviceStatistics*/
+
+var Circuit = (function (circuit) {
+    'use strict';
+    // Imports
+
+    var ClientApiHandler = circuit.ClientApiHandlerSingleton;
+    var Constants = circuit.Constants;
+    var Utils = circuit.Utils;
+
+    /**
+     * Creates a new DeviceDiagnosticSvcImpl.
+     *
+     * @class
+     * @classdesc  Device Diagnostics Service for device analytics purposes
+     */
+    function DeviceDiagnosticSvcImpl($rootScope, $timeout, LogSvc, PubSubSvc, LocalStoreSvc) {
+        LogSvc.debug('New Service: DeviceDiagnosticSvc');
+
+        ///////////////////////////////////////////////////////////////////////////////////////
+        // Internal Variables
+        ///////////////////////////////////////////////////////////////////////////////////////
+        var JOIN_DELAY_TIMEOUT = 3000;
+
+        var _clientApiHandler = ClientApiHandler.getInstance();
+
+        ///////////////////////////////////////////////////////////////////////////////////////
+        // Internal functions
+        ///////////////////////////////////////////////////////////////////////////////////////
+        function cancelJoinDelayTimer(diagnostics) {
+            if (diagnostics && diagnostics.joinDelayTimer) {
+                $timeout.cancel(diagnostics.joinDelayTimer);
+                diagnostics.joinDelayTimer = null;
+            }
+        }
+
+        function startDiagnostics(call) {
+            if (call && !call.isRemote) {
+                if (!_clientApiHandler.isDeviceDiagnosticsSupported()) {
+                    LogSvc.debug('[DeviceDiagnosticSvc]: Cannot start diagnostics collection. Not supported by backend.');
+                    return;
+                }
+                LogSvc.info('[DeviceDiagnosticSvc]: Start diagnostics collection for callId = ', call.callId);
+                call.deviceDiagnostics = call.deviceDiagnostics || {
+                    data: {
+                        actionInfo: []
+                    }
+                };
+            }
+        }
+
+        function startJoinDelayTimer(call) {
+            if (!call || !call.deviceDiagnostics) {
+                return;
+            }
+            LogSvc.debug('[DeviceDiagnosticSvc]: Start join delay timer for callId = ', call.callId);
+
+            var diagnostics = call.deviceDiagnostics;
+
+            cancelJoinDelayTimer(diagnostics);
+            diagnostics.joinDelayTimer = $timeout(function () {
+                diagnostics.joinDelayTimer = null;
+                onJoinDelay(call);
+            }, JOIN_DELAY_TIMEOUT);
+
+            diagnostics.joinDelayed = false;
+            diagnostics.waitingToSend = false;
+            diagnostics.iceGatheringFinished = false;
+
+            call.deviceDiagnostics = diagnostics;
+        }
+
+        function createActionInfo(call, actionType) {
+            LogSvc.debug('[DeviceDiagnosticSvc]: Create action info ', actionType);
+
+            if (!call || !call.deviceDiagnostics || !actionType) {
+                return;
+            }
+
+            var info = {
+                actionType: actionType
+            };
+
+            switch (actionType) {
+            case Constants.RtcDiagnosticsAction.SDP_ANSWER:
+            case Constants.RtcDiagnosticsAction.SDP_CONNECTED:
+            case Constants.RtcDiagnosticsAction.REMOTE_ICE_CANDIDATES:
+                info.type = Constants.RtcActionInfoType.EVENT;
+                info.timestampEvent = Date.now();
+                break;
+
+            default:
+                info.type = Constants.RtcActionInfoType.REQUEST_RESPONSE;
+                info.timestampRequest = Date.now();
+                break;
+            }
+
+            call.deviceDiagnostics.data.actionInfo.push(info);
+            return info;
+        }
+
+        function hasPendingActionInfo(call) {
+            // Check if all action infos are complete.
+            if (!call || !call.deviceDiagnostics) {
+                return false;
+            }
+            var pending = call.deviceDiagnostics.data.actionInfo.some(function (actionInfo) {
+                return !actionInfo.complete;
+            });
+            return pending || !call.deviceDiagnostics.iceGatheringFinished;
+        }
+
+        function finishActionInfo(call, info) {
+            if (!info) {
+                return;
+            }
+
+            LogSvc.debug('[DeviceDiagnosticSvc]: Finish action info ', info.actionType);
+
+            info.complete = true;
+            if (info.type === Constants.RtcActionInfoType.REQUEST_RESPONSE) {
+                info.timestampResponse = Date.now();
+            }
+
+            if (call && call.deviceDiagnostics) {
+                if (info.isEndOfCandidates) {
+                    call.deviceDiagnostics.iceGatheringFinished = true;
+                    LogSvc.debug('[DeviceDiagnosticSvc]: Ice gathering finished');
+                }
+                // Device Diagnostics won't be sent until collection is complete, or at least on terminate
+                if (call.deviceDiagnostics.waitingToSend && !hasPendingActionInfo(call)) {
+                    forceFinishDeviceDiagnostics(call);
+                }
+            }
+        }
+
+        function forceFinishDeviceDiagnostics(call) {
+            if (!call || !call.deviceDiagnostics) {
+                return;
+            }
+
+            LogSvc.debug('[DeviceDiagnosticSvc]: Force finish device diagnostics');
+            var diagnostics = call.deviceDiagnostics;
+            cancelJoinDelayTimer(diagnostics);
+
+            if (diagnostics.joinDelayed) {
+                sendDeviceDiagnostics(call);
+            }
+            clearDeviceDiagnostics(call);
+        }
+
+        function onJoinDelay(call) {
+            if (!call || !call.deviceDiagnostics) {
+                return;
+            }
+
+            var diagnostics = call.deviceDiagnostics;
+
+            LogSvc.debug('[DeviceDiagnosticSvc]: Join action delayed, preparing device diagnostics');
+            cancelJoinDelayTimer(diagnostics);
+            diagnostics.joinDelayed = true;
+
+            if (typeof DeviceStatistics !== 'undefined') {
+                var deviceStats = DeviceStatistics.getStatistics();
+
+                LogSvc.info('[DeviceDiagnosticSvc]: Received native device diagnostics: ', deviceStats);
+                diagnostics.data.usedRAMApp = deviceStats.usedRAMApp;
+                diagnostics.data.availableRAMApp = deviceStats.availableRAMApp;
+                diagnostics.data.usedRAMDevice = deviceStats.usedRAMDevice;
+                diagnostics.data.availableRAMDevice = deviceStats.availableRAMDevice;
+                diagnostics.data.virtualMemory = deviceStats.virtualMemory;
+                diagnostics.data.usagePerCore = deviceStats.usagePerCore;
+                diagnostics.data.numberOfCores = deviceStats.numberOfCores;
+                diagnostics.data.networkType = deviceStats.networkType;
+            }
+        }
+
+        function finishDeviceDiagnostics(call) {
+            if (!call || !call.deviceDiagnostics) {
+                return;
+            }
+            LogSvc.debug('[DeviceDiagnosticSvc]: Finish device diagnostics');
+
+            var diagnostics = call.deviceDiagnostics;
+            cancelJoinDelayTimer(diagnostics);
+
+            if (diagnostics.joinDelayed) {
+                if (!hasPendingActionInfo(call)) {
+                    sendDeviceDiagnostics(call);
+                } else {
+                    diagnostics.waitingToSend = true;
+                    LogSvc.debug('[DeviceDiagnosticSvc]: Send device diagnostic delayed');
+                }
+            } else {
+                clearDeviceDiagnostics(call);
+            }
+        }
+
+        function clearDeviceDiagnostics(call) {
+            if (!call || !call.deviceDiagnostics) {
+                return;
+            }
+
+            LogSvc.debug('[DeviceDiagnosticSvc]: Clear device diagnostics');
+            cancelJoinDelayTimer(call.deviceDiagnostics);
+            delete call.deviceDiagnostics;
+        }
+
+        function sendDeviceDiagnostics(call) {
+            if (!call || !call.deviceDiagnostics) {
+                LogSvc.debug('[DeviceDiagnosticSvc]: sendDeviceDiagnostics - Nothing to send');
+                return;
+            }
+            var clientInfo = {
+                userId: $rootScope.localUser.userId,
+                convId: call.convId,
+                clientInfoType: Constants.RtcClientInfoType.DEVICE_DIAGNOSTICS,
+                reason: Constants.RtcClientInfoReason.JOIN_DELAY,
+                timestamp: Date.now(),
+                sessionId: call.callId,
+                deviceDiagnostics: Utils.shallowCopy(call.deviceDiagnostics.data)
+            };
+
+            if (call && call.instanceId) {
+                clientInfo.instanceId = call.instanceId;
+            }
+
+            clearDeviceDiagnostics(call);
+
+            LogSvc.debug('[DeviceDiagnosticSvc]: Sending device diagnostics...');
+            _clientApiHandler.sendClientInfo([clientInfo], function (err) {
+                if (err) {
+                    LogSvc.debug('[DeviceDiagnosticSvc]: Failed to send device diagnostics. ', err);
+                    storeClientInfo(clientInfo);
+                }
+            });
+        }
+
+        function storeClientInfo(info) {
+            if (LocalStoreSvc && !$rootScope.isSessionGuest) {
+                var clientInfos = LocalStoreSvc.getObjectSync(LocalStoreSvc.keys.RTC_CLIENT_INFOS) || [];
+                clientInfos.push(info);
+                LocalStoreSvc.setObjectSync(LocalStoreSvc.keys.RTC_CLIENT_INFOS, clientInfos);
+            }
+        }
+
+        ///////////////////////////////////////////////////////////////////////////////////////
+        // Public Interface
+        ///////////////////////////////////////////////////////////////////////////////////////
+        this.startDiagnostics = startDiagnostics;
+
+        this.startJoinDelayTimer = startJoinDelayTimer;
+
+        this.createActionInfo = createActionInfo;
+
+        this.finishActionInfo = finishActionInfo;
+
+        this.finishDeviceDiagnostics = finishDeviceDiagnostics;
+
+        this.forceFinishDeviceDiagnostics = forceFinishDeviceDiagnostics;
+
+        return this;
+    }
+
+    // Exports
+    circuit.DeviceDiagnosticSvcImpl = DeviceDiagnosticSvcImpl;
+
+    return circuit;
+
+})(Circuit);
+
+// Define global variables for JSHint
 /*global RegistrationState, require*/
 
 var Circuit = (function (circuit) {
@@ -27180,7 +27648,8 @@ var Circuit = (function (circuit) {
         UserSvc,
         ConversationSvc,
         NotificationSvc,
-        InstrumentationSvc) {
+        InstrumentationSvc,
+        DeviceDiagnosticSvc) {
 
         // The following imports need to be defined inside CircuitCallControlSvcImpl due to JS-SDK
         var Conversation = circuit.Conversation;
@@ -27248,7 +27717,7 @@ var Circuit = (function (circuit) {
             }
         }
 
-        function getTurnCredentials(rtcSessionId) {
+        function getTurnCredentials(call) {
             return new $q(function (resolve, reject) {
                 var expirationTimestamp = (_turnCredentials && _turnCredentials.expirationTimestamp) || 0;
                 if (Date.now() < expirationTimestamp) {
@@ -27259,9 +27728,13 @@ var Circuit = (function (circuit) {
                 }
 
                 LogSvc.debug('[CircuitCallControlSvc]: Get new TURN credentials');
-
-                _clientApiHandler.renewTurnCredentials(rtcSessionId, function (err, servers) {
+                var renewTurnCredentialsInfo = DeviceDiagnosticSvc.createActionInfo(call, Constants.RtcDiagnosticsAction.RENEW_TURN_CREDENTIALS);
+                _clientApiHandler.renewTurnCredentials(call.callId, function (err, servers) {
                     $rootScope.$apply(function () {
+                        if (renewTurnCredentialsInfo) {
+                            renewTurnCredentialsInfo.data = JSON.stringify(servers);
+                            DeviceDiagnosticSvc.finishActionInfo(call, renewTurnCredentialsInfo);
+                        }
                         if (err) {
                             LogSvc.error('[CircuitCallControlSvc]: Error renewing TURN credentials.', err);
                             reject(err);
@@ -27286,43 +27759,50 @@ var Circuit = (function (circuit) {
             return new $q(function (resolve, reject) {
                 var prepareSessionData = {
                     convId: conv.convId,
-                    rtcSessionId: localCall ? localCall.callId : conv.rtcSessionId,
+                    rtcSessionId: localCall.callId,
                     ownerId: conv.creatorId,
                     mediaNode: localCall.getMediaNode(),
                     isTelephonyConversation: conv.isTelephonyConv,
                     replaces: options.replaces && options.replaces.callId
                 };
+
+                DeviceDiagnosticSvc.startDiagnostics(localCall);
+                DeviceDiagnosticSvc.startJoinDelayTimer(localCall);
+                var prepareActionInfo = DeviceDiagnosticSvc.createActionInfo(localCall, Constants.RtcDiagnosticsAction.PREPARE);
+
                 _clientApiHandler.prepareSession(prepareSessionData, function (err, servers, newRtcSessionId) {
                     $rootScope.$apply(function () {
+                        if (prepareActionInfo) {
+                            prepareActionInfo.data = err ? err.toString() : JSON.stringify(servers);
+                            DeviceDiagnosticSvc.finishActionInfo(localCall, prepareActionInfo);
+                        }
+
                         if (err) {
                             if (err === Constants.ErrorCode.RTC_CONCURRENT_INCOMING_CALL) {
                                 LogSvc.debug('[CircuitCallControlSvc]: Concurrent incoming call, aborting own attempt.');
-                                reject(err);
-                                return;
                             } else if (err === Constants.ErrorCode.RTC_NO_MEDIA_NODES_AVAILABLE) {
                                 LogSvc.error('[CircuitCallControlSvc]: No media nodes available, call not possible.');
-                                reject(err);
-                                return;
                             } else if (err === Constants.ErrorCode.RTC_MEDIA_NODE_UNREACHABLE) {
                                 LogSvc.error('[CircuitCallControlSvc]: Specified media node is not reachable, call not possible.');
-                                reject(err);
-                                return;
                             } else {
                                 LogSvc.error('[CircuitCallControlSvc]: Error retrieving start session data.', err);
-                                reject(err);
-                                return;
                             }
-                        } else if (!servers || !servers.length) {
+                            reject(err);
+                            return;
+                        }
+
+                        if (!servers || !servers.length) {
                             LogSvc.error('[CircuitCallControlSvc]: Error getting TURN credentials. No server(s) available.');
                             reject('No TURN server(s) available');
                             return;
                         }
+
                         LogSvc.info('[CircuitCallControlSvc]: Received new TURN credentials');
                         servers = servers[0];
                         _turnCredentials = servers;
                         updateTurnExpireTime();
 
-                        if (localCall && newRtcSessionId) {
+                        if (newRtcSessionId) {
                             localCall.setCallIdForTelephony(newRtcSessionId);
                         }
                         resolve(_turnCredentials);
@@ -27561,6 +28041,8 @@ var Circuit = (function (circuit) {
                         storeOfflineJoinFailure(call);
                     }
                 }
+
+                DeviceDiagnosticSvc.forceFinishDeviceDiagnostics(call);
             }
 
             unregisterSessionController(call);
@@ -27842,7 +28324,7 @@ var Circuit = (function (circuit) {
             participant.screenStreamId = apiParticipant.screenStreamId || '';
             participant.mediaType = Proto.getMediaType(apiParticipant.mediaTypes || mediaType);
             participant.muted = apiParticipant.muted || !participant.mediaType.audio;
-            participant.participantType = apiParticipant.participantType;
+            participant.participantType = apiParticipant.participantType || Constants.RTCParticipantType.USER;
             participant.screenSharePointerSupported = !!apiParticipant.screenSharePointerSupported;
 
             return participant;
@@ -28035,8 +28517,15 @@ var Circuit = (function (circuit) {
                     joinData.fromDn = '+19998455246';
                 }
 
+                var joinInfo = DeviceDiagnosticSvc.createActionInfo(_primaryLocalCall, Constants.RtcDiagnosticsAction.JOIN);
+                if (joinInfo) {
+                    joinInfo.data = JSON.stringify(joinData.sdp);
+                }
+
                 _clientApiHandler.joinRtcCall(joinData, function (err) {
                     $rootScope.$apply(function () {
+                        DeviceDiagnosticSvc.finishActionInfo(_primaryLocalCall, joinInfo);
+
                         if (err) {
                             var replaces = _primaryLocalCall.replaces;
                             var reason = getClientTerminatedReason(err);
@@ -28098,10 +28587,11 @@ var Circuit = (function (circuit) {
             };
 
             var turnPromise;
-            if (!conversation.call || conversation.call !== _primaryLocalCall && !options.handover) { // Session initiating side
+            if (!conversation.call || conversation.call !== _primaryLocalCall && !options.handover) {
+                // Session initiating side
                 turnPromise = prepareSession(conversation, _primaryLocalCall, options);
             } else {
-                turnPromise = getTurnCredentials(_primaryLocalCall.callId);
+                turnPromise = getTurnCredentials(_primaryLocalCall);
             }
             turnPromise.then(function (turnCredentials) {
                 if (turnCredentials) {
@@ -28195,7 +28685,8 @@ var Circuit = (function (circuit) {
             };
 
             var screenShareWasActive = call.localMediaType.desktop;
-            getTurnCredentials(call.callId).then(function (turnCredentials) {
+            getTurnCredentials(call)
+            .then(function (turnCredentials) {
                 sessionCtrl.setTurnUris(turnCredentials.turnServer);
                 sessionCtrl.setTurnCredentials(turnCredentials);
                 sessionCtrl.onSessionDescription = onSdp;
@@ -28341,8 +28832,11 @@ var Circuit = (function (circuit) {
                 activeRemoteCall.setState(Enums.CallState.Started);
                 activeRemoteCall.activeClient = null;
                 publishCallState(activeRemoteCall);
-                _activeRemoteCalls.findAndRemove(function (call) {
-                    return call.callId === activeRemoteCall.callId;
+                _activeRemoteCalls.some(function (call, idx) {
+                    if (call.callId === activeRemoteCall.callId) {
+                        _activeRemoteCalls.splice(idx, 1);
+                        return true;
+                    }
                 });
             }
         }
@@ -28892,9 +29386,16 @@ var Circuit = (function (circuit) {
                 candidates: event.candidates.map(JSON.stringify.bind(JSON))
             };
 
+            var iceInfo = DeviceDiagnosticSvc.createActionInfo(call, Constants.RtcDiagnosticsAction.ICE_CANDIDATES);
+            if (iceInfo) {
+                iceInfo.data = data.candidates;
+                iceInfo.isEndOfCandidates = event.candidates.isEnd;
+            }
+
             _clientApiHandler.sendIceCandidates(data, function (err) {
+                DeviceDiagnosticSvc.finishActionInfo(call, iceInfo);
                 if (err) {
-                    LogSvc.warn('Failed to sent ICE candidate: ', err);
+                    LogSvc.warn('Failed to send ICE candidate: ', err);
                 }
             });
         }
@@ -28904,6 +29405,10 @@ var Circuit = (function (circuit) {
             $rootScope.$apply(function () {
                 LogSvc.debug('[CircuitCallControlSvc]: Publish /call/sdpConnected event');
                 PubSubSvc.publish('/call/sdpConnected', [call]);
+
+                var sdpConnectedInfo = DeviceDiagnosticSvc.createActionInfo(call, Constants.RtcDiagnosticsAction.SDP_CONNECTED);
+                DeviceDiagnosticSvc.finishActionInfo(call, sdpConnectedInfo);
+
                 if (call.isTelephonyCall) {
                     // For telephony calls the backend won't send events when SDP is connected.
                     // So set the call state to waiting here.
@@ -28915,6 +29420,7 @@ var Circuit = (function (circuit) {
                     call.setState((call.isDirect || call.hasOtherParticipants()) ? Enums.CallState.Active : Enums.CallState.Waiting);
                 }
                 publishCallState(call);
+                DeviceDiagnosticSvc.finishDeviceDiagnostics(call);
             });
         }
 
@@ -29645,7 +30151,8 @@ var Circuit = (function (circuit) {
                 sessionCtrl.useMaxNumberOfExtraVideoChannels();
             }
 
-            getTurnCredentials(incomingCall.callId).then(function (turnCredentials) {
+            getTurnCredentials(incomingCall)
+            .then(function (turnCredentials) {
                 addCallToList(incomingCall);
                 if (turnUris) {
                     LogSvc.debug('[CircuitCallControlSvc]: Using TURN servers associated with session: ', turnUris);
@@ -30257,6 +30764,8 @@ var Circuit = (function (circuit) {
                     // Make sure we have a valid SDP
                     var sdp = evt.sdp;
                     if (sdp) {
+                        var sdpAnswerInfo = DeviceDiagnosticSvc.createActionInfo(localCall, Constants.RtcDiagnosticsAction.SDP_ANSWER);
+
                         if (!sdp.sdp || sdp.sdp === 'sdp' || sdp.sdp === 'data') {
                             // The mock keeps getting changed, so we need to adapt...
                             sdp.sdp = 'sdp';
@@ -30269,10 +30778,16 @@ var Circuit = (function (circuit) {
                         // to clear the media renegotiation flags.
                         localCall.sessionCtrl.setRemoteDescription(sdp, function (err) {
                             localCall.clearTransactionId();
+
                             if (err) {
                                 localCall.setDisconnectCause(Constants.DisconnectCause.REMOTE_SDP_FAILED, 'type=' + sdp.type + ' origin=' + sdpParser.getOrigin(sdp.sdp));
                                 leaveCall(localCall, null, Enums.CallClientTerminatedReason.SET_REMOTE_SDP_FAILED);
+                                if (sdpAnswerInfo) {
+                                    sdpAnswerInfo.data = err;
+                                }
                             }
+
+                            DeviceDiagnosticSvc.finishActionInfo(localCall, sdpAnswerInfo);
                         });
                     }
                 });
@@ -30298,6 +30813,12 @@ var Circuit = (function (circuit) {
                 }
 
                 localCall.sessionCtrl.addIceCandidates(evt.origin, evt.candidates);
+
+                var iceInfo = DeviceDiagnosticSvc.createActionInfo(localCall, Constants.RtcDiagnosticsAction.REMOTE_ICE_CANDIDATES);
+                if (iceInfo) {
+                    iceInfo.data = evt.candidates;
+                    DeviceDiagnosticSvc.finishActionInfo(localCall, iceInfo);
+                }
 
             } catch (e) {
                 LogSvc.error('[CircuitCallControlSvc]: Exception handling RTCCall.ICE_CANDIDATES event. ', e);
@@ -31363,7 +31884,8 @@ var Circuit = (function (circuit) {
                         };
 
                         localCall.atcAdvancing = false;
-                        getTurnCredentials(localCall.callId).then(function (turnCredentials) {
+                        getTurnCredentials(localCall)
+                        .then(function (turnCredentials) {
                             sessionCtrl.setTurnCredentials(turnCredentials);
                             if (sdpParser.isNoOfferSdp(evt.sdp)) {
                                 changeMediaType(localCall.callId, localCall.transactionId, localCall.localMediaType, false, null, function (err) {
@@ -31433,6 +31955,14 @@ var Circuit = (function (circuit) {
             } catch (e) {
                 LogSvc.error('[CircuitCallControlSvc]: Exception handling RTCSession.CHANGE_MEDIA_TYPE_FORCED event. ', e);
             }
+        });
+
+        _clientApiHandler.on('RTCCall.RTC_QUALITY_RATING_EVENT', function (evt) {
+            LogSvc.debug('[CircuitCallControlSvc]: Received RTCCall.RTC_QUALITY_RATING_EVENT');
+            $rootScope.$apply(function () {
+                LogSvc.debug('[CircuitCallControlSvc]: Publish /call/showRatingDialog event');
+                PubSubSvc.publish('/call/showRatingDialog', [evt]);
+            });
         });
 
         _clientApiHandler.on('RTCSession.PARTICIPANT_UPDATED', function (evt) {
@@ -33247,6 +33777,20 @@ var Circuit = (function (circuit) {
             });
         };
 
+        this.submitCallQualityRating = function (ratingData, callData, cb) {
+            if (!ratingData || !ratingData.hasOwnProperty('rating') || !callData) {
+                LogSvc.warn('[CircuitCallControlSvc]: submitCallQualityRating - Missing rating or call data');
+                cb && cb('No rating data');
+                return;
+            }
+            Object.assign(ratingData, callData);
+            _clientApiHandler.submitCallQualityRating([ratingData], function (err) {
+                $rootScope.$apply(function () {
+                    cb && cb(err);
+                });
+            });
+        };
+
         /**
          * Send new raise-hand question for large conference
          *
@@ -33961,7 +34505,7 @@ var Circuit = (function (circuit) {
                             LogSvc.debug('[CstaSvc]: No telephony conversation found');
                         });
                 }
-                Utils.extend(_osmoData, AtcRegistrationSvc.getAtcRegistrationData());
+                Object.assign(_osmoData, AtcRegistrationSvc.getAtcRegistrationData());
                 _activeCall = findActiveCall();
                 _heldCall = findHeldCall();
                 _alertingCall = findAlertingCall();
@@ -34255,7 +34799,7 @@ var Circuit = (function (circuit) {
                     newCall.atcCallInfo.setCstaConnection(ep.callIdentifier);
 
                     // Extend top level servicesPermitted (Private data) with my endpoint's service permitted.
-                    Utils.extend(snapshotCallResp.servicesPermitted, ep.servicesPermitted);
+                    Object.assign(snapshotCallResp.servicesPermitted, ep.servicesPermitted);
 
                     if (ep.localConnectionState === 'queued') {
                         callState = CstaCallState.Parked;
@@ -34554,7 +35098,7 @@ var Circuit = (function (circuit) {
         }
 
         function getRegistrationData(cb) {
-            Utils.extend(_osmoData, AtcRegistrationSvc.getAtcRegistrationData());
+            Object.assign(_osmoData, AtcRegistrationSvc.getAtcRegistrationData());
             _regData = {
                 subscriber: $rootScope.localUser.cstaNumber
             };
@@ -35059,9 +35603,14 @@ var Circuit = (function (circuit) {
                         call.atcCallInfo.setIgnoreCall(true);
                     }
                     call.setCstaState(CstaCallState.Idle);
+                    call.direction = CallDirection.INCOMING;
                     call.atcCallInfo.setMissedReason(MissedReasonTypes.CANCELLED);
                     if (FORWARD_EXPR.test(event.cause)) {
                         _atcRemoteCalls[event.connection.cID] = call;
+                        var callingDisplay = getDisplayInfo(event.callingDevice);
+                        LogSvc.debug('[CstaSvc]: Update partner display to ', callingDisplay);
+                        call.atcCallInfo.setPartnerDisplay(callingDisplay);
+                        setCallPeerUser(call, call.atcCallInfo.peerDn, call.atcCallInfo.peerFQN, call.atcCallInfo.peerName);
                     }
                     LogSvc.debug('[CstaSvc]: Publish /atccall/info event');
                     PubSubSvc.publish('/atccall/info', [call]);
@@ -35881,6 +36430,10 @@ var Circuit = (function (circuit) {
                 _savedClientRingDuration = data.clientRingDuration;
                 _savedCellRingDuration = data.cellRingDuration;
                 $rootScope.localUser.alternativeNumber = data.alternativeNumber;
+                $rootScope.localUser.routeToCell = data.routeToCell;
+                if (data.hasOwnProperty('overrideProfile')) {
+                    $rootScope.localUser.ringDurationConfigurable = data.overrideProfile;
+                }
             }
 
             LogSvc.debug('[CstaSvc]: Publish /localUser/update event');
@@ -35891,7 +36444,7 @@ var Circuit = (function (circuit) {
         }
 
         function handleAgentReadyEvent() {
-            if ($rootScope.localUser.isAgent && $rootScope.localUser.agentState !== AgentState.Ready.name) {
+            if ($rootScope.localUser.isAgent && !$rootScope.localUser.agentStateReady) {
                 $rootScope.localUser.agentStateReady = true;
                 LogSvc.debug('[CstaSvc]: Publish /agent/state/ready event');
                 PubSubSvc.publish('/agent/state/ready', [$rootScope.localUser.agentStateReady]);
@@ -35899,7 +36452,7 @@ var Circuit = (function (circuit) {
         }
 
         function handleAgentNotReadyEvent() {
-            if ($rootScope.localUser.isAgent && $rootScope.localUser.agentState !== AgentState.NotReady.name) {
+            if ($rootScope.localUser.isAgent && $rootScope.localUser.agentStateReady) {
                 $rootScope.localUser.agentStateReady = false;
                 LogSvc.debug('[CstaSvc]: Publish /agent/state/ready event');
                 PubSubSvc.publish('/agent/state/ready', [$rootScope.localUser.agentStateReady]);
@@ -36233,6 +36786,10 @@ var Circuit = (function (circuit) {
                 _savedClientRingDuration = data.clientRingDuration;
                 _savedCellRingDuration = data.cellRingDuration;
                 $rootScope.localUser.alternativeNumber = data.alternativeNumber || Utils.cleanPhoneNumber($rootScope.localUser.reroutingPhoneNumber);
+                $rootScope.localUser.routeToCell = data.routeToCell;
+                if (data.hasOwnProperty('overrideProfile')) {
+                    $rootScope.localUser.ringDurationConfigurable = data.overrideProfile;
+                }
             }
             LogSvc.debug('[CstaSvc]: Publish /localUser/update event');
             PubSubSvc.publish('/localUser/update', [$rootScope.localUser]);
@@ -36251,7 +36808,7 @@ var Circuit = (function (circuit) {
             }
             $rootScope.localUser.isAgent = data.loggedOnState;
             if ($rootScope.localUser.isAgent) {
-                $rootScope.localUser.agentStateReady = data.agentState === AgentState.Ready.name;
+                $rootScope.localUser.agentStateReady = (data.agentState === AgentState.Ready);
                 LogSvc.debug('[CstaSvc]: Publish /agent/state/ready event');
                 PubSubSvc.publish('/agent/state/ready', [$rootScope.localUser.agentStateReady]);
             }
@@ -36858,12 +37415,13 @@ var Circuit = (function (circuit) {
         };
 
         this.setAgentState = function (ready, cb) {
+            ready = !!ready;
             if (ready !== $rootScope.localUser.agentStateReady) {
                 if (getRegistrationData(cb)) {
                     var data = {
                         request: 'SetAgentState',
                         device: _osmoData.onsFQN,
-                        state: ready ? AgentState.Ready.name : AgentState.NotReady.name
+                        state: ready ? AgentState.Ready : AgentState.NotReady
                     };
                     sendCstaRequest(data, cb);
                 }
@@ -37142,13 +37700,14 @@ var Circuit = (function (circuit) {
                 if ($rootScope.localUser.ringDurationEnabled) {
                     LogSvc.debug('[CstaSvc]: Set routing timers to: ', timers);
                     if (_savedMainRingDuration !== timers.mainRingDuration || _savedCellRingDuration !== timers.cellRingDuration ||
-                        _savedClientRingDuration !== timers.clientRingDuration) {
+                        _savedClientRingDuration !== timers.clientRingDuration || !$rootScope.localUser.routeToCell) {
                         var msg = {
                             request: 'SetForwarding',
                             device: Utils.normalizeDn(_osmoData.onsFQN),
                             mainRingDuration: timers.mainRingDuration || undefined,
                             clientRingDuration: timers.clientRingDuration || undefined,
-                            cellRingDuration: timers.cellRingDuration || undefined
+                            cellRingDuration: timers.cellRingDuration || undefined,
+                            routeToCell: true
                         };
 
                         sendCstaRequest(msg, function (err) {
@@ -37163,6 +37722,7 @@ var Circuit = (function (circuit) {
                         });
                     }
                 } else {
+                    LogSvc.debug('[CstaSvc]: Cannot set routing timers');
                     cb && cb('Cannot configure routing timers on PBX');
                 }
             }
@@ -38597,6 +39157,8 @@ var Circuit = (function (circuit) {
 
         this.stopRecording = CircuitCallControlSvc.stopRecording;
 
+        this.submitCallQualityRating = CircuitCallControlSvc.submitCallQualityRating;
+
         /**
          * send new raise-hand question for large conference
          *
@@ -39022,29 +39584,50 @@ var Circuit = (function (circuit) {
         };
 
         this.PubSubSvc = new circuit.PubSubSvcImpl(logger);
-        this.ExtensionSvc = new circuit.ExtensionSvcImpl(this.rootScope, $timeout, window, Promise, logger, this.PubSubSvc, null);
-        this.SdkHelperSvc = new circuit.SdkHelperSvcImpl(this.rootScope, Promise, logger, this.PubSubSvc);
+
+        this.ExtensionSvc = new circuit.ExtensionSvcImpl(
+            this.rootScope,
+            $timeout,
+            window,
+            Promise,                // $q
+            logger,
+            this.PubSubSvc,
+            null);                  // PopupSvc
+
+        this.SdkHelperSvc = new circuit.SdkHelperSvcImpl(
+            this.rootScope,
+            Promise,                // $q
+            logger,
+            this.PubSubSvc);
 
         this.AtcRegistrationSvc = new circuit.AtcRegistrationSvcImpl(
             this.rootScope,
             $timeout,
             logger,
             this.PubSubSvc,
-            this.SdkHelperSvc); // ConversationSvc
+            this.SdkHelperSvc);     // ConversationSvc
+
+        this.DeviceDiagnosticSvc = new circuit.DeviceDiagnosticSvcImpl(
+            this.rootScope,
+            $timeout,
+            logger,
+            this.PubSubSvc,
+            null);                  // LocalStoreSvc
 
         this.CircuitCallControlSvc = new circuit.CircuitCallControlSvcImpl(
             this.rootScope,
             $timeout,
             $interval,
-            window,             // $window
-            Promise,            // $q
+            window,                 // $window
+            Promise,                // $q
             logger,
             this.PubSubSvc,
-            null,               // LocalStoreSvc
-            this.SdkHelperSvc,  // UserSvc
-            this.SdkHelperSvc,  // ConversationSvc
-            null,               // NotificationSvc
-            this.SdkHelperSvc); // InstrumentationSvc
+            null,                   // LocalStoreSvc
+            this.SdkHelperSvc,      // UserSvc
+            this.SdkHelperSvc,      // ConversationSvc
+            null,                   // NotificationSvc
+            this.SdkHelperSvc,      // InstrumentationSvc
+            this.DeviceDiagnosticSvc);
 
         this.CstaSvc = new circuit.CstaSvcImpl(
             this.rootScope,
@@ -39053,21 +39636,21 @@ var Circuit = (function (circuit) {
             this.PubSubSvc,
             this.CircuitCallControlSvc,
             this.AtcRegistrationSvc,
-            this.SdkHelperSvc,  // UserSvc
-            this.SdkHelperSvc); // ConversationSvc
+            this.SdkHelperSvc,      // UserSvc
+            this.SdkHelperSvc);     // ConversationSvc
 
         this.CallControlSvc = new circuit.CallControlSvcImpl(
             this.rootScope,
-            Promise,            // $q
+            Promise,                // $q
             logger,
             this.PubSubSvc,
             this.CircuitCallControlSvc,
-            this.SdkHelperSvc,  // ConversationSvc
+            this.SdkHelperSvc,      // ConversationSvc
             this.CstaSvc,
-            null,               // MeetingPointSvc
-            null,               // NotificationSvc
-            this.SdkHelperSvc,  // UserSvc
-            this.SdkHelperSvc); // UserProfileSvc
+            null,                   // MeetingPointSvc
+            null,                   // NotificationSvc
+            this.SdkHelperSvc,      // UserSvc
+            this.SdkHelperSvc);     // UserProfileSvc
 
         // Clear the temporary Circuit and UserProfile objects before initializing the services
         circuit.Conversation = null;
@@ -39347,6 +39930,8 @@ var Circuit = (function (circuit) {
         var _expiresAt;
         var _oauthRenewTokenTimer;
         var _logonCheckTimer;
+        var _telephonyConvId;
+        var _supportConvId;
 
         // Queue to ensure the order of the emited events is the same as the
         // order of the received events.
@@ -39811,11 +40396,24 @@ var Circuit = (function (circuit) {
             });
         }
 
-        function initLoggedOnUser() {
-            if (!hasScope(Constants.OAuthScope.READ_USER_PROFILE)) {
-                return Promise.resolve();
-            }
-            return getLoggedOnUser();
+        function getStuff() {
+            return new Promise(function (resolve, reject) {
+                var types = [
+                    Constants.GetStuffType.USER,
+                    Constants.GetStuffType.SUPPORT_CONVERSATION_ID,
+                    Constants.GetStuffType.TELEPHONY_CONVERSATION_ID,
+                    Constants.GetStuffType.ACCOUNTS,
+                    Constants.GetStuffType.PRESENCE_STATE
+                ];
+                _clientApiHandler.getStuff(types, function (err, stuff) {
+                    if (apiError(err, reject, true)) { return; }
+                    _self.loggedOnUser = stuff.user;
+                    _services.SdkHelperSvc.setLocalUser(stuff.user);
+                    _telephonyConvId = stuff.telephonyConvId;
+                    _supportConvId = stuff.supportConvId;
+                    resolve();
+                });
+            });
         }
 
         function initActiveSessions() {
@@ -39836,7 +40434,7 @@ var Circuit = (function (circuit) {
         function wsLogon() {
             return setupWebSocket()
             .then(getUserData)
-            .then(initLoggedOnUser)
+            .then(getStuff)
             .then(initActiveSessions)
             .then(initAtc)
             .then(function () {
@@ -40036,6 +40634,58 @@ var Circuit = (function (circuit) {
                 _clientApiHandler.getFavoriteConversationIds(function (err, favoriteConversationIds) {
                     if (apiError(err, reject, true)) { return; }
                     resolve(favoriteConversationIds || []);
+                });
+            });
+        }
+
+        function favoriteConversation(convId) {
+            return new Promise(function (resolve, reject) {
+                if (!convId) {
+                    reject(new Circuit.Error(Constants.ReturnCode.MISSING_REQUIRED_PARAMETER, 'convId is required'));
+                    return;
+                }
+                _clientApiHandler.markConversation({convId: convId, markType: Constants.ConversationMarkFilter.FAVORITE}, function (err) {
+                    if (apiError(err, reject)) { return; }
+                    resolve();
+                });
+            });
+        }
+
+        function unfavoriteConversation(convId) {
+            return new Promise(function (resolve, reject) {
+                if (!convId) {
+                    reject(new Circuit.Error(Constants.ReturnCode.MISSING_REQUIRED_PARAMETER, 'convId is required'));
+                    return;
+                }
+                _clientApiHandler.unmarkConversation({convId: convId, markType: Constants.ConversationMarkFilter.FAVORITE}, function (err) {
+                    if (apiError(err, reject)) { return; }
+                    resolve();
+                });
+            });
+        }
+
+        function archiveConversation(convId) {
+            return new Promise(function (resolve, reject) {
+                if (!convId) {
+                    reject(new Circuit.Error(Constants.ReturnCode.MISSING_REQUIRED_PARAMETER, 'convId is required'));
+                    return;
+                }
+                _clientApiHandler.markConversation({convId: convId, markType: Constants.ConversationMarkFilter.MUTE}, function (err) {
+                    if (apiError(err, reject)) { return; }
+                    resolve();
+                });
+            });
+        }
+
+        function unarchiveConversation(convId) {
+            return new Promise(function (resolve, reject) {
+                if (!convId) {
+                    reject(new Circuit.Error(Constants.ReturnCode.MISSING_REQUIRED_PARAMETER, 'convId is required'));
+                    return;
+                }
+                _clientApiHandler.unmarkConversation({convId: convId, markType: Constants.ConversationMarkFilter.MUTE}, function (err) {
+                    if (apiError(err, reject)) { return; }
+                    resolve();
                 });
             });
         }
@@ -40655,7 +41305,7 @@ var Circuit = (function (circuit) {
         function moderateConversation(convId) {
             return new Promise(function (resolve, reject) {
                 if (!convId) {
-                    reject(new Circuit.Error(Constants.ReturnCode.MISSING_REQUIRED_PARAMETER, 'item is required'));
+                    reject(new Circuit.Error(Constants.ReturnCode.MISSING_REQUIRED_PARAMETER, 'convId is required'));
                     return;
                 }
                 _clientApiHandler.moderateConversation(convId, function (err, res) {
@@ -40672,7 +41322,7 @@ var Circuit = (function (circuit) {
         function unmoderateConversation(convId) {
             return new Promise(function (resolve, reject) {
                 if (!convId) {
-                    reject(new Circuit.Error(Constants.ReturnCode.MISSING_REQUIRED_PARAMETER, 'item is required'));
+                    reject(new Circuit.Error(Constants.ReturnCode.MISSING_REQUIRED_PARAMETER, 'convId is required'));
                     return;
                 }
                 _clientApiHandler.unmoderateConversation(convId, function (err, res) {
@@ -40689,7 +41339,7 @@ var Circuit = (function (circuit) {
         function grantModeratorRights(convId, userId) {
             return new Promise(function (resolve, reject) {
                 if (!convId || !userId) {
-                    reject(new Circuit.Error(Constants.ReturnCode.MISSING_REQUIRED_PARAMETER, 'item is required'));
+                    reject(new Circuit.Error(Constants.ReturnCode.MISSING_REQUIRED_PARAMETER, 'convId and userId are required'));
                     return;
                 }
                 _clientApiHandler.grantModeratorRights(convId, userId, function (err, res) {
@@ -40706,7 +41356,7 @@ var Circuit = (function (circuit) {
         function dropModeratorRights(convId, userId) {
             return new Promise(function (resolve, reject) {
                 if (!convId || !userId) {
-                    reject(new Circuit.Error(Constants.ReturnCode.MISSING_REQUIRED_PARAMETER, 'item is required'));
+                    reject(new Circuit.Error(Constants.ReturnCode.MISSING_REQUIRED_PARAMETER, 'convId and userId are required'));
                     return;
                 }
                 _clientApiHandler.dropModeratorRights(convId, userId, function (err, res) {
@@ -40715,6 +41365,19 @@ var Circuit = (function (circuit) {
                         reject(res);
                         return;
                     }
+                    resolve();
+                });
+            });
+        }
+
+        function updateGuestAccess(convId, disabled) {
+            return new Promise(function (resolve, reject) {
+                if (!convId) {
+                    reject(new Circuit.Error(Constants.ReturnCode.MISSING_REQUIRED_PARAMETER, 'convId is required'));
+                    return;
+                }
+                _clientApiHandler.updateGuestAccess(convId, disabled, function (err) {
+                    if (apiError(err, reject)) { return; }
                     resolve();
                 });
             });
@@ -42148,6 +42811,9 @@ var Circuit = (function (circuit) {
                 return p.userId;
             });
 
+            conv.isTelephonyConversation = conv.convId === _telephonyConvId;
+            conv.isSupportConversation = conv.convId === _supportConvId;
+
             if (conv.type !== Constants.ConversationType.DIRECT) {
                 // Add avatar and avatarLarge attributes
                 if (conv.conversationAvatar && conv.conversationAvatar.smallPictureId && conv.conversationAvatar.largePictureId) {
@@ -42886,6 +43552,54 @@ var Circuit = (function (circuit) {
         _self.getFavoriteConversationIds = getFavoriteConversationIds;
 
         /**
+         * Add a conversation to the favorite list. Succeeds if conversation is already favorited.
+         * @method favoriteConversation
+         * @param {String} convId Conversation ID
+         * @returns {Promise} A promise without data
+         * @scope `WRITE_CONVERSATIONS` or `FULL`
+         * @example
+         *     client.favoriteConversation('d353db50-b835-483e-9fce-2b157b2253d3')
+         *       .then(() => console.log('Conversation added to favorites'));
+         */
+        _self.favoriteConversation = favoriteConversation;
+
+        /**
+         * Remove a conversation to the favorite list. Succeeds if conversation is already unfavorited.
+         * @method unfavoriteConversation
+         * @param {String} convId Conversation ID
+         * @returns {Promise} A promise without data
+         * @scope `WRITE_CONVERSATIONS` or `FULL`
+         * @example
+         *     client.unfavoriteConversation('d353db50-b835-483e-9fce-2b157b2253d3')
+         *       .then(() => console.log('Conversation removed from favorites'));
+         */
+        _self.unfavoriteConversation = unfavoriteConversation;
+
+        /**
+         * Archive a conversation. Succeeds if conversation is already archived.
+         * @method archiveConversation
+         * @param {String} convId Conversation ID
+         * @returns {Promise} A promise without data
+         * @scope `WRITE_CONVERSATIONS` or `FULL`
+         * @example
+         *     client.archiveConversation('d353db50-b835-483e-9fce-2b157b2253d3')
+         *       .then(() => console.log('Conversation archived'));
+         */
+        _self.archiveConversation = archiveConversation;
+
+        /**
+         * Unarchive a conversation. Succeeds if conversation is already unarchived.
+         * @method unarchiveConversation
+         * @param {String} convId Conversation ID
+         * @returns {Promise} A promise without data
+         * @scope `WRITE_CONVERSATIONS` or `FULL`
+         * @example
+         *     client.unarchiveConversation('d353db50-b835-483e-9fce-2b157b2253d3')
+         *       .then(() => console.log('Conversation unarchived'));
+         */
+        _self.unarchiveConversation = unarchiveConversation;
+
+        /**
          * Retrieve all labels.
          * @method getAllLabels
          * @returns {Promise|Object} A promise returning a list of label objects.
@@ -43298,6 +44012,34 @@ var Circuit = (function (circuit) {
          *       .then(() => console.log('Successfully removed moderation rights'));
          */
         _self.dropModeratorRights = dropModeratorRights;
+
+        /**
+         * Enable guest access on a conversation.
+         * @method enableGuestAccess
+         * @param {String} convId Conversation ID.
+         * @returns {Promise} A promise without data.
+         * @scope `WRITE_CONVERSATION` or `FULL`
+         * @example
+         *     client.enableGuestAccess('338d2002-ae68-495c-aa5c-1dff3fbc845a')
+         *       .then(() => console.log('Successfully enabled guest access'));
+         */
+        _self.enableGuestAccess = function (convId) {
+            return updateGuestAccess(convId, false);
+        };
+
+        /**
+         * Disable guest access on a conversation.
+         * @method disableGuestAccess
+         * @param {String} convId Conversation ID.
+         * @returns {Promise} A promise without data.
+         * @scope `WRITE_CONVERSATION` or `FULL`
+         * @example
+         *     client.disableGuestAccess('338d2002-ae68-495c-aa5c-1dff3fbc845a')
+         *       .then(() => console.log('Successfully disabled guest access'));
+         */
+        _self.disableGuestAccess = function (convId) {
+            return updateGuestAccess(convId, true);
+        };
 
         /**
          * Create a new direct conversation.
@@ -44225,6 +44967,60 @@ var Circuit = (function (circuit) {
         });
 
         /**
+         * Fired when a conversation has been archived for the logged on user
+         * @event conversationArchived
+         * @param {Object} event Object literal containing the event properties
+         * @param {String} event.type Event name
+         * @param {String} event.convId Conversation ID
+         */
+        /**
+         * Fired when a conversation has been favorited for the logged on user
+         * @event conversationFavorited
+         * @param {Object} event Object literal containing the event properties
+         * @param {String} event.type Event name
+         * @param {String} event.convId Conversation ID
+         */
+        _clientApiHandler.on('Conversation.CONVERSATION_MARKED', function (evt) {
+            switch (evt.filter) {
+            case Constants.ConversationMarkFilter.MUTE:
+                addToEventQueue({type: 'conversationArchived', convId: evt.convId});
+                break;
+            case Constants.ConversationMarkFilter.FAVORITE:
+                addToEventQueue({type: 'conversationFavorited', convId: evt.convId});
+                break;
+            default:
+                break;
+            }
+        });
+
+        /**
+         * Fired when a conversation has been unarchived for the logged on user
+         * @event conversationUnarchived
+         * @param {Object} event Object literal containing the event properties
+         * @param {String} event.type Event name
+         * @param {String} event.convId Conversation ID
+         */
+        /**
+         * Fired when a conversation has been unfavorited for the logged on user
+         * @event conversationUnfavorited
+         * @param {Object} event Object literal containing the event properties
+         * @param {String} event.type Event name
+         * @param {String} event.convId Conversation ID
+         */
+        _clientApiHandler.on('Conversation.CONVERSATION_UNMARKED', function (evt) {
+            switch (evt.filter) {
+            case Constants.ConversationMarkFilter.MUTE:
+                addToEventQueue({type: 'conversationUnarchived', convId: evt.convId});
+                break;
+            case Constants.ConversationMarkFilter.FAVORITE:
+                addToEventQueue({type: 'conversationUnfavorited', convId: evt.convId});
+                break;
+            default:
+                break;
+            }
+        });
+
+        /**
          * Fired when conversation user data changes. E.g. label added/changed/removed
          * @event conversationUserDataChanged
          * @param {Object} event Object literal containing the event properties
@@ -44652,6 +45448,10 @@ var Circuit = (function (circuit) {
                 'itemUpdated',
                 'conversationCreated',
                 'conversationUpdated',
+                'conversationArchived',
+                'conversationFavorited',
+                'conversationUnarchived',
+                'conversationUnfavorited',
                 'conversationUserDataChanged',
                 'conversationReadItems',
                 'userPresenceChanged',
