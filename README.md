@@ -92,9 +92,9 @@ client.logon()
 ```
 
 #### Get Conversations
-Get 10 newest conversations of logged on user.
+Get 5 newest conversations of logged on user.
 ```javascript
-client.getConversations({numberOfConversations: 10})
+client.getConversations({numberOfConversations: 5})
   .then(conversations => console.log(`Retrieved ${conversations.length} conversations`))
 ```
 
