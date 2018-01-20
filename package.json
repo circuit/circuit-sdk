@@ -1,0 +1,39 @@
+{
+  "name": "circuit-sdk",
+  "version": "1.2.2401",
+  "description": "Circuit Node.js SDK",
+  "main": "circuit-node.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Unify Inc.",
+  "contributors": [
+    "Roger Urscheler <roger.urscheler@unify.com>",
+    "Rodrigo Pastro <rodrigo.pastro@unify.com>",
+    "Johannes Ruetschi <johannes.ruetschi@unify.com>"
+  ],
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/circuit/circuit-sdk",
+  "engines": {
+    "node": ">= 4.5.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/circuit/circuit-sdk"
+  },
+  "bugs": {
+    "url": "http://github.com/circuit/circuit-sdk/issues",
+    "mail": ""
+  },
+  "keywords": [
+    "api",
+    "webrtc",
+    "circuit",
+    "collaboration",
+    "sdk"
+  ],
+  "unpkg": "dist/circuit.min.js",
+  "dependencies": {
+    "ws": "~0.8.0"
+  }
+}
