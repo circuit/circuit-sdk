@@ -13,10 +13,10 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- *  @version: 1.2.2401
+ *  @version: 1.2.2402
  */
 
-var Circuit = {}; Object.defineProperty(Circuit, 'version', { value: '1.2.2401'});
+var Circuit = {}; Object.defineProperty(Circuit, 'version', { value: '1.2.2402'});
 
 // Define external globals for JSHint
 /*global Buffer, clearInterval, clearTimeout, process, require, setInterval, setTimeout*/
@@ -3263,6 +3263,10 @@ var Circuit = (function (circuit) {
             EXISTING_USERS_IN_RANGE: 'EXISTING_USERS_IN_RANGE'
         },
 
+        CloudTelephonyCmpNextError: {
+            COUNTRY_DETAILS_NOT_FOUND: 'COUNTRY_DETAILS_NOT_FOUND'
+        },
+
         ///////////////////////////////////////////////////////////////////////////
         // Conversation Action
         ///////////////////////////////////////////////////////////////////////////
@@ -4370,6 +4374,7 @@ var Circuit = (function (circuit) {
             UPDATE_OPENSCAPE_USER: 'UPDATE_OPENSCAPE_USER',
             DELETE_OPENSCAPE_USER: 'DELETE_OPENSCAPE_USER',
             GET_OPENSCAPE_USER: 'GET_OPENSCAPE_USER',
+            GET_OPENSCAPE_USER_V2: 'GET_OPENSCAPE_USER_V2',
             GET_OPENSCAPE_TENANT: 'GET_OPENSCAPE_TENANT',
             DELETE_OPENSCAPE_SITES: 'DELETE_OPENSCAPE_SITES',
             CREATE_OPENSCAPE_SITE: 'CREATE_OPENSCAPE_SITE',
@@ -4849,7 +4854,6 @@ var Circuit = (function (circuit) {
             PARTNER_ADMINISTRATION: 'PARTNER_ADMINISTRATION',
             SCOPE_SEARCHES: 'SCOPE_SEARCHES',
             SCREENSHARE_TAP_INDICATOR: 'SCREENSHARE_TAP_INDICATOR',
-            SECOND_TELEPHONY_CALL_SUPPORT: 'SECOND_TELEPHONY_CALL_SUPPORT',
             TEXT_TO_SPEECH: 'TEXT_TO_SPEECH',
             VIDEO_PLAYER: 'VIDEO_PLAYER',
             VOTING: 'VOTING',
@@ -10162,7 +10166,7 @@ var Circuit = (function (circuit) {
         return (this.state !== CallState.Idle && this.state !== CallState.Terminated);
     };
 
-    BaseCall.prototype.isHeld = function () { return false; };
+    BaseCall.prototype.isHeld = function () { return this.state === CallState.Held; };
 
     BaseCall.prototype.hasRemoteMedia = function () {
         return false;
@@ -14049,6 +14053,12 @@ var Circuit = (function (circuit) {
                 } else {
                     renegotiationFailed('Renegotiation already in progress');
                 }
+            }
+
+            if (_pc && _pc.iceDisconnectTimeout) {
+                logger.info('[RtcSessionController]: Ignore previous ice Disconnection');
+                window.clearTimeout(_pc.iceDisconnectTimeout);
+                delete _pc.iceDisconnectTimeout;
             }
 
             // Save the current RTCPeerConnection and MediaStream objects in case
@@ -21116,7 +21126,7 @@ var Circuit = (function (circuit) {
             });
         };
 
-        this.getOpenScapeUser = function (dn, cb) {
+        this.getOpenScapeUser = function (dn, circuitUserId, cb) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: getOpenScapeUser...');
 
@@ -21126,12 +21136,23 @@ var Circuit = (function (circuit) {
                 return;
             }
 
-            var request = {
-                type: Constants.AdministrationActionType.GET_OPENSCAPE_USER,
-                getOpenScapeUser: {
-                    directoryNumber: dn
-                }
-            };
+            var request;
+            if (_clientApiVersion >= SP88_API_VERSION) {
+                request = {
+                    type: Constants.AdministrationActionType.GET_OPENSCAPE_USER_V2,
+                    getV2OpenScapeUser: {
+                        directoryNumber: dn,
+                        circuitUserId: circuitUserId
+                    }
+                };
+            } else {
+                request = {
+                    type: Constants.AdministrationActionType.GET_OPENSCAPE_USER,
+                    getOpenScapeUser: {
+                        directoryNumber: dn
+                    }
+                };
+            }
 
             sendRequest(Constants.ContentType.ADMINISTRATION, request, function (err, rsp) {
                 if (isResponseValid(err, rsp, cb)) {
@@ -27621,16 +27642,20 @@ var Circuit = (function (circuit) {
         ///////////////////////////////////////////////////////////////////////////////////////
         var JOIN_DELAY_TIMEOUT = 3000;
 
-        var MAX_CACHED_RTC_CLIENT_SIZE = 50000; // Maximum size of cached diagnostics data in local storage
-        var DISCARD_SIZE = 10000; // Size that should be discarded if max size is reached
+        var MAX_CACHED_RTC_CLIENT_SIZE = 60000; // Maximum size of cached diagnostics data in local storage
+        var TRIMMED_RTC_CLIENT_SIZE = 50000; // Max size after data is trimmed
 
         var _clientApiHandler = ClientApiHandler.getInstance();
         var _cachedClientInfo = [];
+        var _supportsOfflineFailures = !!(LocalStoreSvc && !$rootScope.isSessionGuest);
 
         ///////////////////////////////////////////////////////////////////////////////////////
         // Internal functions
         ///////////////////////////////////////////////////////////////////////////////////////
         function trimAndStoreData() {
+            if (!_supportsOfflineFailures) {
+                return;
+            }
             if (_cachedClientInfo.length === 0) {
                 LocalStoreSvc.removeItem(LocalStoreSvc.keys.RTC_CLIENT_INFOS);
                 return;
@@ -27639,10 +27664,11 @@ var Circuit = (function (circuit) {
             if (serializedData.length > MAX_CACHED_RTC_CLIENT_SIZE) {
                 LogSvc.warn('[DeviceDiagnosticSvc]: Stored device diagnostics exceeded max size. Discard old data.');
                 var discardedData = '';
+                var discardSize = serializedData.length - TRIMMED_RTC_CLIENT_SIZE;
                 _cachedClientInfo.some(function (oldInfo, idx) {
                     discardedData += JSON.stringify(oldInfo);
-                    if (discardedData.length > DISCARD_SIZE) {
-                        LogSvc.info('[DeviceDiagnosticSvc]: Number of discarded records: ', idx + 1);
+                    if (discardedData.length > discardSize) {
+                        LogSvc.warn('[DeviceDiagnosticSvc]: Number of discarded records: ', idx + 1);
                         _cachedClientInfo.splice(0, idx + 1);
                         serializedData = JSON.stringify(_cachedClientInfo);
                         return true;
@@ -27653,11 +27679,13 @@ var Circuit = (function (circuit) {
         }
 
         function init() {
-            _cachedClientInfo = LocalStoreSvc.getObjectSync(LocalStoreSvc.keys.RTC_CLIENT_INFOS) || [];
-            if (!Array.isArray(_cachedClientInfo)) {
-                _cachedClientInfo = [];
+            if (_supportsOfflineFailures) {
+                _cachedClientInfo = LocalStoreSvc.getObjectSync(LocalStoreSvc.keys.RTC_CLIENT_INFOS) || [];
+                if (!Array.isArray(_cachedClientInfo)) {
+                    _cachedClientInfo = [];
+                }
+                trimAndStoreData();
             }
-            trimAndStoreData();
         }
 
         function cancelJoinDelayTimer(diagnostics) {
@@ -27840,13 +27868,11 @@ var Circuit = (function (circuit) {
         }
 
         function storeClientInfo(info) {
-            if (!LocalStoreSvc || $rootScope.isSessionGuest) {
-                return;
+            if (_supportsOfflineFailures) {
+                LogSvc.debug('[DeviceDiagnosticSvc]: Store device diagnostics to send when client reconnects');
+                _cachedClientInfo.push(info);
+                trimAndStoreData();
             }
-
-            LogSvc.debug('[DeviceDiagnosticSvc]: Store device diagnostics to send when client reconnects');
-            _cachedClientInfo.push(info);
-            trimAndStoreData();
         }
 
         function sendDeviceDiagnostics(call) {
@@ -27906,10 +27932,12 @@ var Circuit = (function (circuit) {
         ///////////////////////////////////////////////////////////////////////////////////////
         // PubSubSvc Event Handlers
         ///////////////////////////////////////////////////////////////////////////////////////
-        PubSubSvc.subscribe('/conversations/loadComplete', function () {
-            LogSvc.debug('[DeviceDiagnosticSvc]: Received /conversations/loadComplete event');
-            sendOfflineJoinFailures();
-        });
+        if (_supportsOfflineFailures) {
+            PubSubSvc.subscribe('/conversations/loadComplete', function () {
+                LogSvc.debug('[DeviceDiagnosticSvc]: Received /conversations/loadComplete event');
+                sendOfflineJoinFailures();
+            });
+        }
 
         ///////////////////////////////////////////////////////////////////////////////////////
         // Public Interface
@@ -27998,6 +28026,7 @@ var Circuit = (function (circuit) {
         // Internal Variables
         ///////////////////////////////////////////////////////////////////////////////////////
         var _isMobile = Utils.isMobile();
+        var _isIOS = ($window.navigator.platform === 'iOS');
         var _isDotNet = ($window.navigator.platform === 'dotnet');
 
         var CLOSE_CALL_DELAY = 3200;  // Set the delay a little over 3 seconds to give enough time for 3 failed tones
@@ -29811,7 +29840,7 @@ var Circuit = (function (circuit) {
 
         function onIceDisconnected(call, event) {
             LogSvc.debug('[CircuitCallControlSvc]: RtcSessionController - onIceDisconnected. pcType:', event.pcType);
-            if (event.pcType === 'audio/video' && call.isEstablished()) {
+            if (event.pcType === 'audio/video' && call.isEstablished() && !call.isHeld()) {
                 call.setDisconnectCause(Constants.DisconnectCause.STREAM_LOST);
                 publishIceConnectionState(call, 'disconnected');
             }
@@ -32932,7 +32961,7 @@ var Circuit = (function (circuit) {
             }
 
             if (_primaryLocalCall && _primaryLocalCall.isPresent() && (!_primaryLocalCall.isTelephonyCall ||
-                !incomingCall.isTelephonyCall || (_isMobile && !$rootScope.circuitLabs.SECOND_TELEPHONY_CALL_SUPPORT)) && !incomingCall.replaces || !$rootScope.localUser.isATC) {
+                !incomingCall.isTelephonyCall || (_isMobile && !_isIOS)) && !incomingCall.replaces || !$rootScope.localUser.isATC) {
                 leaveCall(_primaryLocalCall, null, Enums.CallClientTerminatedReason.USER_ENDED);
                 if (_secondaryLocalCall) {
                     leaveCall(_secondaryLocalCall, null, Enums.CallClientTerminatedReason.USER_ENDED);
