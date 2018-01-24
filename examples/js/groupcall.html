@@ -99,7 +99,7 @@
     <span id="errorMessage" style="display: none"></span>
     <audio id="remoteAudio" autoplay="autoplay"></audio>
 
-    <script src="https://circuitsandbox.net/circuit.js"></script>
+    <script src="https://unpkg.com/circuit-sdk"></script>
 
     <script>
       var _client;
@@ -472,6 +472,7 @@
           var userIds = conversation.participants.filter(function (p) {
             return p !== _client.loggedOnUser.userId;
           });
+          console.log('calling getUsersById for ' + userIds.length + ' users');
           _client.getUsersById(userIds).then(function (users) {
             // Set conversation.otherUsers
             conversation.otherUsers = users;
