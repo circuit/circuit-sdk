@@ -99,7 +99,7 @@
     <span id="errorMessage" style="display: none"></span>
     <audio id="remoteAudio" autoplay="autoplay"></audio>
 
-    <script src="https://unpkg.com/circuit-sdk"></script>
+    <script src="https://unpkg.com/circuit-sdk@beta/dist/circuit.js"></script>
 
     <script>
       var _client;
@@ -141,7 +141,7 @@
       }
 
       // Displays SDK internal logs in console
-      // Circuit.logger.setLevel(Circuit.Enums.LogLevel.Debug);
+      Circuit.logger.setLevel(Circuit.Enums.LogLevel.Debug);
 
       // Helper function to get the list element
       function getListOption(convId) {
@@ -255,6 +255,24 @@
             }
           });
 
+          _client.addEventListener('callIncoming', function (evt) {
+            console.log('Received callIncoming event. state: ' + evt.call.state, evt.call);
+            if (_calls[evt.call.convId]) {
+              console.log('Already on a call. Ignore event.');
+              return;
+            }
+            // Automatically answer the call with audio
+            var mediaType = {audio: true, video: false};
+            _client.answerCall(evt.call.callId, mediaType).then(() => {
+              _calls[evt.call.convId] = evt.call;
+              updateList(evt.call);
+              setCallUI();
+              console.log('Call has been answered')
+            }).catch(err => {
+              console.log('Failed to answer call. ', err)
+            });
+          });
+
           _client.addEventListener('callEnded', function (evt) {
             var call = _calls[evt.call.convId];
             if (call && call.callId === evt.call.callId) {
@@ -262,6 +280,16 @@
               delete _calls[evt.call.convId];
               updateList(evt.call);
               resetCallUI();
+            }
+          });
+
+          _client.addEventListener('conversationUpdated', function (evt) {
+            var conv = evt.conversation;
+            if (!_conversations[conv.convId]) {
+              _conversations[conv.convId] = conv;
+              if (conv.type !== 'DIRECT') {
+                $convList.options[$convList.options.length] = new Option(conv.title, conv.convId);
+              }
             }
           });
 

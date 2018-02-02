@@ -69,7 +69,7 @@
     </style>
     <script src="//ajax.googleapis.com/ajax/libs/angularjs/1.3.2/angular.min.js"></script>
     <script src="//ajax.googleapis.com/ajax/libs/angularjs/1.3.2/angular-sanitize.min.js"></script>
-    <script src="https://unpkg.com/circuit-sdk/dist/circuit.js"></script>
+    <script src="//unpkg.com/circuit-sdk@beta/dist/circuit.js"></script>
   </head>
 
   <body>
@@ -154,6 +154,7 @@
             client_id: '78cafde2f6854ad5ad80a67c532687bc',
             scope: 'ALL' // Asking for ALL permissions because all these examples use the same domain
           });
+          Circuit.logger.setLevel(Circuit.Enums.LogLevel.Debug);
 
           client.logon().then(function (user) {
             $scope.localUser = user;
