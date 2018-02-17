@@ -1,6 +1,6 @@
 {
   "name": "circuit-sdk",
-  "version": "1.2.2402",
+  "version": "1.2.2701",
   "description": "Circuit Node.js SDK",
   "main": "circuit-node.js",
   "scripts": {
@@ -32,8 +32,11 @@
     "collaboration",
     "sdk"
   ],
+  "browser": {
+    "electron": false
+  },
   "unpkg": "dist/circuit.min.js",
   "dependencies": {
-    "ws": "~0.8.0"
+    "ws": "~3.3.3"
   }
 }

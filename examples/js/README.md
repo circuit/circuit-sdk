@@ -1,18 +1,20 @@
 ## JavaScript SDK Examples
 
-Each html file is an independent example to show a particular use case.
+There are places with examples, with JSBin the largest set, and Plunker the newest.
+Each example snippet is meant to be as simple as possible to show a particular use case.
 
-### Live examples on rawgit
+* [JSBin](https://circuit.github.io/jssdk.html#jsbin)
+* [Plunker](https://circuit.github.io/jssdk.html#plunker)
+* github, listed on this page [live on rawgit](https://rawgit.com/circuit/circuit-sdk/master/examples/js/index.html)
 
-Try them [live on rawgit](https://rawgit.com/circuit/circuit-sdk/master/examples/js/index.html).
 
-Use your own sandbox account, or one of the following playground accounts. Password is `GoCircuit!1`.
+All examples use OAuth. Use your own sandbox account, or one of the following playground accounts. Password is `GoCircuit!1`.
 * kim.jackson@mailinator.com
 * maeva.barnaby@mailinator.com
 * derek.hopkins@mailinator.com
 
 
-### Running examples locally
+### Running github examples locally
 
 First [register for a free developer account](https://www.circuit.com/web/developers/registration), then [register for an OAuth client-side (Implicit) application](https://circuit.github.io/oauth) providing a local redirect URL such as `http://localhost:7000`.
 

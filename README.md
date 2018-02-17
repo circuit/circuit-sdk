@@ -18,7 +18,7 @@ More info at [circuit.github.io](https://circuit.github.io/).
 ### Usage
 
 #### JavaScript
-Add the the line below to the HTML file of you app. This will include the latest version of Circuit SDK and make the `Circuit` object available.
+Add the the line below to the HTML file of your app. This will include the latest version of Circuit SDK and make the `Circuit` object available.
 ```html
 <script type="text/javascript" src="https://unpkg.com/circuit-sdk"></script>
 ```
