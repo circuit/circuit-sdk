@@ -6,8 +6,8 @@ Circuit JavaScript and Node.js SDK
 
 
 ### Prerequisites
-* Developer account on circuitsandbox.net. Get it for free at [developer registration](https://www.circuit.com/web/developers/registration).
-* OAuth 2.0 `client_id` and optionally `client_secret`. Get if for free at [circuit.github.com/oauth](https://circuit.github.com/oauth).
+* [Register for a free developer account](https://www.circuit.com/web/developers/registration) on circuitsandbox.net.
+* [Register for a free OAuth app](https://circuit.github.com/oauth) to get a  `client_id` for your app.
 
 
 ### API Reference
@@ -23,6 +23,8 @@ Add the the line below to the HTML file of your app. This will include the lates
 <script type="text/javascript" src="https://unpkg.com/circuit-sdk"></script>
 ```
 
+> Starting with version 1.2.2800 the JS SDK can also be imported as CommonJS or AMD module. See [umd](https://github.com/circuit/umd) or [circuit-ionic-starter](https://github.com/circuit/circuit-ionic-starter) repos for examples.
+
 #### Node.js
 ```bash
 npm install --save circuit-sdk
@@ -34,7 +36,7 @@ The majority of apps fall in one of the three types below. Each type uses a diff
 1. **Client-side web applications** use the JavaScript SDK with the [OAuth 2.0 Implicit Grant](https://circuit.github.io/oauth.html#implicit).
    ```javascript
    // No client_secret needed for Implicit Grant. SDK will obtain access token.
-   let client = new Circuit.Client({
+   const client = new Circuit.Client({
      client_id: '<your client_id>',
      domain: 'circuitsandbox.net'
    });
@@ -46,7 +48,7 @@ The majority of apps fall in one of the three types below. Each type uses a diff
 Example apps: [node-linkify](https://github.com/circuit/node-linkify) or [circuit-google-assistant](https://github.com/circuit/circuit-google-assistant)
    ```javascript
    // access token is obtained and managed by server-side app
-   let client = new Circuit.Client({
+   const client = new Circuit.Client({
      client_id: '<your client_id>',
      domain: 'circuitsandbox.net'
    });
@@ -59,16 +61,23 @@ Example bots: [xlator-bot](https://github.com/circuit/xlator-bot) or [node-sdk-e
 Example electron bots: [webrtc-bot-example](https://github.com/circuit/webrtc-bot-example) or [live-cam-bot](https://github.com/circuit/live-cam-bot)
    ```javascript
    const Circuit = require('circuit-sdk');
-   let client = new Circuit.Client({
+   const client = new Circuit.Client({
      client_id: '<client_id>',
      client_secret: '<client_secret>',
      domain: 'circuitsandbox.net'
    });
    client.logon()
      .then(user => console.log('Logged on as bot: ' + user.emailAddress))
+     .catch(console.error);
    ```
 
+### Beta channel
+The official SDK release is aligned with the official production cloud system (eu.yourcircuit.com & na.yourcircuit.com).
 
+The beta channel of the SDK is aligned with the circuitsandbox and available at:
+
+* JS SDK: https://unpkg.com/circuit-sdk@beta
+* Node.js SDK: `npm install circuit-sdk@beta`
 
 ### Examples
 
