@@ -1,0 +1,12 @@
+{
+    "bot1": {
+        "domain": "circuitsandbox.net",
+        "client_id": "98594cb4951240ce8f65944d1ea07f46",
+        "client_secret": "b43e8a83de8040cabd97fea2478631f4"
+    },
+    "bot2": {
+        "domain": "circuitsandbox.net",
+        "client_id": "738383cd7eb24dbe896a8bdddabb046d",
+        "client_secret": "1b2f76e525114066ac73d89ed0a20637"
+    }
+}
