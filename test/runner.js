@@ -136,12 +136,10 @@ async function handlePeerUserCommand({name, args, username}) {
         peerBrowsers[username] = page;
 
         // Create client instance and login
-        await page.evaluate(async (config, credentials) => {
+        return await page.evaluate(async (config, credentials) => {
             window.__client__ = new Circuit.Client(config);
-            await window.__client__.logon(credentials);
+            return await window.__client__.logon(credentials);
         }, config.config, peerUserCredentials.get(username));
-
-        return username;
     }
 
     const page = peerBrowsers[username];

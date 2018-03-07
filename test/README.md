@@ -1,5 +1,7 @@
 # JS SDK and Node.js SDK test suites
 
+> Node.js 8+ is required to run the tests
+
 ## Writing Tests
 Since the code for the JS SDK and Node.js SDK is shared, the recommendation is to write the tests for Node.js only. JS SDK tests are used to test features only available in th browser, which is mainly WebRTC.
 

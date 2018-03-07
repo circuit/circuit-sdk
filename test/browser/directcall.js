@@ -6,7 +6,7 @@ import config from './config.js'
 
 const assert = chai.assert;
 
-describe('WebRTC direct call', async function() {
+describe('Outgoing direct call', async function() {
     this.timeout(5000);
 
     let client;
@@ -29,7 +29,7 @@ describe('WebRTC direct call', async function() {
     });
 
     it('should initiate direct call and get callStatus with callStateChanged:Initiated and callStateChanged:Delivered', async () => {
-        call = await client.makeCall(peerUser.username, {audio: true, video: true});
+        call = await client.makeCall(peerUser.userId, {audio: true, video: true});
         await expectEvents(client, [{
             type: 'callStatus',
             predicate: evt => evt.call.state === Circuit.Enums.CallStateName.Initiated
