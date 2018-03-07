@@ -28,5 +28,5 @@ app.listen(options.port);
 
 runner(options)
     .then(() => process.exit())
-    .catch(console.error);
+    .catch(() => process.exit(1));
 
