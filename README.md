@@ -24,6 +24,8 @@ Add the the line below to the HTML file of your app. This will include the lates
 <script type="text/javascript" src="https://unpkg.com/circuit-sdk"></script>
 ```
 
+> Starting version 1.2.2800 the JS SDK can also be imported via CommonJS or AMD. View the repo [UMD](https://github.com/circuit/umd) for the different types of usage, or [circuit-ionic-start](https://github.com/circuit/circuit-ionic-starter) for example how import the SDK via `require` using webpack.
+
 #### Node.js
 ```bash
 npm install --save circuit-sdk
