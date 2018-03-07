@@ -4,7 +4,7 @@
   "description": "Circuit Node.js SDK",
   "main": "circuit-node.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "mocha ./test/node/* --recursive --timeout=5000 --exit"
   },
   "author": "Unify Inc.",
   "contributors": [
@@ -38,5 +38,14 @@
   "unpkg": "dist/circuit.min.js",
   "dependencies": {
     "ws": "~3.3.3"
+  },
+  "devDependencies": {
+    "chai": "^4.1.2",
+    "express": "^4.16.2",
+    "globby": "^8.0.1",
+    "minimist": "^1.2.0",
+    "mocha": "^5.0.1",
+    "puppeteer": "^1.1.1",
+    "serve-static": "^1.13.2"
   }
 }

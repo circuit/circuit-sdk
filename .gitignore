@@ -1,7 +1,9 @@
-# OS X
 .DS_Store
+node_modules
+
 
 # VS Code
-.vscode
+.vscode/*
+!.vscode/launch.json
 
 npm-debug.log
