@@ -28,8 +28,9 @@ describe('Outgoing direct call', async function() {
         client.removeAllListeners();
     });
 
-    it('should initiate direct call and get callStatus with callStateChanged:Initiated and callStateChanged:Delivered', async () => {
-        call = await client.makeCall(peerUser.userId, {audio: true, video: true});
+    it('should initiate direct call and get callStatus Initiated and Delivered', async () => {
+        assert(false, 'testing');
+        call = await client.makeCall(peerUser.userId, {audio: true, video: true}, true);
         await expectEvents(client, [{
             type: 'callStatus',
             predicate: evt => evt.call.state === Circuit.Enums.CallStateName.Initiated
@@ -39,9 +40,9 @@ describe('Outgoing direct call', async function() {
         }]);
         assert(call.callId);
         document.querySelector('#localVideo').src = call.localVideoUrl;
-    });
+    }).timeout(60000);
 
-    it('should get callStatus event for remoteStreamUpdated and callStateChanged:Active upon peer answering', async () => {
+    it('should get callStatus event for remoteStreamUpdated and state Active upon peer answering', async () => {
         updateRemoteVideos(client);
         await Promise.all([
             peerUser.exec('answerCall', call.callId, {audio: true, video: true}),

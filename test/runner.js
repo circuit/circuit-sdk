@@ -217,7 +217,10 @@ module.exports = async options => {
                         .then(() => page.goto(`http://localhost:${port}/${file}`))
                         .then(() => page.waitForFunction(() => window.__mochaResult__, { timeout: timeout }))
                         .then(() => page.evaluate(() => window.__mochaResult__))
-                        .then(() => browser.close());
+                        .then(res => {
+                            browser.close();
+                            return res.result;
+                        });
                 }));
 
     }

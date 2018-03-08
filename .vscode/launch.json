@@ -4,7 +4,6 @@
   // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
   "version": "0.2.0",
   "configurations": [
-
     {
       "type": "node",
       "request": "launch",
@@ -26,8 +25,8 @@
       "name": "Browser SDK Tests",
       "program": "${workspaceFolder}/test/index.js",
       "args": [
-        "--files", "test/browser/*.html",
-        "--port", "3000",
+        //"--files", "test/browser/directcall.html",
+        "--port", "3001",
         "--visible"
       ],
       "console": "integratedTerminal"
