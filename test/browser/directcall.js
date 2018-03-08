@@ -29,7 +29,6 @@ describe('Outgoing direct call', async function() {
     });
 
     it('should initiate direct call and get callStatus Initiated and Delivered', async () => {
-        assert(false, 'testing');
         call = await client.makeCall(peerUser.userId, {audio: true, video: true}, true);
         await expectEvents(client, [{
             type: 'callStatus',
