@@ -27,11 +27,7 @@ app.use(serveStatic('.'));
 app.listen(options.port);
 
 runner(options)
-    .then(res => res.failures.length ? 1 : 0)
+    .then(results => results.find(res => res.failures.length) ? 1 : 0)
     .catch(() => 1)
-    .then(res => {
-        console.log('result: ' + res)
-        return res;
-    })
     .then(process.exit);
 

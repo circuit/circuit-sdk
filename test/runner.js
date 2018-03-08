@@ -204,8 +204,10 @@ module.exports = async options => {
 
     const paths = await globby(files);
 
+    const result = [];
+
     for (let file of paths) {
-        await puppeteer
+        const res = await puppeteer
             .launch(puppeteerOptions)
             .then(browser => browser.newPage()
                 .then(page => {
@@ -222,7 +224,8 @@ module.exports = async options => {
                             return res.result;
                         });
                 }));
-
+        result.push(res);
     }
 
+    return result;
 };
