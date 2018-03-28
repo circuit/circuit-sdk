@@ -1,6 +1,7 @@
 Circuit JavaScript and Node.js SDK
 ==================================
 
+[![NPM release](https://img.shields.io/npm/v/circuit-sdk/beta.svg)](https://www.npmjs.com/package/circuit-sdk)
 [![Build Status](https://travis-ci.org/circuit/circuit-sdk.svg?branch=beta)](https://travis-ci.org/circuit/circuit-sdk)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
