@@ -1,9 +1,4 @@
 .DS_Store
 node_modules
 
-
-# VS Code
-.vscode/*
-!.vscode/launch.json
-
 npm-debug.log

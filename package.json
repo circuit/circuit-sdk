@@ -1,10 +1,12 @@
 {
   "name": "circuit-sdk",
-  "version": "1.2.2701",
-  "description": "Circuit Node.js SDK",
+  "version": "1.2.2902",
+  "description": "Circuit SDK",
   "main": "circuit-node.js",
   "scripts": {
-    "test": "mocha ./test/node/* --recursive --timeout=5000 --exit"
+    "test:browser": "node test/index",
+    "test:node": "mocha ./test/node/* --recursive --timeout=5000 --exit",
+    "test": "npm run test:node && npm run test:browser"
   },
   "author": "Unify Inc.",
   "contributors": [
@@ -33,9 +35,10 @@
     "sdk"
   ],
   "browser": {
-    "electron": false
+    "electron": false,
+    "./circuit-node.js": "./circuit.js"
   },
-  "unpkg": "dist/circuit.min.js",
+  "unpkg": "circuit.min.js",
   "dependencies": {
     "ws": "~3.3.3"
   },
