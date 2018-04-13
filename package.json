@@ -6,7 +6,7 @@
   "scripts": {
     "test:browser": "node test/index",
     "test:node": "mocha ./test/node/* --recursive --timeout=5000 --exit",
-    "test": "npm run test:node && npm run test:browser"
+    "test": "npm run test:node"
   },
   "author": "Unify Inc.",
   "contributors": [
