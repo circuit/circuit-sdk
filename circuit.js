@@ -30,10 +30,10 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- *  @version: 1.2.2902
+ *  @version: 1.2.3302
  */
 
-var Circuit = {}; Object.defineProperty(Circuit, 'version', { value: '1.2.2902'});
+var Circuit = {}; Object.defineProperty(Circuit, 'version', { value: '1.2.3302'});
 
 // Define external globals for JSHint
 /*global Buffer, clearInterval, clearTimeout, process, require, setInterval, setTimeout*/
@@ -123,7 +123,7 @@ var Circuit = (function (circuit) {
 })(Circuit || {});
 
 // Define global variables for JSHint
-/*global console*/
+/*global console, _circuitLogger*/
 
 var Circuit = (function (circuit) {
     'use strict';
@@ -184,7 +184,7 @@ var Circuit = (function (circuit) {
      * @static
      * @class logger
      */
-    var logger = {
+    var logger = (typeof _circuitLogger !== 'undefined') ? _circuitLogger : {
         /**
          * Set the log level for API logging.
          * @method setLevel
@@ -410,7 +410,8 @@ var Circuit = (function (circuit) {
         LOG: 'log',
         SCREEN_SHARE: 'screenShare',
         EXCHANGE_CONNECTOR: 'exchange_connector',
-        HEADSET_APP: 'headsetAppManager'
+        HEADSET_APP: 'headsetAppManager',
+        PRIVACY_SETTINGS: 'privacySettings'
     });
 
     // Error reasons
@@ -434,7 +435,8 @@ var Circuit = (function (circuit) {
         IS_ALIVE: 'isAlive',
         GET_WINDOW_SIZE: 'getWindowSize',
         EXTENSION_DISCONNECTED: 'extensionDisconnected',
-        BRING_TO_FRONT: 'bringToFront'
+        BRING_TO_FRONT: 'bringToFront',
+        GET_FILE: 'getFile'
     });
 
     ChromeExtension.BgScreenShareMsgType = Object.freeze({
@@ -443,10 +445,23 @@ var Circuit = (function (circuit) {
         CHOOSE_DESKTOP_MEDIA_CANCELLED: 'cdmCancelled'
     });
 
+    ChromeExtension.BgPrivacySettingsMsgType = Object.freeze({
+        SET_IP_HANDLING_POLICY: 'setWebRTCIPHandlingPolicy',
+        GET_IP_HANDLING_POLICY: 'getWebRTCIPHandlingPolicy',
+        IP_HANDLING_POLICY_CHANGED: 'webRTCIPHandlingPolicyChanged'
+    });
+
+    ChromeExtension.BgPrivacySettingsError = Object.freeze({
+        NOT_AUTHORIZED: 'notAuthorized', // Extension has not been authorized to control policy settings
+        NOT_CONTROLLABLE: 'notControllable', // Setting is locked by enterprise policies
+        CONTROLLED_BY_OTHER_EXTENSIONS: 'controlledByOtherExtensions' // Setting is being controlled by another extension
+    });
+
     ChromeExtension.BgExchangeMsgType = Object.freeze({
         CONNECT: 'connect',
         DISCONNECT: 'disconnect',
         SEARCH_CONTACTS: 'searchContacts',
+        AUTODISCOVER_GET_SERVER: 'autodiscoverGetServer',
         GET_CONNECTION_STATUS: 'getConnectionStatus',
         GET_CAPABILITIES: 'getCapabilities',
         GET_CONTACT: 'getContact',
@@ -467,7 +482,8 @@ var Circuit = (function (circuit) {
         GET_HEADSET_APP_STATUS: 'getHeadsetAppStatus',
         LAUNCH_HEADSET_APP: 'launchHeadsetApp',
         HEADSET_APP_LAUNCHED: 'headsetAppLaunched',
-        HEADSET_APP_UNINSTALLED: 'headsetAppUninstalled'
+        HEADSET_APP_UNINSTALLED: 'headsetAppUninstalled',
+        RESTART_HEADSET_APP: 'restartHeadsetApp'
     });
 
     // Possible response values sent by Exchange Connector
@@ -694,6 +710,10 @@ var Circuit = (function (circuit) {
 
     Utils.cleanPhoneNumber = function (number) {
         return number ? number.replace(/[^\*\#\d\+]/g, '') : '';
+    };
+
+    Utils.cleanPhoneNumberDigitsWithPin = function (number) {
+        return number ? number.replace(/[^\*\#\d\+\,]/g, '') : '';
     };
 
     /**
@@ -945,7 +965,7 @@ var Circuit = (function (circuit) {
         return Utils.toPlainText(content, type);
     };
 
-    Utils.createMentionedUsersArray = function (msg) {
+    Utils.createMentionedUsersArray = function (msg, convUsers) {
         var mentionedUsers = [];
         // We cannot guarantee the order of the attributes within the span, so we need
         // to split the patterns.
@@ -962,6 +982,15 @@ var Circuit = (function (circuit) {
             match = mentionPattern.exec(msg);
         }
 
+        if (convUsers) {
+            // Check that mentioned users are from the users array
+            mentionedUsers = mentionedUsers.filter(function (mentionedUser) {
+                return convUsers.some(function (user) {
+                    return user.userId === mentionedUser;
+                });
+            });
+        }
+
         return mentionedUsers;
     };
 
@@ -972,6 +1001,9 @@ var Circuit = (function (circuit) {
 
     // Pattern for numbers only (used in Cloud Telephony)
     Utils.NUMERIC_PATTERN = '^[0-9]*$';
+
+    // Pattern for numbers with * and + signs at the beginning of number(used in Cloud Telephony)
+    Utils.NUMERIC_SIGN_PATTERN = '^[\*\+]?[0-9]*$';
 
     //AlphaNumeric Pattern
     Utils.ALPHANUMERIC_PATTERN = '^[a-zA-Z0-9_]*$';
@@ -1039,6 +1071,7 @@ var Circuit = (function (circuit) {
     Utils.PHONE_PAC = /^([#\*]+[#\*\(\)\-\s\+\d]*)$/;
 
     Utils.PHONE_DIAL_PATTERN = /^([#\*\(\)\\\/\-\.\s\+\d]*)$/;
+    Utils.PHONE_DIAL_WITH_PIN_PATTERN = /^([#\*\(\)\\\/\-\.\s\+\d\,]*)$/;
 
     // Same as PHONE_DIAL_PATTERN but with an extension at the end (e.g.: +1 (231) 344-3455 x 1324)
     Utils.PHONE_WITH_EXTENSION_PATTERN = /^([#\*\(\)\\\/\-\.\s\+\d]*)(\s*(x|X|ext\.)\s*\d+)$/;
@@ -1352,21 +1385,29 @@ var Circuit = (function (circuit) {
     };
 
     /**
-     * Get ICE candidate info. For host and srflx candidates, it
-     * returns the local connection IP address. For relay candidates, it returns
-     * the related IP address and the client transport type.
+     * Get ICE candidate info (hAddr, sAddr and tt)
      *
-     * @param {type} res - Stat resource containing the candidate info
-     * @param {type} sdp - Local SDP (needed for relay candidates)
-     * @param {type} media - Media type (audio or video)
-     * @param {type} port - Port used by the candidate. We use it to find the relay candidate in the local SDP
-     * @returns {Object} - Object containing the candidate IP address and the relay transport type (if applicable)
+     * @param {Object} res - Stat resource containing the candidate info
+     * @param {Object} sdp - Local SDP (needed for relay candidates)
+     * @param {String} media - Media type (audio or video)
+     * @returns {Object} - Object containing the candidate's hAddr, sAddr and tt (if applicable)
      */
-    Utils.getIceCandidateInfo = function (res, sdp, media, port) {
+    Utils.getIceCandidateInfo = function (res, sdp, media) {
         var info = {};
 
-        if (!res || !sdp || !media || !port) {
+        if (!res || !sdp || !media) {
             return info;
+        }
+
+        var port, ip;
+        var type = res.stat('candidateType');
+        if (type === 'prflx') {
+            // Peer reflexive candidates are not in the SDP, but we still need to collect
+            // their hAddr. For that we use their connection IP address (sAddr) to find
+            // the corresponding srflx candidate, then the host candidate (hAddr)
+            ip = res.stat('ipAddress');
+        } else {
+            port = res.stat('portNumber');
         }
 
         var getAddrByNetworkIdForQosReport = function (parsedMLine, selectedCandidate, type) {
@@ -1393,31 +1434,41 @@ var Circuit = (function (circuit) {
                         return;
                     }
                     // Only parse the ICE candidate if the port is found in it
-                    if (a.value && a.value.indexOf(port) >= 0) {
-                        var candidate = new circuit.IceCandidate(a.value);
-                        if (String(candidate.port) === port) {
-                            info.value = a.value;
-                            var type = res.stat('candidateType');
-                            if (type === 'host') {
-                                info.hAddr = res.stat('ipAddress');
-                                // ANS-51833: In some cases of VPN connected calls, selected candidate is host
-                                // but, backend needs srflx host address for the QoS bandwidth calculations
-                                // get srflx address if there any otherwise default to host address.
-                                info.sAddr = getAddrByNetworkIdForQosReport(m, candidate, 'srflx');
-                                if (!info.sAddr) {
-                                    info.sAddr = info.hAddr;
-                                }
+                    if (a.value) {
+                        var candidate;
+                        if (port && a.value.indexOf(port) >= 0) {
+                            candidate = new circuit.IceCandidate(a.value);
+                            if (String(candidate.port) === port) {
+                                info.value = a.value;
+                                if (type === 'host') {
+                                    info.hAddr = res.stat('ipAddress');
+                                    // ANS-51833: In some cases of VPN connected calls, selected candidate is host
+                                    // but, backend needs srflx host address for the QoS bandwidth calculations
+                                    // get srflx address if there any otherwise default to host address.
+                                    info.sAddr = getAddrByNetworkIdForQosReport(m, candidate, 'srflx');
+                                    if (!info.sAddr) {
+                                        info.sAddr = info.hAddr;
+                                    }
+                                } else {
+                                    info.sAddr = candidate.raddr;
+                                    // Get the corresponding host address for srflx/relay candidate
+                                    info.hAddr = getAddrByNetworkIdForQosReport(m, candidate, 'host');
 
-                            } else {
-                                info.sAddr = candidate.raddr;
-                                // Get the corresponding host address for srflx/relay candidate
-                                info.hAddr = getAddrByNetworkIdForQosReport(m, candidate, 'host');
-
-                                if (type === 'relayed' || type === 'relay') {
-                                    info.tt = candidate.getRelayClientTransportType();
+                                    if (type === 'relayed' || type === 'relay') {
+                                        info.tt = candidate.getRelayClientTransportType();
+                                    }
                                 }
+                                return true;
                             }
-                            return true;
+                        } else if (ip && a.value.indexOf('srflx') >= 0) {
+                            // We're using the ip to search for the candidate, which must be srflx
+                            candidate = new circuit.IceCandidate(a.value);
+                            if (candidate.typ === 'srflx' && String(candidate.address) === ip) {
+                                info.sAddr = ip;
+                                // Now get the host address
+                                info.hAddr = getAddrByNetworkIdForQosReport(m, candidate, 'host');
+                                return true;
+                            }
                         }
                     }
                 });
@@ -1710,7 +1761,7 @@ var Circuit = (function (circuit) {
         return circuit.isElectron ? (HTTPS + circuit.__server) : window.location && window.location.origin;
     }
 
-    function linkifyText(text) {
+    Utils.linkifyText = function (text) {
         text = text.replace(/\xA0|&#160;|\x0A|\x0D/gim, ' ');
         var LT = String.fromCharCode(17); // Temporary mapping using non-printable ascii code x11 (DEC 17) for char "<" replacements
         var GT = String.fromCharCode(18); // Temporary mapping using non-printable ascii code x12 (DEC 18) for char ">" replacements
@@ -1771,7 +1822,7 @@ var Circuit = (function (circuit) {
             .replace(/\x11/gi, '<') // Linkify was done, replace them back
             .replace(/\x12/gi, '>')
             .replace(/\x13/gi, '\'');
-    }
+    };
 
     function linkifyNode(startNode, linkifiedDOM) { // Node traversing method in order to find text nodes and linkify them
         if (!startNode || !startNode.childNodes || !startNode.childNodes.length) {
@@ -1794,7 +1845,7 @@ var Circuit = (function (circuit) {
                 linkifyNode(currentNode, linkifiedDOM);
                 break;
             case 3:  // TEXT_NODE
-                linkifiedDOM.innerHTML = linkifyText(currentNode.textContent);
+                linkifiedDOM.innerHTML = Utils.linkifyText(currentNode.textContent);
                 i += linkifiedDOM.childNodes.length - 1;
                 while (linkifiedDOM.childNodes.length) {
                     startNode.insertBefore(linkifiedDOM.childNodes[0], currentNode);
@@ -1817,7 +1868,7 @@ var Circuit = (function (circuit) {
         case 'RICH':
             return linkifyHtml(content); // When content is html, parsing is done node-wise, and every text nodes is parsed for links
         case 'PLAIN':
-            return linkifyText(content); // When content is plain text, html tags are escaped and content is linkified as text
+            return Utils.linkifyText(content); // When content is plain text, html tags are escaped and content is linkified as text
         }
         return content;
     };
@@ -2492,8 +2543,11 @@ var Circuit = (function (circuit) {
             isMsie = this.getBrowserInfo().msie;
 
             buffer = document.createElement('div');
-            // Replace new line with <br> for correct view in Outlook
-            copyText = copyText.replace(/\r\n/gi, '<br>');
+
+            if (!asText) {
+                // Replace new line with <br> for correct view in Outlook
+                copyText = copyText.replace(/\r\n/gi, '<br>');
+            }
 
             // Note: Chrome doesn't override the bg-color with transparent in Outlook, so use the #fff;
             buffer.style.backgroundColor = '#fff';
@@ -3212,9 +3266,15 @@ var Circuit = (function (circuit) {
             THIRDPARTYCONNECTORS: 'THIRDPARTYCONNECTORS',
             USER_TO_USER: 'USER_TO_USER',
             VERSION: 'VERSION',
+            SANITY_CHECK: 'SANITY_CHECK',           // Not used by client
+            WEB_HOOK: 'WEB_HOOK',                   // Not used by client
             ACCOUNT: 'ACCOUNT',
             ACTIVITYSTREAM: 'ACTIVITYSTREAM',
+            PROVISIONING: 'PROVISIONING',           // Not used by client
+            RTC_CONNECTION: 'RTC_CONNECTION',       // Not used by client
             CONVERSATION_USER_DATA: 'CONVERSATION_USER_DATA',
+            MS_CONNECTOR: 'MS_CONNECTOR',           // Not used by client
+            SPACE: 'SPACE',                         // Not used by client
 
             // Content type used exclusively between client and access server
             USER_DATA: 'USER_DATA'
@@ -3296,8 +3356,8 @@ var Circuit = (function (circuit) {
         },
 
         CloudTelephonyErrorType: {
-            CMP_NEXT: 'CMP_NEXT',       // Error caused in CMPNext side
-            VALIDATION: 'VALIDATION'    // Error during user's input validation
+            CMP_NEXT: 'CMP_NEXT',        // Error caused in CMPNext side
+            VALIDATION: 'VALIDATION'     // Error during user's input validation
         },
 
         CloudTelephonyValidationError: {
@@ -3315,7 +3375,13 @@ var Circuit = (function (circuit) {
         },
 
         CloudTelephonyCmpNextError: {
-            COUNTRY_DETAILS_NOT_FOUND: 'COUNTRY_DETAILS_NOT_FOUND'
+            COUNTRY_DETAILS_NOT_FOUND: 'COUNTRY_DETAILS_NOT_FOUND',
+            OSV_OPERATION_FAILED: 'OSV_OPERATION_FAILED'
+        },
+
+        ClientCapability: {  // This is a bitwise enum for client capabilities. Used between client and access.
+            GUEST_EXPERIENCE: 0x01,
+            SYSTEM_MESSAGES: 0x02
         },
 
         ///////////////////////////////////////////////////////////////////////////
@@ -3395,7 +3461,9 @@ var Circuit = (function (circuit) {
             GET_CONVERSATIONS_BY_IDS: 'GET_CONVERSATIONS_BY_IDS',
             GET_USER_DATA_SINCE: 'GET_USER_DATA_SINCE',
             GET_CONFERENCE_INVITATION_TEXT: 'GET_CONFERENCE_INVITATION_TEXT',
-            GET_CONFERENCE_INVITATION_EXAMPLE: 'GET_CONFERENCE_INVITATION_EXAMPLE'
+            GET_CONFERENCE_INVITATION_EXAMPLE: 'GET_CONFERENCE_INVITATION_EXAMPLE',
+            GET_TEASER_MESSAGES: 'GET_TEASER_MESSAGES',
+            TAKE_MODERATION_RIGHT: 'TAKE_MODERATION_RIGHT'
         },
 
         ///////////////////////////////////////////////////////////////////////////
@@ -3457,6 +3525,17 @@ var Circuit = (function (circuit) {
             TEXT: 'TEXT',
             RTC: 'RTC',
             SYSTEM: 'SYSTEM'
+        },
+
+        ConversationItemTypeMapping: {
+            RTC: 'phone',
+            CALL_SUMMARY: 'call-summary',
+            TEXT: 'text',
+            SYSTEM: 'notification',
+            VOICEMAIL: 'vm',
+            MARKER: 'marker',
+            DIVIDER: 'divider',
+            GAP: 'gap'
         },
 
         ConversationFilter: {
@@ -3622,6 +3701,14 @@ var Circuit = (function (circuit) {
             SYSTEM_LABEL_IDS: 'SYSTEMLABELIDS'
         },
 
+        ModerationTakenResult: {
+            OK: 'OK',
+            ALREADY_HAS_MODERATOR: 'ALREADY_HAS_MODERATOR',
+            NO_MODERATED_CONVERTION: 'NO_MODERATED_CONVERTION',
+            NO_FULL_CONVERSATION_MEMBER: 'NO_FULL_CONVERSATION_MEMBER',
+            TAKE_MODERATION_FORBIDDEN: 'TAKE_MODERATION_FORBIDDEN'
+        },
+
         ///////////////////////////////////////////////////////////////////////////
         // Instrumentation Action
         ///////////////////////////////////////////////////////////////////////////
@@ -3677,7 +3764,8 @@ var Circuit = (function (circuit) {
             PROGRESS: 'PROGRESS',
             CHANGE_MEDIA_TYPE_FORCED: 'CHANGE_MEDIA_TYPE_FORCED',
             ICE_CANDIDATES: 'ICE_CANDIDATES',
-            RTC_QUALITY_RATING_EVENT: 'RTC_QUALITY_RATING_EVENT'
+            RTC_QUALITY_RATING_EVENT: 'RTC_QUALITY_RATING_EVENT',
+            IFRAME_STATISTICS: 'IFRAME_STATISTICS'
         },
 
         ///////////////////////////////////////////////////////////////////////////
@@ -3774,7 +3862,13 @@ var Circuit = (function (circuit) {
             CLEAR_WHITEBOARD_BACKGROUND: 'CLEAR_WHITEBOARD_BACKGROUND',
             TOGGLE_WHITEBOARD_OVERLAY: 'TOGGLE_WHITEBOARD_OVERLAY',
             UNDO_WHITEBOARD: 'UNDO_WHITEBOARD',
-            SEND_CLIENT_INFO: 'SEND_CLIENT_INFO'
+            SEND_CLIENT_INFO: 'SEND_CLIENT_INFO',
+            REQUEST_SCREEN_CONTROL: 'REQUEST_SCREEN_CONTROL',
+            REJECT_SCREEN_CONTROL_REQUEST: 'REJECT_SCREEN_CONTROL_REQUEST',
+            OFFER_SCREEN_CONTROL: 'OFFER_SCREEN_CONTROL',
+            ACCEPT_SCREEN_CONTROL: 'ACCEPT_SCREEN_CONTROL',
+            REJECT_SCREEN_CONTROL: 'REJECT_SCREEN_CONTROL',
+            STOP_SCREEN_CONTROL: 'STOP_SCREEN_CONTROL'
         },
 
         ///////////////////////////////////////////////////////////////////////////
@@ -3810,7 +3904,15 @@ var Circuit = (function (circuit) {
             WHITEBOARD_BACKGROUND_SET: 'WHITEBOARD_BACKGROUND_SET',
             WHITEBOARD_BACKGROUND_CLEARED: 'WHITEBOARD_BACKGROUND_CLEARED',
             WHITEBOARD_OVERLAY_TOGGLED: 'WHITEBOARD_OVERLAY_TOGGLED',
-            WHITEBOARD_SYNC: 'WHITEBOARD_SYNC'
+            WHITEBOARD_SYNC: 'WHITEBOARD_SYNC',
+            SCREEN_CONTROL_REQUESTED: 'SCREEN_CONTROL_REQUESTED',
+            SCREEN_CONTROL_REQUEST_REJECTED: 'SCREEN_CONTROL_REQUEST_REJECTED',
+            SCREEN_CONTROL_OFFERED: 'SCREEN_CONTROL_OFFERED',
+            SCREEN_CONTROL_ACCEPTED: 'SCREEN_CONTROL_ACCEPTED',
+            SCREEN_CONTROL_REJECTED: 'SCREEN_CONTROL_REJECTED',
+            HANDOVER_SCREEN_CONTROL: 'HANDOVER_SCREEN_CONTROL',
+            SCREEN_CONTROL_TERMINATED: 'SCREEN_CONTROL_TERMINATED',
+            SCREEN_CONTROL_FAILED: 'SCREEN_CONTROL_FAILED'
         },
 
         ///////////////////////////////////////////////////////////////////////////
@@ -3837,6 +3939,11 @@ var Circuit = (function (circuit) {
             SECURITY_NEGOTIATION_FAILED: 'SECURITY_NEGOTIATION_FAILED',
             CALL_SETUP_FAILED: 'CALL_SETUP_FAILED',
             REMOTE_SDP_FAILED: 'REMOTE_SDP_FAILED'
+        },
+
+        RtcSupportedFeatures: {
+            UPGRADE_TO_CONFERENCE: 'UPGRADE_TO_CONFERENCE',
+            SCREEN_CONTROL: 'SCREEN_CONTROL'
         },
 
         RealtimeMediaType: {
@@ -3933,7 +4040,17 @@ var Circuit = (function (circuit) {
 
         RtcClientInfoType: {
             OFFLINE_JOIN_FAILURE: 'OFFLINE_JOIN_FAILURE',
-            DEVICE_DIAGNOSTICS: 'DEVICE_DIAGNOSTICS'
+            DEVICE_DIAGNOSTICS: 'DEVICE_DIAGNOSTICS',
+            CALL_CONNECTED: 'CALL_CONNECTED'
+        },
+
+        RtcClientInfoReason: {
+            NO_NETWORK_CONNECTION: 'NO_NETWORK_CONNECTION',
+            DISCONNECTED: 'DISCONNECTED',
+            FAILED_TO_SEND: 'FAILED_TO_SEND',
+            REQUEST_TIMEOUT: 'REQUEST_TIMEOUT',
+            JOIN_DELAY: 'JOIN_DELAY',
+            CALL_CONNECTED: 'CALL_CONNECTED'
         },
 
         RtcActionInfoType: {
@@ -3952,13 +4069,6 @@ var Circuit = (function (circuit) {
             SDP_CONNECTED: 'SDP_CONNECTED',
             SDP_ANSWER: 'SDP_ANSWER',
             REMOTE_ICE_CANDIDATES: 'REMOTE_ICE_CANDIDATES'
-        },
-
-        RtcClientInfoReason: {
-            DISCONNECTED: 'DISCONNECTED',
-            FAILED_TO_SEND: 'FAILED_TO_SEND',
-            REQUEST_TIMEOUT: 'REQUEST_TIMEOUT',
-            JOIN_DELAY: 'JOIN_DELAY'
         },
 
         ///////////////////////////////////////////////////////////////////////////
@@ -3996,6 +4106,8 @@ var Circuit = (function (circuit) {
         // System Event
         ///////////////////////////////////////////////////////////////////////////
         SystemEventType: {
+            BROADCAST: 'BROADCAST',
+            BROADCAST_REMOVED: 'BROADCAST_REMOVED',
             MAINTENANCE: 'MAINTENANCE',
             MAINTENANCE_REMOVED: 'MAINTENANCE_REMOVED',
             MAINTENANCE_ADDED: 'MAINTENANCE_ADDED'
@@ -4053,8 +4165,6 @@ var Circuit = (function (circuit) {
         // User Action
         ///////////////////////////////////////////////////////////////////////////
         UserActionType: {
-            WAKE_UP: 'WAKE_UP',         // Used between clients and Access Server. Not part of official API.
-            GO_TO_SLEEP: 'GO_TO_SLEEP', // Used between clients and Access Server. Not part of official API.
             LOGON: 'LOGON',
             LOGOUT: 'LOGOUT',
             RENEW_TOKEN: 'RENEW_TOKEN',
@@ -4089,7 +4199,14 @@ var Circuit = (function (circuit) {
             REVOKE_MANAGED_DEVICES: 'REVOKE_MANAGED_DEVICES',
             GET_SECURITY_TOKEN_INFO: 'GET_SECURITY_TOKEN_INFO',
             REVOKE_SECURITY_TOKEN: 'REVOKE_SECURITY_TOKEN',
-            RESET_OPENSCAPE_DEVICE_PINS: 'RESET_OPENSCAPE_DEVICE_PINS'
+            RESET_OPENSCAPE_DEVICE_PINS: 'RESET_OPENSCAPE_DEVICE_PINS',
+            SUBSCRIBE_TENANT_PRESENCE: 'SUBSCRIBE_TENANT_PRESENCE',
+            UNSUBSCRIBE_TENANT_PRESENCE: 'UNSUBSCRIBE_TENANT_PRESENCE',
+
+            // Used between clients and Access Server. Not part of official API.
+            WAKE_UP: 'WAKE_UP',
+            GO_TO_SLEEP: 'GO_TO_SLEEP',
+            SET_CLIENT_CAPABILITIES: 'SET_CLIENT_CAPABILITIES'
         },
 
         ///////////////////////////////////////////////////////////////////////////
@@ -4108,7 +4225,8 @@ var Circuit = (function (circuit) {
             DEVICE_LIST_CHANGED: 'DEVICE_LIST_CHANGED',
             NOTIFICATION_SUBSCRIPTION_CHANGE: 'NOTIFICATION_SUBSCRIPTION_CHANGE',
             TENANT_CONFIGURATION_UPDATED: 'TENANT_CONFIGURATION_UPDATED',
-            UCAAS_DEVICE_UPDATED: 'UCAAS_DEVICE_UPDATED'
+            UCAAS_DEVICE_UPDATED: 'UCAAS_DEVICE_UPDATED',
+            TENANT_PRESENCE_CHANGE: 'TENANT_PRESENCE_CHANGE'
         },
 
         ///////////////////////////////////////////////////////////////////////////
@@ -4387,32 +4505,62 @@ var Circuit = (function (circuit) {
         // Administration Action
         ///////////////////////////////////////////////////////////////////////////
         AdministrationActionType: {
+            // User Management                                                                                                                                                                                                                            --
             INVITE_USER: 'INVITE_USER',
             ADD_USER: 'ADD_USER',
             INVITE_MULTIPLE_USERS: 'INVITE_MULTIPLE_USERS',
+            UPDATE_USER: 'UPDATE_USER',
             DELETE_USER: 'DELETE_USER',
             VALIDATE_USER_INVITATION_TOKEN: 'VALIDATE_USER_INVITATION_TOKEN',
             ACTIVATE_INVITED_USER: 'ACTIVATE_INVITED_USER',
             RESEND_USER_INVITATION: 'RESEND_USER_INVITATION',
+
+            // Tenant Management                                                                                                                                                                                                                          --
             CHECK_INVALID_TENANTS: 'CHECK_INVALID_TENANTS',
             GET_TENANT: 'GET_TENANT',
             GET_SHARED_KEY: 'GET_SHARED_KEY',
+            GET_TENANT_SETTINGS: 'GET_TENANT_SETTINGS',
+            SET_TENANT_SETTINGS: 'SET_TENANT_SETTINGS',
+            FIND_TENANT_SETTING: 'FIND_TENANT_SETTING',
             EXPORT_TENANT: 'EXPORT_TENANT',
+            SAVE_TENANT_LOGIN_PROVIDER: 'SAVE_TENANT_LOGIN_PROVIDER',
+            UPDATE_TENANT_LOGIN_PROVIDER: 'UPDATE_TENANT_LOGIN_PROVIDER',
+            DELETE_TENANT_LOGIN_PROVIDER: 'DELETE_TENANT_LOGIN_PROVIDER',
             GET_ALL_TENANT_LOGIN_PROVIDERS: 'GET_ALL_TENANT_LOGIN_PROVIDERS',
+            GET_TENANT_LOGIN_PROVIDER_BY_PROVIDERID_AND_TENANTID: 'GET_TENANT_LOGIN_PROVIDER_BY_PROVIDERID_AND_TENANTID',
+            GET_TENANT_LOGIN_PROVIDER_CONFIGURATION_BY_PROVIDERID: 'GET_TENANT_LOGIN_PROVIDER_CONFIGURATION_BY_PROVIDERID',
+            SEND_TENANT_LOGIN_PROVIDER_EMAIL_NOTIFICATIONS: 'SEND_TENANT_LOGIN_PROVIDER_EMAIL_NOTIFICATIONS',
+            UPDATE_TENANT: 'UPDATE_TENANT',
+
+            // Extensions                                                                                                                                                                                                                                 --
             UPLOAD_EXTENSION_CONFIGURATION: 'UPLOAD_EXTENSION_CONFIGURATION',
             GET_TENANT_EXTENSIONS: 'GET_TENANT_EXTENSIONS',
             SET_EXTENSION_STATE: 'SET_EXTENSION_STATE',
             DELETE_EXTENSION: 'DELETE_EXTENSION',
             REGENERATE_API_KEY: 'REGENERATE_API_KEY',
+            ADD_API_TECHNICAL_USER: 'ADD_API_TECHNICAL_USER',
+
+            // Developer console                                                                                                                                                                                                                                 --
+            GET_CUSTOM_APPS: 'GET_CUSTOM_APPS',
+            ADD_CUSTOM_APP: 'ADD_CUSTOM_APP',
+
+            // LDAP support                                                                                                                                                                                                                               --
+            GET_PROVISIONED_TENANT_USERS: 'GET_PROVISIONED_TENANT_USERS',
+            CREATE_PROVISIONED_USER: 'CREATE_PROVISIONED_USER',
+            REMOVE_PROVISIONED_USER: 'REMOVE_PROVISIONED_USER',
+            UPDATE_PROVISIONED_USER: 'UPDATE_PROVISIONED_USER',
+
+            // Telephony                                                                                                                                                                                                                    --
+            SET_TELEPHONY_STATUS: 'SET_TELEPHONY_STATUS',
             SET_TELEPHONY_TRUNK_DATA: 'SET_TELEPHONY_TRUNK_DATA',
             GET_TELEPHONY_TRUNK_STATUS: 'GET_TELEPHONY_TRUNK_STATUS',
             GET_TENANT_BRIDGE_NUMBERS: 'GET_TENANT_BRIDGE_NUMBERS',
             SET_TENANT_BRIDGE_NUMBERS: 'SET_TENANT_BRIDGE_NUMBERS',
+            GET_TECHNICAL_CREDENTIALS: 'GET_TECHNICAL_CREDENTIALS',
             ADD_TRUNK: 'ADD_TRUNK',
             GET_TENANT_TELEPHONY_CONFIGURATION: 'GET_TENANT_TELEPHONY_CONFIGURATION',
             ADD_TRUNK_WITHOUT_PARAMETERS: 'ADD_TRUNK_WITHOUT_PARAMETERS',
             SET_TRUNK_PASSWORD: 'SET_TRUNK_PASSWORD',
-            UPDATE_TRUNK: 'UPDATE_TRUNK',
             GET_TELEPHONY_ROUTING_RULES: 'GET_TELEPHONY_ROUTING_RULES',
             ADD_TELEPHONY_ROUTING_RULE: 'ADD_TELEPHONY_ROUTING_RULE',
             UPDATE_TELEPHONY_ROUTING_RULE: 'UPDATE_TELEPHONY_ROUTING_RULE',
@@ -4424,18 +4572,18 @@ var Circuit = (function (circuit) {
             ADD_TELEPHONY_TRUNK_GROUP: 'ADD_TELEPHONY_TRUNK_GROUP',
             REMOVE_TELEPHONY_TRUNK_GROUP: 'REMOVE_TELEPHONY_TRUNK_GROUP',
             UPDATE_TELEPHONY_TRUNK_GROUP: 'UPDATE_TELEPHONY_TRUNK_GROUP',
-            SUSPEND_USER: 'SUSPEND_USER',
-            UNSUSPEND_USER: 'UNSUSPEND_USER',
-            ASSIGN_PHONE_NUMBER: 'ASSIGN_PHONE_NUMBER',
-            INVITE_MULTIPLE_PARTNER_USERS: 'INVITE_MULTIPLE_PARTNER_USERS',
-            ADD_MEETING_POINT: 'ADD_MEETING_POINT',
-            ADD_MEETING_POINT_V2: 'ADD_MEETING_POINT_V2',
-            UPDATE_MEETING_POINT_V2: 'UPDATE_MEETING_POINT_V2',
-            SET_TENANT_SETTINGS: 'SET_TENANT_SETTINGS',
-            UPDATE_TENANT: 'UPDATE_TENANT',
-            SAVE_TENANT_LOGIN_PROVIDER: 'SAVE_TENANT_LOGIN_PROVIDER',
-            UPDATE_TENANT_LOGIN_PROVIDER: 'UPDATE_TENANT_LOGIN_PROVIDER',
-            DELETE_TENANT_LOGIN_PROVIDER: 'DELETE_TENANT_LOGIN_PROVIDER',
+            ADD_TELEPHONY_TRUNK_TO_GROUP: 'ADD_TELEPHONY_TRUNK_TO_GROUP',
+            REMOVE_TELEPHONY_TRUNK_FROM_GROUP: 'REMOVE_TELEPHONY_TRUNK_FROM_GROUP',
+            GET_CLASSLESS_INTER_DOMAIN_ROUTING_BLOCKS: 'GET_CLASSLESS_INTER_DOMAIN_ROUTING_BLOCKS',
+            GET_CLASSLESS_INTER_DOMAIN_ROUTING_BLOCK: 'GET_CLASSLESS_INTER_DOMAIN_ROUTING_BLOCK',
+            ADD_CLASSLESS_INTER_DOMAIN_ROUTING_BLOCK: 'ADD_CLASSLESS_INTER_DOMAIN_ROUTING_BLOCK',
+            UPDATE_CLASSLESS_INTER_DOMAIN_ROUTING_BLOCK: 'UPDATE_CLASSLESS_INTER_DOMAIN_ROUTING_BLOCK',
+            REMOVE_CLASSLESS_INTER_DOMAIN_ROUTING_BLOCK: 'REMOVE_CLASSLESS_INTER_DOMAIN_ROUTING_BLOCK',
+            SET_TENANT_VOICEMAIL_NUMBERS: 'SET_TENANT_VOICEMAIL_NUMBERS',
+            GET_TENANT_VOICEMAIL_NUMBERS: 'GET_TENANT_VOICEMAIL_NUMBERS',
+            UPDATE_TRUNK: 'UPDATE_TRUNK',
+
+            // UCaaS                                                                                                                                                                          --
             GET_VACANT_HOME_DIRECTORY_NUMBERS: 'GET_VACANT_HOME_DIRECTORY_NUMBERS',
             CREATE_OPENSCAPE_USER: 'CREATE_OPENSCAPE_USER',
             UPDATE_OPENSCAPE_USER: 'UPDATE_OPENSCAPE_USER',
@@ -4445,19 +4593,43 @@ var Circuit = (function (circuit) {
             GET_OPENSCAPE_TENANT: 'GET_OPENSCAPE_TENANT',
             DELETE_OPENSCAPE_SITES: 'DELETE_OPENSCAPE_SITES',
             CREATE_OPENSCAPE_SITE: 'CREATE_OPENSCAPE_SITE',
-            GET_OPENSCAPE_SITE: 'GET_OPENSCAPE_SITE',
             UPDATE_OPENSCAPE_SITE: 'UPDATE_OPENSCAPE_SITE',
+            GET_OPENSCAPE_SITE: 'GET_OPENSCAPE_SITE',
             DELETE_PUBLIC_NUMBER_RANGE: 'DELETE_PUBLIC_NUMBER_RANGE',
             DELETE_PRIVATE_NUMBER_RANGE: 'DELETE_PRIVATE_NUMBER_RANGE',
+            CREATE_HUNT_GROUP: 'CREATE_HUNT_GROUP',
+            DELETE_HUNT_GROUP: 'DELETE_HUNT_GROUP',
+            GET_HUNT_GROUP: 'GET_HUNT_GROUP',
+            GET_TENANT_HUNT_GROUPS: 'GET_TENANT_HUNT_GROUPS',
+            GET_HUNT_GROUP_PILOT_CANDIDATES: 'GET_HUNT_GROUP_PILOT_CANDIDATES',
+            GET_HUNT_GROUP_MEMBER_CANDIDATES: 'GET_HUNT_GROUP_MEMBER_CANDIDATES',
+            UPDATE_HUNT_GROUP: 'UPDATE_HUNT_GROUP',
+
+            // Deprecated methods for users (but still used for TC)
+            SUSPEND_USER: 'SUSPEND_USER',
+            UNSUSPEND_USER: 'UNSUSPEND_USER',
+
+            // Partner collaboration                                                                                                                                                                                                                      --
+            INVITE_PARTNER_USER: 'INVITE_PARTNER_USER',
+            INVITE_MULTIPLE_PARTNER_USERS: 'INVITE_MULTIPLE_PARTNER_USERS',
+
+            // Meeting Room                                                                                                                                                                                                                      --
+            ADD_MEETING_POINT: 'ADD_MEETING_POINT',
+            ADD_MEETING_POINT_V2: 'ADD_MEETING_POINT_V2',
+            UPDATE_MEETING_POINT_V2: 'UPDATE_MEETING_POINT_V2',
+            SET_CMR_SETTINGS: 'SET_CMR_SETTINGS',
+            GET_CMR_SETTINGS: 'GET_CMR_SETTINGS',
+
+            // Automated Attendant
             GET_AUTOMATEDATTENDANT_CONFIGURATION: 'GET_AUTOMATEDATTENDANT_CONFIGURATION',
             SET_AUTOMATEDATTENDANT_CONFIGURATION: 'SET_AUTOMATEDATTENDANT_CONFIGURATION',
-            GET_CUSTOM_APPS: 'GET_CUSTOM_APPS',
-            ADD_CUSTOM_APP: 'ADD_CUSTOM_APP',
             GET_PARTNER_MANAGEABLE_TENANTS: 'GET_PARTNER_MANAGEABLE_TENANTS',
-            GET_CMR_SETTINGS: 'GET_CMR_SETTINGS',
-            SET_CMR_SETTINGS: 'SET_CMR_SETTINGS',
-            SET_TENANT_VOICEMAIL_NUMBERS: 'SET_TENANT_VOICEMAIL_NUMBERS',
-            GET_TENANT_VOICEMAIL_NUMBERS: 'GET_TENANT_VOICEMAIL_NUMBERS'
+
+            // System notifications
+            GET_SYSTEM_NOTIFICATIONS: 'GET_SYSTEM_NOTIFICATIONS',
+            ADD_SYSTEM_NOTIFICATION: 'ADD_SYSTEM_NOTIFICATION',
+            REMOVE_SYSTEM_NOTIFICATION: 'REMOVE_SYSTEM_NOTIFICATION',
+            UPDATE_SYSTEM_NOTIFICATION: 'UPDATE_SYSTEM_NOTIFICATION'
         },
 
         InvitationResponseCode: {
@@ -4523,6 +4695,21 @@ var Circuit = (function (circuit) {
         ///////////////////////////////////////////////////////////////////////////
         // Administration Data
         ///////////////////////////////////////////////////////////////////////////
+        SystemNotificationType: {
+            MAINTENANCE: 'MAINTENANCE',
+            BROADCAST: 'BROADCAST'
+        },
+
+        HuntType: {
+            INIT: 'INIT',
+            LINEAR: 'LINEAR',
+            CIRCULAR_WITH_HUNT: 'CIRCULAR_WITH_HUNT',
+            UCD: 'UCD',
+            MANUAL: 'MANUAL',
+            PARALLEL: 'PARALLEL',
+            PARALLEL_SA: 'PARALLEL_SA'
+        },
+
         TenantSettingsType: {
             CREDENTIALS_LOGIN_ENABLED: 'CREDENTIALS_LOGIN_ENABLED',
             HELP_URL: 'HELP_URL',
@@ -4624,6 +4811,13 @@ var Circuit = (function (circuit) {
             CONFIGURED: 'CONFIGURED'
         },
 
+        OpenscapeDirectoryNumberUsage: {
+            MLHG_MEMBER: 'MLHG_MEMBER',
+            MLHG_PILOT: 'MLHG_PILOT',
+            PICKUP_MEMBER: 'PICKUP_MEMBER',
+            AA_MEMBER: 'AA_MEMBER'
+        },
+
         ///////////////////////////////////////////////////////////////////////////
         // Third Party Connectors
         ///////////////////////////////////////////////////////////////////////////
@@ -4678,7 +4872,8 @@ var Circuit = (function (circuit) {
         ///////////////////////////////////////////////////////////////////////////
         GuestActionType: {
             VALIDATE_SESSION_INVITE_TOKEN: 'VALIDATE_SESSION_INVITE_TOKEN',
-            REGISTER_SESSION_GUEST: 'REGISTER_SESSION_GUEST'
+            REGISTER_SESSION_GUEST: 'REGISTER_SESSION_GUEST',
+            GET_REGIONS: 'GET_REGIONS'
         },
 
         SessionInviteInfoResult: {
@@ -4923,25 +5118,30 @@ var Circuit = (function (circuit) {
         ///////////////////////////////////////////////////////////////////////////
         LabFeatureName: {
             ADD_CMR_VIA_QR_CODE: 'ADD_CMR_VIA_QR_CODE',
+            ANSWER_CALL_SCREEN: 'ANSWER_CALL_SCREEN',
             AUTHENTICATION_SETTINGS: 'AUTHENTICATION_SETTINGS',
+            BROADCAST_MESSAGES: 'BROADCAST_MESSAGES',
+            CIRCUIT_GUEST: 'CIRCUIT_GUEST',
             COLOR_CONTRAST: 'COLOR_CONTRAST',
             DEVELOPER_CONSOLE: 'DEVELOPER_CONSOLE',
             EXPORT_USER_DATA: 'EXPORT_USER_DATA',
             FILTER_BY_LABEL: 'FILTER_BY_LABEL',
-            FIREBASE_PUSH_NOTIFICATIONS: 'FIREBASE_PUSH_NOTIFICATIONS',
             GLOBAL_FUNCTIONS_REDESIGN: 'GLOBAL_FUNCTIONS_REDESIGN',
             GROUP_PICKUP: 'GROUP_PICKUP',
             INCOMING_CALL_ROUTING: 'INCOMING_CALL_ROUTING',
+            IP_HANDLING_POLICY: 'IP_HANDLING_POLICY',
+            KEYBOARD_NAVIGATION: 'KEYBOARD_NAVIGATION',
             LANDSCAPE_MODE: 'LANDSCAPE_MODE',
             LEAK_CANARY: 'LEAK_CANARY',
-            NOTIFICATION_SETTINGS_FAVORITE: 'NOTIFICATION_SETTINGS_FAVORITE',
+            MEETING_CANVAS: 'MEETING_CANVAS',
             OPEN_XCHANGE: 'OPEN_XCHANGE',
             ORGANISE_CONTENT: 'ORGANISE_CONTENT',
             PARTICIPANT_DRAWING: 'PARTICIPANT_DRAWING',
             SCOPE_SEARCHES: 'SCOPE_SEARCHES',
-            TEXT_TO_SPEECH: 'TEXT_TO_SPEECH',
+            SCREEN_CONTROL: 'SCREEN_CONTROL',
+            SECOND_LOCAL_CALL: 'SECOND_LOCAL_CALL',
+            SIRI_SEARCH: 'SIRI_SEARCH',
             THREADABLE_RTC_ITEM: 'THREADABLE_RTC_ITEM',
-            UCAAS_DEVICE: 'UCAAS_DEVICE',
             UCAAS_HUNT_GROUPS: 'UCAAS_HUNT_GROUPS',
             VIDEO_PLAYER: 'VIDEO_PLAYER',
             VOICEMAIL_CONFIG: 'VOICEMAIL_CONFIG',
@@ -5209,6 +5409,9 @@ var Circuit = (function (circuit) {
                 case Constants.UserEventType.UCAAS_DEVICE_UPDATED:
                     // Event has no data
                     break;
+                case Constants.UserEventType.TENANT_PRESENCE_CHANGE:
+                    evtData = event.user.tenantPresenceChanged;
+                    break;
                 }
                 evtData.userId = event.user.userId;
                 break;
@@ -5246,6 +5449,9 @@ var Circuit = (function (circuit) {
                     break;
                 case Constants.RTCCallEventType.RTC_QUALITY_RATING_EVENT:
                     evtData = event.rtcCall.ratingEvent;
+                    break;
+                case Constants.RTCCallEventType.IFRAME_STATISTICS:
+                    evtData = event.rtcCall.iFrameStatisticsEvent;
                     break;
                 }
                 evtData.sessionId = event.rtcCall.sessionId;
@@ -5347,6 +5553,24 @@ var Circuit = (function (circuit) {
                 case Constants.RTCSessionEventType.WHITEBOARD_OVERLAY_TOGGLED:
                     // Event has no data
                     break;
+                case Constants.RTCSessionEventType.SCREEN_CONTROL_REQUESTED:
+                    evtData = event.rtcSession.screenControlRequested;
+                    break;
+                case Constants.RTCSessionEventType.SCREEN_CONTROL_OFFERED:
+                    evtData = event.rtcSession.screenControlOffered;
+                    break;
+                case Constants.RTCSessionEventType.SCREEN_CONTROL_ACCEPTED:
+                    evtData = event.rtcSession.screenControlAccepted;
+                    break;
+                case Constants.RTCSessionEventType.HANDOVER_SCREEN_CONTROL:
+                    evtData = event.rtcSession.handoverScreenControl;
+                    break;
+                case Constants.RTCSessionEventType.SCREEN_CONTROL_REQUEST_REJECTED:
+                case Constants.RTCSessionEventType.SCREEN_CONTROL_REJECTED:
+                case Constants.RTCSessionEventType.SCREEN_CONTROL_TERMINATED:
+                case Constants.RTCSessionEventType.SCREEN_CONTROL_FAILED:
+                    // Event has no data
+                    break;
                 }
                 evtData.sessionId = event.rtcSession.sessionId;
                 break;
@@ -5375,16 +5599,21 @@ var Circuit = (function (circuit) {
             case Constants.ContentType.SYSTEM:
                 evtName = 'System.' + event.system.type;
                 switch (event.system.type) {
+                case Constants.SystemEventType.BROADCAST:
+                    evtData = event.system.systemNotificationEvent;
+                    evtData.eventId = event.system.eventId;
+                    break;
                 case Constants.SystemEventType.MAINTENANCE:
                 case Constants.SystemEventType.MAINTENANCE_ADDED:
                     evtData = event.system.maintenance;
-
+                    evtData.eventId = event.system.eventId;
                     break;
+                case Constants.SystemEventType.BROADCAST_REMOVED:
                 case Constants.SystemEventType.MAINTENANCE_REMOVED:
                     // Event has no data
+                    evtData = event.system.eventId;
                     break;
                 }
-                evtData.eventId = event.system.eventId;
                 break;
 
             // ADMINISTRATION
@@ -7283,8 +7512,17 @@ var Circuit = (function (circuit) {
     };
 
     var pendingEnumerateDevicesRequests = [];
+    var pendingEnumerateDevicesTimeout = null;
     var cachedDeviceInfos = null;
-    var CACHED_DEVICE_INFOS_TIMEOUT = 5000; // Keep cached devices for 5 seconds
+    var CACHED_DEVICE_INFOS_TIMEOUT = 60000; // Keep cached devices for 60 seconds
+    var ENUMERATE_DEVICES_TIMEOUT = 3000;
+
+    var clearEnumerateDevicesTimeout = function () {
+        if (pendingEnumerateDevicesTimeout) {
+            window.clearTimeout(pendingEnumerateDevicesTimeout);
+            pendingEnumerateDevicesTimeout = null;
+        }
+    };
 
     var splitDeviceInfos = function (cb) {
         if (typeof cb !== 'function') {
@@ -7303,6 +7541,12 @@ var Circuit = (function (circuit) {
             return;
         }
 
+        if (pendingEnumerateDevicesRequests.length > 0) {
+            logger.debug('[WebRTCAdapter]: There is a pending MediaDevices.enumerateDevices() request');
+            pendingEnumerateDevicesRequests.push(cb);
+            return;
+        }
+
         if (cachedDeviceInfos && (cachedDeviceInfos.validTimestamp > Date.now())) {
             logger.debug('[WebRTCAdapter]: Return cached devices');
             audioSources = cachedDeviceInfos.audioSources;
@@ -7317,23 +7561,39 @@ var Circuit = (function (circuit) {
 
         pendingEnumerateDevicesRequests.push(cb);
 
-        if (pendingEnumerateDevicesRequests.length > 1) {
-            logger.debug('[WebRTCAdapter]: There is a pending MediaDevices.enumerateDevices() request');
-            return;
-        }
-
-        logger.info('[WebRTCAdapter]: Invoke MediaDevices.enumerateDevices()');
+        logger.debug('[WebRTCAdapter]: Invoke MediaDevices.enumerateDevices()');
 
         var invokePendingCallbacks = function (audioSources, videoSources, audioOutputs) {
-            pendingEnumerateDevicesRequests.forEach(function (cb) {
+            clearEnumerateDevicesTimeout();
+            var callbacks = pendingEnumerateDevicesRequests;
+            pendingEnumerateDevicesRequests = [];
+
+            callbacks.forEach(function (cb) {
                 try {
-                    cb(audioSources, videoSources, audioOutputs);
+                    cb(audioSources || [], videoSources || [], audioOutputs || null);
                 } catch (err) {}
             });
-            pendingEnumerateDevicesRequests = [];
         };
 
-        cachedDeviceInfos = null;
+        clearEnumerateDevicesTimeout();
+        pendingEnumerateDevicesTimeout = window.setTimeout(function () {
+            pendingEnumerateDevicesTimeout = null;
+            if (!pendingEnumerateDevicesRequests.length) {
+                return;
+            }
+            if (cachedDeviceInfos) {
+                logger.error('[WebRTCAdapter]: MediaDevices.enumerateDevices timed out. Return cached devices.');
+                audioSources = cachedDeviceInfos.audioSources;
+                audioOutputs = cachedDeviceInfos.audioOutputs;
+                videoSources = cachedDeviceInfos.videoSources;
+            } else {
+                logger.error('[WebRTCAdapter]: MediaDevices.enumerateDevices timed out. Device cache is empty, no devices available!');
+            }
+            invokePendingCallbacks(audioSources, videoSources, audioOutputs);
+            invokePendingCallbacks = null;
+
+        }, ENUMERATE_DEVICES_TIMEOUT);
+
         navigator.mediaDevices.enumerateDevices()
         .then(function (deviceInfos) {
             deviceInfos = deviceInfos || [];
@@ -7377,18 +7637,28 @@ var Circuit = (function (circuit) {
                 audioOutputs = null;
             }
 
+            logger.debug('[WebRTCAdapter]: Update DeviceInfos cache');
             cachedDeviceInfos = {
-                validTimestamp: Date.now() + CACHED_DEVICE_INFOS_TIMEOUT,
                 audioSources: audioSources,
                 audioOutputs: audioOutputs,
                 videoSources: videoSources
             };
 
-            invokePendingCallbacks(audioSources, videoSources, audioOutputs);
+            if (!audioSources.some(function (source) { return source.label; }) || (videoSources.length &&
+                !videoSources.some(function (source) { return source.label; }))) {
+                logger.debug('[WebRTCAdapter]: User hasn\'t authorized access to audio and/or video input devices yet');
+                // User still hasn't authorized access to audio and video sources, so mark the cached
+                // devices as expired, so we'll attempt to retrieve them again next time around
+                cachedDeviceInfos.validTimestamp = 0;
+            } else {
+                cachedDeviceInfos.validTimestamp = Date.now() + CACHED_DEVICE_INFOS_TIMEOUT;
+            }
+
+            invokePendingCallbacks && invokePendingCallbacks(audioSources, videoSources, audioOutputs);
         })
         .catch(function (e) {
             logger.error('[WebRTCAdapter]: Failed to enumerate devices. ', e);
-            invokePendingCallbacks();
+            invokePendingCallbacks && invokePendingCallbacks();
         });
     };
 
@@ -7545,6 +7815,7 @@ var Circuit = (function (circuit) {
                     logger.error('[WebRTCAdapter]: Failed to attach output device. Device Id:' + deviceId + ' - ', errorMessage);
                     cb(errorMessage);
                 });
+                logger.debug('[WebRTCAdapter]: setSinkId has been invoked');
             });
         } else {
             cb('setSinkId not available');
@@ -7701,7 +7972,7 @@ var Circuit = (function (circuit) {
             /////////////////////////////////////////////////////////////////////////////////
             // Chrome
             /////////////////////////////////////////////////////////////////////////////////
-            if (_browser.chrome) {
+            if (_browser.chrome || _browser.phantomjs) {
                 logger.info('Setting WebRTC APIs for Chrome');
 
                 // Temporary workaround to solve Chrome issue #467490
@@ -7955,6 +8226,30 @@ var Circuit = (function (circuit) {
                             }
                             dtmfSender.canInsertDTMF = true; // set obsolete property
                             return dtmfSender;
+                        };
+                        // Override getRemoteStreams with our own, which makes use of RTCRtpTransceivers
+                        pc.getRemoteStreams = function () {
+                            var remoteStreams = [];
+                            var receivers = pc.getReceivers();
+                            receivers.forEach(function (r) {
+                                if (r.track) {
+                                    var stream = new MediaStream([r.track]);
+                                    remoteStreams.push(stream);
+                                }
+                            });
+                            return remoteStreams;
+                        };
+                        // Override getLocalStreams with our own, which makes use of RTCRtpTransceivers
+                        pc.getLocalStreams = function () {
+                            var localStreams = [];
+                            var senders = pc.getSenders();
+                            senders.forEach(function (s) {
+                                if (s.track) {
+                                    var stream = new MediaStream([s.track]);
+                                    localStreams.push(stream);
+                                }
+                            });
+                            return localStreams;
                         };
 
                         if (parseInt(_browser.version, 10) >= 46) {
@@ -9460,6 +9755,8 @@ var Circuit = (function (circuit) {
 
     // Imports
     var Constants = circuit.Constants;
+    var logger = circuit.logger;
+    var Utils = circuit.Utils;
 
     // Participant States for RTC Sessions
     var ParticipantState = {
@@ -9508,7 +9805,7 @@ var Circuit = (function (circuit) {
         participant.pcState = pcState || ParticipantState.Idle;
         participant.streamId = null;
         participant.screenStreamId = null;
-        participant.videoUrl = '';
+        participant.videoStream = null;
         participant.mediaType = {audio: false, video: false, desktop: false};
         participant.muted = false;
         participant.activeSpeaker = false;
@@ -9535,6 +9832,38 @@ var Circuit = (function (circuit) {
         participant.firstName = user.firstName;
         participant.lastName = user.lastName;
 
+        // Video URLs are deprecated, but we need to save it if a client requested it,
+        // otherwise we would create a different URL every time the client accesses the videoUrl property
+        var videoStream = null;
+        var videoUrl = '';
+
+        Object.defineProperties(participant, {
+            videoStream: {
+                get: function () {
+                    return videoStream;
+                },
+                set: function (stream) {
+                    videoStream = stream;
+                    videoUrl = '';
+                },
+                enumerable: true,
+                configurable: false
+            },
+            videoUrl: {
+                get: function () {
+                    logger.warn('[RtcParticipant]: videoUrl is deprecated and will eventually be removed');
+                    if (videoStream) {
+                        videoUrl = videoUrl || circuit.WebRTCAdapter.createObjectURL(videoStream);
+                    } else {
+                        videoUrl = '';
+                    }
+                    return videoUrl;
+                },
+                enumerable: Utils.isMobile(),
+                configurable: false
+            }
+        });
+
         return participant;
     };
 
@@ -9557,7 +9886,7 @@ var Circuit = (function (circuit) {
     };
 
     RtcParticipant.hasVideoStream = function (participant) {
-        return !!(participant.videoUrl && (participant.streamId || participant.screenStreamId) && (participant.mediaType.video || participant.mediaType.desktop));
+        return !!(participant.videoStream && (participant.streamId || participant.screenStreamId) && (participant.mediaType.video || participant.mediaType.desktop));
     };
 
     RtcParticipant.setActions = function (participant, conversation, localUser) {
@@ -10127,6 +10456,9 @@ var Circuit = (function (circuit) {
 
         // Remote calls
         Started: {name: 'Started', ui: 'res_InProgress', established: false, css: 'started'},
+        NotStarted: {name: 'NotStarted', ui: 'res_NotStarted', established: false, css: 'not-started'},
+
+        // Remote call active on another client
         ActiveRemote: {name: 'ActiveRemote', ui: 'res_RemoteCall', established: true, css: 'active-call-remote'},
 
         // Call has been terminated
@@ -10433,8 +10765,6 @@ var Circuit = (function (circuit) {
         this.sessionMuted = false;
         this.sessionLocked = false;
 
-        this.whiteboardEnabled = false;
-
         this.recording = {
             state: Constants.RecordingInfoState.INITIAL,
             notifyByCurtain: false,
@@ -10713,13 +11043,24 @@ var Circuit = (function (circuit) {
             logger.warning('[BaseCall]: The given participant is not part of the call');
             return null;
         }
-        curr.pcState = pcState || participant.pcState;
+
+        pcState = pcState || participant.pcState;
+
+        if (curr.isMeetingPointInvitee && curr.locallyMuted) {
+            // CMR is locally muted
+            curr.muted = true;
+            curr.pcState = (pcState !== ParticipantState.Active) ? pcState : ParticipantState.Muted;
+        } else {
+            curr.muted = participant.muted;
+            curr.pcState = pcState;
+        }
+
         curr.streamId = participant.streamId;
         curr.screenStreamId = participant.screenStreamId;
-        curr.muted = participant.muted;
         curr.mediaType = participant.mediaType;
         curr.screenSharePointerSupported = participant.screenSharePointerSupported;
         curr.isModerator = participant.isModerator;
+        curr.isMeetingGuest = participant.isMeetingGuest;
 
         logger.debug('[BaseCall]: Updated participant data for ', curr.userId);
         return curr;
@@ -10731,7 +11072,7 @@ var Circuit = (function (circuit) {
             if (this.participants[idx].userId === userId) {
                 var p = this.participants.splice(idx, 1)[0];
                 // Reset the participant's video URL and media type
-                p.videoUrl = '';
+                p.videoStream = null;
                 p.mediaType = {audio: false, video: false, desktop: false};
 
                 logger.debug('[BaseCall]: Removed participant from call: ', p.userId);
@@ -11204,6 +11545,10 @@ var Circuit = (function (circuit) {
         var _recordingDeviceList = [];
         var _videoDeviceList = [];
 
+        // The blob URLs for local video and remote audio/video (these are being deprecated)
+        var _localVideoUrl = '';
+        var _remoteAudioUrl = '';
+
         // Remember the current view for the call.
         // true: call stage is collapsed and user is viewing the conversation feed or details
         // false: call stage is expanded and user is in the conference object view
@@ -11226,8 +11571,8 @@ var Circuit = (function (circuit) {
                     reuseDesktopStreamFrom: options.reuseDesktopStreamFrom
                 });
                 _sessionCtrl.onMediaUpdate = onMediaUpdate;
-                _sessionCtrl.onLocalVideoURL = onLocalVideoURL;
-                _sessionCtrl.onRemoteObjectURL = onRemoteObjectURL;
+                _sessionCtrl.onLocalVideoStream = onLocalVideoStream;
+                _sessionCtrl.onRemoteStreams = onRemoteStreams;
                 _sessionCtrl.onScreenSharePointerStatus = onScreenSharePointerStatus;
 
                 if (!_that.isDirect) {
@@ -11241,8 +11586,8 @@ var Circuit = (function (circuit) {
         function unregisterSessionController() {
             if (_sessionCtrl) {
                 _sessionCtrl.onMediaUpdate = null;
-                _sessionCtrl.onLocalVideoURL = null;
-                _sessionCtrl.onRemoteObjectURL = null;
+                _sessionCtrl.onLocalVideo = null;
+                _sessionCtrl.onRemoteStreams = null;
                 _sessionCtrl.onScreenSharePointerStatus = null;
             }
         }
@@ -11260,10 +11605,11 @@ var Circuit = (function (circuit) {
             _that.updateCallState();
         }
 
-        function onLocalVideoURL(event) {
-            logger.debug('[LocalCall]: RtcSessionController - onLocalVideoURL: callId =', _that.callId);
-            _that.localVideoUrl = event.url;
-            logger.debug('[LocalCall]: Set local video URL to', event.url || '<empty>');
+        function onLocalVideoStream(event) {
+            logger.debug('[LocalCall]: RtcSessionController - onLocalVideoStream: callId =', _that.callId);
+            _that.localVideoStream = event.stream;
+            _localVideoUrl = '';
+            logger.debug('[LocalCall]: Set local video stream to', (event.stream && event.stream.id) || '<null>');
         }
 
         function onScreenSharePointerStatus(data) {
@@ -11274,18 +11620,19 @@ var Circuit = (function (circuit) {
             };
         }
 
-        function onRemoteObjectURL(event) {
-            logger.debug('[LocalCall]: RtcSessionController - onRemoteObjectURL: callId =', _that.callId);
+        function onRemoteStreams(event) {
+            logger.debug('[LocalCall]: RtcSessionController - onRemoteStreams: callId =', _that.callId);
 
-            _that.remoteAudioUrl = (event.audioUrl && event.audioUrl.url) || '';
-            logger.debug('[LocalCall]: Set remote audio URL to', _that.remoteAudioUrl || '<empty>');
+            _that.remoteAudioStream = (event.audio && event.audio.stream) || null;
+            _remoteAudioUrl = '';
+            logger.debug('[LocalCall]: Set remote audio stream to', (_that.remoteAudioStream && _that.remoteAudioStream.id) || '<empty>');
 
-            _that.remoteVideoUrlStreams = event.videoUrl || [];
-            logger.debug('[LocalCall]: Set remote video URL streams to', event.videoUrl || '<empty>');
+            _that.remoteVideoStreams = event.video || [];
+            logger.debug('[LocalCall]: Set remote video streams to', event.video || '<empty>');
 
-            // Set the remote video URL for all participants
+            // Set the remote video stream for all participants
             _that.participants.forEach(function (p) {
-                _that.setParticipantRemoteVideoURL(p);
+                _that.setParticipantRemoteVideoStream(p);
             });
             _that.checkForActiveRemoteVideo();
         }
@@ -11425,17 +11772,64 @@ var Circuit = (function (circuit) {
                 },
                 enumerable: true,
                 configurable: false
+            },
+            localVideoUrl: {
+                get: function () {
+                    logger.warn('[LocalCall]: localVideoUrl is deprecated and will eventually be removed');
+                    if (_that.localVideoStream) {
+                        _localVideoUrl = _localVideoUrl || WebRTCAdapter.createObjectURL(_that.localVideoStream);
+                    } else {
+                        _localVideoUrl = '';
+                    }
+                    return _localVideoUrl;
+                },
+                enumerable: Utils.isMobile(),
+                configurable: false
+            },
+            remoteAudioUrl: {
+                get: function () {
+                    logger.warn('[LocalCall]: remoteAudioUrl is deprecated and will eventually be removed');
+                    if (_that.remoteAudioStream) {
+                        _remoteAudioUrl = _remoteAudioUrl || WebRTCAdapter.createObjectURL(_that.remoteAudioStream);
+                    } else {
+                        _remoteAudioUrl = '';
+                    }
+                    return _remoteAudioUrl;
+                },
+                enumerable: Utils.isMobile(),
+                configurable: false
+            },
+            remoteVideoUrlStreams: {
+                get: function () {
+                    logger.warn('[LocalCall]: remoteVideoUrlStreams is deprecated and will eventually be removed');
+                    return _that.remoteVideoStreams.map(function (stream) {
+                        if (!stream.url) {
+                            stream.url = WebRTCAdapter.createObjectURL(stream.stream);
+                        }
+                        return {
+                            streamId: stream.streamId,
+                            url: stream.url
+                        };
+                    });
+                },
+                enumerable: Utils.isMobile(),
+                configurable: false
             }
         });
 
-        // The blob URLs for local video and remote audio/video
-        this.localVideoUrl = '';
-        this.remoteAudioUrl = '';
-        this.remoteVideoUrlStreams = [];
+        // We should work with stream objects directly (as opposed to their URLs)
+        this.localVideoStream = null;
+        this.remoteAudioStream = null;
+        this.remoteVideoStreams = [];
 
         // Stores the media types negotiated at the RTC level.
         this.activeMediaType = {audio: false, video: false, desktop: false};
         this.ringingTimeout = DEFAULT_RINGING_TIME;
+
+        // Is whiteboard enabled for the call
+        this.whiteboardEnabled = false;
+        // Object that contains whiteboard data
+        this.whiteboard = null;
 
         // Is screenshare pointing supported and enabled
         this.pointer = {
@@ -11450,6 +11844,9 @@ var Circuit = (function (circuit) {
             dismissed: false
         };
 
+        // Current client ID associated to this call
+        this.clientId = options.clientId;
+
         ///////////////////////////////////////////////////////////////////////////////////////
         // Public Members
         // (Only includes members which need to access private data)
@@ -11463,9 +11860,11 @@ var Circuit = (function (circuit) {
             unregisterSessionController();
             _sessionCtrl.terminate();
 
-            this.localVideoUrl = '';
-            this.remoteAudioUrl = '';
-            this.remoteVideoUrlStreams = [];
+            _localVideoUrl = '';
+            _remoteAudioUrl = '';
+            this.localVideoStream = null;
+            this.remoteAudioStream = null;
+            this.remoteVideoStreams = [];
 
             // Call the prototype's terminate() function
             LocalCall.prototype.terminate.call(this);
@@ -11505,14 +11904,14 @@ var Circuit = (function (circuit) {
                 if (this.state !== CallState.Terminated) {
                     logger.debug('[LocalCall]: Initialize remote mocked streams');
 
-                    onRemoteObjectURL({
-                        audioUrl: '',
-                        videoUrl: [{
+                    onRemoteStreams({
+                        audio: null,
+                        video: [{
                             streamId: 'mock',
-                            url: 'content/images/mock/trailer.mp4'
+                            stream: 'content/images/mock/trailer.mp4'
                         }]
                     });
-                    _sessionCtrl.onRemoteObjectURL = null;
+                    _sessionCtrl.onRemoteStreams = null;
                 }
             }, 100);
         };
@@ -11538,7 +11937,7 @@ var Circuit = (function (circuit) {
             }
         };
 
-        // Override hasRemoteVideo to check if we have a valid remote video URL for at
+        // Override hasRemoteVideo to check if we have a valid remote video stream for at
         // least one participant
         this.hasRemoteVideo = function () {
             return _hasActiveRemoteVideo;
@@ -11549,7 +11948,7 @@ var Circuit = (function (circuit) {
                 _hasActiveRemoteVideo = false;
             } else {
                 _hasActiveRemoteVideo = this.participants.some(function (p) {
-                    return !!p.videoUrl;
+                    return !!p.videoStream;
                 });
             }
             logger.debug('[LocalCall]: Set hasActiveRemoteVideo to ', _hasActiveRemoteVideo);
@@ -11573,7 +11972,7 @@ var Circuit = (function (circuit) {
             _hasActiveRemoteVideo = false;
 
             this.participants.forEach(function (p) {
-                p.videoUrl = '';
+                p.videoStream = null;
                 if (_that.isDirect) {
                     p.streamId = '';
                 }
@@ -11695,7 +12094,7 @@ var Circuit = (function (circuit) {
     }
 
     LocalCall.prototype.hasRemoteMedia = function () {
-        return !!(this.remoteAudioUrl || this.remoteVideoUrlStreams.length);
+        return !!(this.remoteAudioStream || this.remoteVideoStreams.length);
     };
 
     LocalCall.prototype.hasRemoteScreenShare = function () {
@@ -11709,7 +12108,7 @@ var Circuit = (function (circuit) {
         }
         var addedParticipant = LocalCall.parent.addParticipant.apply(this, arguments);
         if (addedParticipant) {
-            this.setParticipantRemoteVideoURL(addedParticipant);
+            this.setParticipantRemoteVideoStream(addedParticipant);
             this.checkForActiveRemoteVideo();
             this.setHasUnmutedParticipants();
         }
@@ -11722,7 +12121,7 @@ var Circuit = (function (circuit) {
         }
         var updatedParticipant = LocalCall.parent.updateParticipant.apply(this, arguments);
         if (updatedParticipant) {
-            this.setParticipantRemoteVideoURL(updatedParticipant);
+            this.setParticipantRemoteVideoStream(updatedParticipant);
             this.checkForActiveRemoteVideo();
             this.setHasUnmutedParticipants();
         }
@@ -11737,8 +12136,8 @@ var Circuit = (function (circuit) {
         return removedParticipant;
     };
 
-    LocalCall.prototype.setParticipantRemoteVideoURL = function (participant) {
-        participant.videoUrl = '';
+    LocalCall.prototype.setParticipantRemoteVideoStream = function (participant) {
+        participant.videoStream = null;
 
         if (this.isDirect) {
             participant.streamId = '';
@@ -11749,15 +12148,15 @@ var Circuit = (function (circuit) {
         }
 
         if (participant.mediaType && !participant.mediaType.video && !participant.mediaType.desktop) {
-            logger.debug('[LocalCall]: The participant does not have video or screen-share. Do not set video URL. userId = ', participant.userId);
+            logger.debug('[LocalCall]: The participant does not have video or screen-share. Do not set video stream. userId = ', participant.userId);
             return;
         }
 
         if (this.isDirect) {
-            if (this.remoteVideoUrlStreams && this.remoteVideoUrlStreams.length) {
-                var remoteUrlStream = this.remoteVideoUrlStreams[this.remoteVideoUrlStreams.length - 1];
-                participant.streamId = remoteUrlStream.streamId;
-                participant.videoUrl = remoteUrlStream.url;
+            if (this.remoteVideoStreams && this.remoteVideoStreams.length) {
+                var remoteStream = this.remoteVideoStreams[this.remoteVideoStreams.length - 1];
+                participant.streamId = remoteStream.streamId;
+                participant.videoStream = remoteStream.stream;
                 participant.pcState = participant.muted ? ParticipantState.Muted : ParticipantState.Active;
             }
         } else {
@@ -11766,23 +12165,23 @@ var Circuit = (function (circuit) {
                 return;
             }
 
-            if (this.remoteVideoUrlStreams && this.remoteVideoUrlStreams.length) {
-                this.remoteVideoUrlStreams.some(function (u) {
+            if (this.remoteVideoStreams && this.remoteVideoStreams.length) {
+                this.remoteVideoStreams.some(function (u) {
                     if (u.streamId === participant.streamId || u.streamId === participant.screenStreamId) {
-                        participant.videoUrl = u.url;
+                        participant.videoStream = u.stream;
 
-                        // If the participant has a remote video URL, it must be Active
+                        // If the participant has a remote video stream, it must be Active
                         participant.pcState = participant.muted ? ParticipantState.Muted : ParticipantState.Active;
 
-                        logger.debug('[LocalCall]: Set remote video URL for participant: ', participant);
+                        logger.debug('[LocalCall]: Set remote video stream for participant: ', participant);
                         return true;
                     }
                 });
             }
         }
 
-        if (!participant.videoUrl) {
-            logger.debug('[LocalCall]: We still do not have a video URL for the participant. ', participant);
+        if (!participant.videoStream) {
+            logger.debug('[LocalCall]: We still do not have a video stream for the participant. ', participant);
         }
     };
 
@@ -11906,10 +12305,6 @@ var Circuit = (function (circuit) {
             injectExtensionSvc: function () {},
             injectTemasysSvc: function () {}
         };
-
-        if (window.navigator.platform === 'iOS') {
-            return _api;
-        }
 
         var _browser = Utils.getBrowserInfo();
         if (circuit.isElectron) {
@@ -12081,7 +12476,7 @@ var Circuit = (function (circuit) {
                  */
                 return parseInt(_browser.version, 10) >= SCREENSHARE_SUPPORT_VERSION;
             };
-        } else if (window.navigator.platform === 'Android') {
+        } else if (window.navigator.platform === 'Android' || window.navigator.platform === 'iOS') {
             _api.getScreen = function (successCb) {
                 successCb && successCb();
             };
@@ -12332,14 +12727,14 @@ var Circuit = (function (circuit) {
                         // Audio
                         formattedStats.audio.channelInfo.ni = res.stat('networkType');
                         parsedLocalSdp = parsedLocalSdp || circuit.sdpParser.parse(pc.localDescription && pc.localDescription.sdp);
-                        formattedStats.audio.channelInfo.candidate = Utils.getIceCandidateInfo(res, parsedLocalSdp, 'audio', res.stat('portNumber'));
+                        formattedStats.audio.channelInfo.candidate = Utils.getIceCandidateInfo(res, parsedLocalSdp, 'audio');
                         return --count <= 0;
                     }
                     if (videoCandidateId === res.id && formattedStats.video.channelInfo) {
                         // Video
                         formattedStats.video.channelInfo.ni = res.stat('networkType');
                         parsedLocalSdp = parsedLocalSdp || circuit.sdpParser.parse(pc.localDescription && pc.localDescription.sdp);
-                        formattedStats.video.channelInfo.candidate = Utils.getIceCandidateInfo(res, parsedLocalSdp, 'video', res.stat('portNumber'));
+                        formattedStats.video.channelInfo.candidate = Utils.getIceCandidateInfo(res, parsedLocalSdp, 'video');
                         return --count <= 0;
                     }
                 }
@@ -13199,12 +13594,13 @@ var Circuit = (function (circuit) {
         var _oldDesktopPC = null;
         var _oldCallStats = null;
 
-        // Local and Remote object URLs
-        var _localVideoUrl = null;
-        var _localDesktopUrl = null;
+        // Local and Remote streams
+        var _localVideoStream = null;
+        var _localDesktopStream = null;
 
-        var _remoteVideoUrls = [];
-        var _remoteAudioUrl = null;
+        var _remoteVideoStreams = [];
+        // Remote audio stream information (there's always only one)
+        var _remoteAudioStream = null;
 
         // State information
         var _sdpStatus = SdpStatus.None;
@@ -13227,7 +13623,7 @@ var Circuit = (function (circuit) {
 
         // The folowing variables enable/disable the support of Trickle ICE for SDPs generated by the WebRTC client.
         // Trickle ICE for Offer is enabled by default for all non telephony calls.
-        var _trickleIceForOffer = !_isTelephonyCall && !RtcSessionController.disableTrickleIce;
+        var _trickleIceForOffer = !_isTelephonyCall && !options.disableTrickleIce && !RtcSessionController.disableTrickleIce;
         // Trickle ICE for Answer is enabled if the Offer indicates support for Trickle ICE.
         var _trickleIceForAnswer = false;
 
@@ -13273,6 +13669,12 @@ var Circuit = (function (circuit) {
         // don't need to waste time waiting for ICE candidates.
         var _ignoreNextConnection = false;
 
+        // Indicates whether the controller is only being used for candidates collection test
+        var _candidatesCollectionTest = !!options.candidatesCollectionTest;
+
+        var _browser = Utils.getBrowserInfo();
+        var _lastGUMAudioConstraints = {};
+
         /////////////////////////////////////////////////////////////////////////////
         // Media Capture and Streams
         ////////////////////////////////////////////////////////////////////////////
@@ -13310,6 +13712,22 @@ var Circuit = (function (circuit) {
             }
         }
 
+        function getAudioConstraints(audioSources) {
+            var source = Utils.selectMediaDevice(audioSources, RtcSessionController.recordingDevices);
+            var constraints = {
+                enableAudioAGC: RtcSessionController.enableAudioAGC,
+                sourceId: source && source.id
+            };
+            if (_renegotiationInProgress && (_browser.firefox || _browser.chrome) &&
+                _mediaConstraints.audio === _oldMediaConstraints.audio &&
+                _lastGUMAudioConstraints.enableAudioAGC === constraints.enableAudioAGC &&
+                _lastGUMAudioConstraints.sourceId === constraints.sourceId) {
+                // We can reuse the local audio stream from the old connection (Chrome and FF only)
+                return null;
+            }
+            return constraints;
+        }
+
         function getUserMedia(successCb, errorCb, screenConstraint) {
             logger.debug('[RtcSessionController]: Get User Media for ', _mediaConstraints);
             screenConstraint = screenConstraint || {};
@@ -13325,7 +13743,7 @@ var Circuit = (function (circuit) {
                             successCb();
                         } else {
                             chooseDesktopAndGetUserMedia(successCb, errorCb, screenConstraint);
-                            //reset the flag, as soon as we choose desktop media
+                            // Reset the flag, as soon as we choose desktop media
                             _selectNewDesktopMediaInProgress = false;
                         }
                     } else {
@@ -13352,19 +13770,38 @@ var Circuit = (function (circuit) {
                 // second media stream for the same camera (ticket #1519).
                 // 2. FF doesn't call gerUserMedia callback if the browser is not focused (bug #1195654 on bugzilla).
                 // Reuse stream when screensharing is switching off to prevent errors after the timeout expires.
+                if (_localStreams[LOCAL_AUDIO_VIDEO]) {
+                    // Reuse stream from another call (e.g.: 1-1 call upgraded to group call)
+                    var av = _localStreams[LOCAL_AUDIO_VIDEO];
+                    av.oninactive = onInactiveStream.bind(null, av, false);
+                    _localStreams[LOCAL_AUDIO_VIDEO] = null; // Set it to null first, otherwise setLocalStream won't do anything
+                    return av;
+                }
                 var streamCanBeUsed = !_renegotiationStartedLocally || WebRTCAdapter.browser === 'msie' ||
                     (WebRTCAdapter.browser === 'firefox' && !_mediaConstraints.desktop && _oldMediaConstraints.desktop);
 
-                return _renegotiationInProgress && streamCanBeUsed &&
+                if (_renegotiationInProgress && streamCanBeUsed &&
                     (WebRTCAdapter.browser !== 'android') &&
                     (_mediaConstraints.audio === _oldMediaConstraints.audio) &&
                     (_mediaConstraints.video === _oldMediaConstraints.video) &&
-                    (_mediaConstraints.hdVideo === _oldMediaConstraints.hdVideo);
+                    (_mediaConstraints.hdVideo === _oldMediaConstraints.hdVideo)) {
+                    // Reuse stream from same call (media renegotiation)
+                    return _oldLocalStreams[LOCAL_AUDIO_VIDEO];
+                }
             };
 
             logger.debug('[RtcSessionController]: getUserMediaAudioVideo()');
             var gumTimeout = null;
             try {
+                var reuseAudioOnlyTrack;
+                var reuseStream = reuseLocalStream();
+                if (reuseStream) {
+                    logger.debug('[RtcSessionController]: getUserMediaAudioVideo(): Reusing audio/video stream ID: ', reuseStream.id);
+                    setLocalStream(reuseStream, LOCAL_AUDIO_VIDEO);
+                    successCb();
+                    return;
+                }
+
                 var constraints = {
                     audio: false,
                     video: false
@@ -13372,16 +13809,23 @@ var Circuit = (function (circuit) {
 
                 // Get the up-to-date list of devices that are plugged in and select one based on the list of
                 // devices previously selected by the user
-                WebRTCAdapter.getMediaSources(function (audioSources, videoSources, audioOutputDevices) {
+                WebRTCAdapter.getMediaSources(function (audioSources, videoSources) {
                     logger.debug('[RtcSessionController]: Retrieved media sources');
+                    var audioConstraints;
                     if (_mediaConstraints.audio) {
-                        var source = Utils.selectMediaDevice(audioSources, RtcSessionController.recordingDevices);
-                        var playback = Utils.selectMediaDevice(audioOutputDevices, RtcSessionController.playbackDevices);
-                        constraints.audio = WebRTCAdapter.getAudioOptions({
-                            enableAudioAGC: RtcSessionController.enableAudioAGC,
-                            sourceId: source && source.id,
-                            playbackDeviceId: playback && playback.id
-                        });
+                        audioConstraints = getAudioConstraints(audioSources);
+                        if (!audioConstraints) {
+                            // We can't reuse the whole old stream object, but we can reuse the audio track
+                            var av = _oldLocalStreams[LOCAL_AUDIO_VIDEO];
+                            var audioTrack = av.getAudioTracks()[0];
+                            if (audioTrack) {
+                                logger.debug('[RtcSessionController]: Reusing audio track');
+                                // Clone the audio track so stopping the old stream won't affect the new stream
+                                reuseAudioOnlyTrack = audioTrack.clone();
+                            }
+                        } else {
+                            constraints.audio = WebRTCAdapter.getAudioOptions(audioConstraints);
+                        }
                     }
 
                     var fullHD = false, regularHD = false;
@@ -13400,94 +13844,105 @@ var Circuit = (function (circuit) {
                         constraints.video = WebRTCAdapter.getDesktopOptions();
                     }
 
-                    if (reuseLocalStream()) {
-                        setLocalStream(_oldLocalStreams[LOCAL_AUDIO_VIDEO], LOCAL_AUDIO_VIDEO);
-                        successCb();
-                    } else {
-                        gumTimeout = window.setTimeout(function () {
-                            gumTimeout = null;
-                            logger.warn('[RtcSessionController]: Failed to access local media: device unresponsive');
-                            errorCb('res_MediaInputDevicesUnresponsive');
-                        }, GUM_TIMEOUT);
-
-                        // Stop local video if has to change the HDVideo
-                        if (_renegotiationInProgress &&
-                            _mediaConstraints.video &&
-                            _oldMediaConstraints.video &&
-                            _mediaConstraints.hdVideo !== _oldMediaConstraints.hdVideo) {
-                            WebRTCAdapter.stopLocalVideoTrack(_oldLocalStreams[LOCAL_AUDIO_VIDEO]);
-                        }
-
-                        var getLocalMedia = function () {
-                            logger.info('[RtcSessionController]: Calling getUserMedia - constraints = ', constraints);
-                            WebRTCAdapter.getUserMedia(constraints, function (stream, exception) {
-                                logger.info('[RtcSessionController]: User has granted access to local media');
-                                logger.debug('[RtcSessionController]: Local MediaStream: ', stream.id);
-
-                                if (gumTimeout) {
-                                    window.clearTimeout(gumTimeout);
-                                    gumTimeout = null;
-                                } else {
-                                    logger.info('[RtcSessionController]: GUM time out already fired');
-                                    stopStream(stream);
-                                    return;
-                                }
-                                if (_sessionTerminated) {
-                                    logger.info('[RtcSessionController]: Session already terminated. Stop audio/video MediaStream: ', stream.id);
-                                    stopStream(stream);
-                                    return;
-                                }
-                                stream.oninactive = onInactiveStream.bind(null, stream, false);
-
-                                if (_mediaConstraints.video && !stream.getVideoTracks().length) {
-                                    if (_renegotiationInProgress && !_oldMediaConstraints.video) {
-                                        errorCb('res_CameraAccessRestricted');
-                                        return;
-                                    }
-                                    _mediaConstraints.video = false;
-                                    logger.info('[RtcSessionController]: Failed to get access to video stream. Fallback to audio-only.');
-                                    sendAsyncWarning('res_AddVideoFailed');
-                                    logger.info('[RtcSessionController]: New getUserMedia - constraints = ', _mediaConstraints);
-                                }
-                                setLocalStream(stream, LOCAL_AUDIO_VIDEO);
-                                successCb();
-                                if (exception) {
-                                    logger.warn('[RtcSessionController]: Get user media succeeded. But we had an exception: ', exception.name || '<unknown>');
-                                    sendEvent(_that.onGetUserMediaException, {info: exception});
-                                }
-                            }, function (error) {
-                                var errorName = (error && error.name) || 'Unspecified';
-                                if ((fullHD || regularHD) && (errorName === GUM_CONSTRAINT_ERROR || errorName === GUM_OVERCONSTRAINT_ERROR)) {
-                                    logger.warn('[RtcSessionController]: Failed to access local media with HD constraints: ', constraints.video);
-                                    regularHD = fullHD;
-                                    fullHD = false;
-                                    constraints.video = WebRTCAdapter.getVideoOptions({
-                                        sourceId: videoDevice && videoDevice.id,
-                                        hdVideo: regularHD ? '720p' : ''
-                                    });
-                                    getLocalMedia();
-                                    return;
-                                }
-                                logger.warn('[RtcSessionController]: Failed to access local media: ', errorName);
-                                if (gumTimeout) {
-                                    window.clearTimeout(gumTimeout);
-                                    gumTimeout = null;
-                                }
-                                var strError;
-                                if (errorName.indexOf(GUM_PERMISSION_DENIED_ERROR) !== -1) {
-                                    strError = _mediaConstraints.video ? 'res_AccessToMediaInputDevicesFailedPermissionDenied' : 'res_AccessToAudioInputDeviceFailedPermissionDenied';
-                                } else {
-                                    strError = _mediaConstraints.video ? 'res_AccessToMediaInputDevicesFailed' : 'res_AccessToAudioInputDeviceFailed';
-                                }
-
-                                errorCb(strError);
-                            });
-                        };
-
-                        getLocalMedia();
-
-                        logger.debug('[RtcSessionController]: Requested access to Local Media');
+                    // Stop local video if has to change the HDVideo
+                    if (_renegotiationInProgress &&
+                        ((_mediaConstraints.video && _oldMediaConstraints.video &&
+                        _mediaConstraints.hdVideo !== _oldMediaConstraints.hdVideo) ||
+                        !_mediaConstraints.video && _oldMediaConstraints.video)) {
+                        WebRTCAdapter.stopLocalVideoTrack(_oldLocalStreams[LOCAL_AUDIO_VIDEO]);
                     }
+
+                    if (reuseAudioOnlyTrack && !constraints.audio && !constraints.video) {
+                        // We're left with only the reused audio track, so no getUserMedia is needed.
+                        // Create a brand new MediaStream object with the reused audio track
+                        var stream = new WebRTCAdapter.MediaStream([reuseAudioOnlyTrack]);
+                        stream.oninactive = onInactiveStream.bind(null, stream, false);
+                        setLocalStream(stream, LOCAL_AUDIO_VIDEO);
+                        successCb();
+                        return;
+                    }
+
+                    gumTimeout = window.setTimeout(function () {
+                        gumTimeout = null;
+                        logger.warn('[RtcSessionController]: Failed to access local media: device unresponsive');
+                        errorCb('res_MediaInputDevicesUnresponsive');
+                    }, GUM_TIMEOUT);
+
+                    var getLocalMedia = function () {
+                        logger.info('[RtcSessionController]: Calling getUserMedia - constraints = ', constraints);
+                        WebRTCAdapter.getUserMedia(constraints, function (stream, exception) {
+                            if (audioConstraints) {
+                                _lastGUMAudioConstraints = audioConstraints;
+                            }
+                            logger.info('[RtcSessionController]: User has granted access to local media');
+                            logger.debug('[RtcSessionController]: Local MediaStream: ', stream.id);
+
+                            if (gumTimeout) {
+                                window.clearTimeout(gumTimeout);
+                                gumTimeout = null;
+                            } else {
+                                logger.info('[RtcSessionController]: GUM time out already fired');
+                                stopStream(stream);
+                                return;
+                            }
+                            if (_sessionTerminated) {
+                                logger.info('[RtcSessionController]: Session already terminated. Stop audio/video MediaStream: ', stream.id);
+                                stopStream(stream);
+                                return;
+                            }
+                            stream.oninactive = onInactiveStream.bind(null, stream, false);
+
+                            if (_mediaConstraints.video && !stream.getVideoTracks().length) {
+                                if (_renegotiationInProgress && !_oldMediaConstraints.video) {
+                                    errorCb('res_CameraAccessRestricted');
+                                    return;
+                                }
+                                _mediaConstraints.video = false;
+                                logger.info('[RtcSessionController]: Failed to get access to video stream. Fallback to audio-only.');
+                                sendAsyncWarning('res_AddVideoFailed');
+                                logger.info('[RtcSessionController]: New getUserMedia - constraints = ', _mediaConstraints);
+                            }
+                            if (reuseAudioOnlyTrack) {
+                                stream.addTrack(reuseAudioOnlyTrack);
+                            }
+                            setLocalStream(stream, LOCAL_AUDIO_VIDEO);
+                            successCb();
+                            if (exception) {
+                                logger.warn('[RtcSessionController]: Get user media succeeded. But we had an exception: ', exception.name || '<unknown>');
+                                sendEvent(_that.onGetUserMediaException, {info: exception});
+                            }
+                        }, function (error) {
+                            var errorName = (error && error.name) || 'Unspecified';
+                            if ((fullHD || regularHD) && (errorName === GUM_CONSTRAINT_ERROR || errorName === GUM_OVERCONSTRAINT_ERROR)) {
+                                logger.warn('[RtcSessionController]: Failed to access local media with HD constraints: ', constraints.video);
+                                regularHD = fullHD;
+                                fullHD = false;
+                                constraints.video = WebRTCAdapter.getVideoOptions({
+                                    sourceId: videoDevice && videoDevice.id,
+                                    hdVideo: regularHD ? '720p' : ''
+                                });
+                                getLocalMedia();
+                                return;
+                            }
+                            logger.warn('[RtcSessionController]: Failed to access local media: ', errorName);
+                            if (gumTimeout) {
+                                window.clearTimeout(gumTimeout);
+                                gumTimeout = null;
+                            }
+                            var strError;
+                            if (errorName.indexOf(GUM_PERMISSION_DENIED_ERROR) !== -1) {
+                                strError = _mediaConstraints.video ? 'res_AccessToMediaInputDevicesFailedPermissionDenied' : 'res_AccessToAudioInputDeviceFailedPermissionDenied';
+                            } else {
+                                strError = _mediaConstraints.video ? 'res_AccessToMediaInputDevicesFailed' : 'res_AccessToAudioInputDeviceFailed';
+                            }
+
+                            errorCb(strError);
+                        });
+                    };
+
+                    getLocalMedia();
+
+                    logger.debug('[RtcSessionController]: Requested access to Local Media');
                 });
 
             } catch (e) {
@@ -13535,9 +13990,8 @@ var Circuit = (function (circuit) {
 
                     // If getUserMedia returns PermissionDeniedError/SecurityError, assume that user has cancelled screenshare,
                     // Error message was replaced with NotAllowedError in FF >= 49.
-                    var browser = Utils.getBrowserInfo();
-                    if ((browser.msie && errorName === 'PermissionDeniedError') ||
-                        (browser.firefox && (errorName === 'SecurityError' || errorName === 'NotAllowedError'))) {
+                    if ((_browser.msie && errorName === 'PermissionDeniedError') ||
+                        (_browser.firefox && (errorName === 'SecurityError' || errorName === 'NotAllowedError'))) {
                         errorCb(Constants.ReturnCode.CHOOSE_DESKTOP_MEDIA_CANCELLED);
                     } else {
                         errorCb('res_AccessToDesktopFailed');
@@ -13589,6 +14043,11 @@ var Circuit = (function (circuit) {
             }
             var connectionBypassed = !!_ignoreTurnOnNextPC;
             _ignoreTurnOnNextPC = false;
+
+            if (RtcSessionController.webRTCIPHandlingPolicy) {
+                // Log the webRTCIPHandlingPolicy value so we know how the browser/DA is configured
+                logger.info('[RtcSessionController]: webRTCIPHandlingPolicy is set to ', RtcSessionController.webRTCIPHandlingPolicy);
+            }
 
             logger.debug('[RtcSessionController]: Creating RtcPeerConnections. config: ', config);
 
@@ -13803,14 +14262,14 @@ var Circuit = (function (circuit) {
                 logDebug('Renegotiation is in progress. Ignore AddStream event.');
                 return;
             }
-            putRemoteObjectURLs([event.stream]);
+            putRemoteStreams([event.stream]);
             sendRemoteStreamUpdated();
         }
 
         function handleRemoveStream(pc, event) {
             logWarning('Removed Remote Stream');
-            //remove URL associated with this stream
-            deleteRemoteObjectURL(event.stream);
+            // Remove stream from list
+            deleteRemoteStream(event.stream);
             sendRemoteStreamUpdated();
         }
 
@@ -13979,7 +14438,9 @@ var Circuit = (function (circuit) {
             // so remove it!
             parsedSdp = sdpParser.removeNotNeededSsrc(parsedSdp);
 
-            if (sdpParser.iceTotalCandidatesCount(parsedSdp) === 0 && !_ignoreNextConnection) {
+            var ignoreNoCandidates = _ignoreNextConnection || _candidatesCollectionTest;
+
+            if (sdpParser.iceTotalCandidatesCount(parsedSdp) === 0 && !ignoreNoCandidates) {
                 ///////////////////////////////////////////////////////////////////////////////////////////
                 // WORKAROUND!!!
                 // When the network on the local computer changes (e.g.: VPN is connected/disconnected),
@@ -13992,7 +14453,7 @@ var Circuit = (function (circuit) {
                 } else {
                     handleFailure('res_RestartBrowser');
                 }
-            } else if (sdpParser.validateIceCandidates(parsedSdp) || (trickleIceEnabled && !isEndOfCandidates()) || _ignoreNextConnection) {
+            } else if (sdpParser.validateIceCandidates(parsedSdp) || (trickleIceEnabled && !isEndOfCandidates()) || ignoreNoCandidates) {
                 if (trickleIceEnabled && !isEndOfCandidates()) {
                     _sentIceCandidates = sdpParser.getIceCandidates(parsedSdp);
                 }
@@ -14090,23 +14551,23 @@ var Circuit = (function (circuit) {
             sendEvent(_that.onMediaUpdate, {});
         }
 
-        function sendLocalVideoURL() {
-            // Invoke onLocalVideoURL event handler
-            logger.debug('[RtcSessionController]: send LocalVideoURL event');
+        function sendLocalVideoStream() {
+            // Invoke onLocalVideoStream event handler
+            logger.debug('[RtcSessionController]: send LocalVideoStream event');
 
-            // The local desktop (screen share) URL has precendece over the local video URL.
-            sendEvent(_that.onLocalVideoURL, {
-                url: _localDesktopUrl || _localVideoUrl
+            // The local desktop (screen share) has precendece over the local video stream.
+            sendEvent(_that.onLocalVideoStream, {
+                stream: _localDesktopStream || _localVideoStream
             });
             sendMediaUpdate();
         }
 
-        function sendRemoteObjectURL() {
-            // Invoke onRemoteObjectURL event handler
-            logger.debug('[RtcSessionController]: send RemoteObjectURL event');
-            sendEvent(_that.onRemoteObjectURL, {
-                audioUrl: _remoteAudioUrl,
-                videoUrl: _remoteVideoUrls
+        function sendRemoteStreams() {
+            // Invoke onRemoteStreams event handler
+            logger.debug('[RtcSessionController]: send RemoteStreams event');
+            sendEvent(_that.onRemoteStreams, {
+                audio: _remoteAudioStream,
+                video: _remoteVideoStreams
             });
         }
 
@@ -14351,33 +14812,29 @@ var Circuit = (function (circuit) {
         }
 
         function stopStreams(streams) {
-            var reusedStreams = (streams === _oldLocalStreams) ? _localStreams : _oldLocalStreams;
             streams && streams.forEach(function (stream) {
-                // Make sure the stream being stopped is not being reused. If it is, don't stop it!
-                if (!reusedStreams || reusedStreams.indexOf(stream) === -1) {
-                    stopStream(stream);
-                }
+                stopStream(stream);
             });
         }
 
-        function setLocalVideoUrl(streams) {
+        function setLocalVideoStreams(streams) {
             // Index 0 is video stream. Index 1 is the desktop stream.
-            var url = ['', ''];
+            var videoStreams = [null, null];
 
             streams && streams.forEach(function (stream, idx) {
                 if (stream && stream.getVideoTracks().length > 0) {
-                    url[idx] = WebRTCAdapter.createObjectURL(stream);
+                    videoStreams[idx] = stream;
                 }
             });
 
-            if (_localVideoUrl !== url[0] || _localDesktopUrl !== url[1]) {
-                _localVideoUrl = url[0];
-                logger.debug('[RtcSessionController]: Set local video URL to ', _localVideoUrl || '<empty>');
+            if (_localVideoStream !== videoStreams[0] || _localDesktopStream !== videoStreams[1]) {
+                _localVideoStream = videoStreams[0];
+                logger.debug('[RtcSessionController]: Set local video stream to ', (_localVideoStream && _localVideoStream.id) || '<null>');
 
-                _localDesktopUrl = url[1];
-                logger.debug('[RtcSessionController]: Set local desktop URL to ', _localDesktopUrl || '<empty>');
+                _localDesktopStream = videoStreams[1];
+                logger.debug('[RtcSessionController]: Set local desktop stream to ', (_localDesktopStream && _localDesktopStream.id) || '<null>');
 
-                sendLocalVideoURL();
+                sendLocalVideoStream();
             }
         }
 
@@ -14394,25 +14851,31 @@ var Circuit = (function (circuit) {
                 return;
             }
 
+            if (_oldLocalStreams && _oldLocalStreams[index] === stream) {
+                // This stream is being reused. Set _oldLocalStreams to null so it
+                // won't be stopped after the media renegotiation finishes
+                _oldLocalStreams[index] = null;
+            }
+
             if (_localStreams[index]) {
                 // Stop the previous local stream
                 stopStream(_localStreams[index]);
             }
             _localStreams[index] = stream;
 
-            setLocalVideoUrl(_localStreams);
+            setLocalVideoStreams(_localStreams);
         }
 
-        function clearRemoteObjectURL() {
-            if (!_remoteAudioUrl && !_remoteVideoUrls.length) {
+        function clearRemoteStreams() {
+            if (!_remoteAudioStream && !_remoteVideoStreams.length) {
                 return;
             }
-            _remoteAudioUrl = null;
-            _remoteVideoUrls = [];
-            sendRemoteObjectURL();
+            _remoteAudioStream = null;
+            _remoteVideoStreams = [];
+            sendRemoteStreams();
         }
 
-        function putRemoteObjectURL(stream) {
+        function putRemoteStream(stream) {
             var updated = false;
 
             if (!stream) {
@@ -14420,15 +14883,14 @@ var Circuit = (function (circuit) {
             }
 
             if (stream.getVideoTracks().length > 0) {
-                var videoUrl = WebRTCAdapter.createObjectURL(stream, undefined, true /*IE only option*/);
                 var videoTrackId = WebRTCAdapter.getVideoTrackId(stream);
                 var videoStreamId = _remoteStreamIds[videoTrackId] || WebRTCAdapter.getVideoStreamTrackId(stream);
                 logger.debug('[RtcSessionController]: Remote video trackId=' + videoTrackId + ', streamId=' + videoStreamId);
 
-                var found = _remoteVideoUrls.some(function (v) {
+                var found = _remoteVideoStreams.some(function (v) {
                     if (v.streamId === videoStreamId) {
-                        if (v.url !== videoUrl) {
-                            v.url = videoUrl;
+                        if (v.stream !== stream) {
+                            v.stream = stream;
                             updated = true;
                         }
                         return true;
@@ -14436,40 +14898,39 @@ var Circuit = (function (circuit) {
                 });
 
                 if (!found) {
-                    _remoteVideoUrls.push({url: videoUrl, streamId: videoStreamId});
+                    _remoteVideoStreams.push({streamId: videoStreamId, stream: stream});
                     updated = true;
                 }
 
                 if (updated) {
-                    logger.debug('[RtcSessionController]: Updated Remote Video URLs:', _remoteVideoUrls);
+                    logger.debug('[RtcSessionController]: Updated Remote Video streams:', _remoteVideoStreams);
                 }
             }
 
             if (stream.getAudioTracks().length > 0) {
-                var audioUrl = WebRTCAdapter.createObjectURL(stream);
                 var audioTrackId = WebRTCAdapter.getAudioTrackId(stream);
                 var audioStreamId = _remoteStreamIds[audioTrackId] || WebRTCAdapter.getAudioStreamTrackId(stream);
                 logger.debug('[RtcSessionController]: Remote audio trackId=' + audioTrackId + ', streamId=' + audioStreamId);
 
-                if (_remoteAudioUrl && (_remoteAudioUrl.streamId === audioStreamId)) {
-                    if (_remoteAudioUrl !== audioUrl) {
-                        _remoteAudioUrl.url = audioUrl;
+                if (_remoteAudioStream && _remoteAudioStream.streamId === audioStreamId) {
+                    if (_remoteAudioStream.stream !== stream) {
+                        _remoteAudioStream.stream = stream;
                         updated = true;
                     }
                 } else {
-                    _remoteAudioUrl = {url: audioUrl, streamId: audioStreamId};
+                    _remoteAudioStream = {streamId: audioStreamId, stream: stream};
                     updated = true;
                 }
 
                 if (updated) {
-                    logger.debug('[RtcSessionController]: Updated Remote Audio URL:', _remoteAudioUrl);
+                    logger.debug('[RtcSessionController]: Updated Remote Audio stream:', _remoteAudioStream.streamId);
                 }
             }
 
             return updated;
         }
 
-        function putRemoteObjectURLs(streams, clearExisting) {
+        function putRemoteStreams(streams, clearExisting) {
             if (!streams) {
                 return;
             }
@@ -14478,46 +14939,46 @@ var Circuit = (function (circuit) {
             }
             var updated = false;
 
-            if (clearExisting && (_remoteAudioUrl || _remoteVideoUrls.length)) {
+            if (clearExisting && (_remoteAudioStream || _remoteVideoStreams.length)) {
                 updated = true;
-                _remoteAudioUrl = null;
-                _remoteVideoUrls = [];
+                _remoteAudioStream = null;
+                _remoteVideoStreams = [];
             }
 
             streams.forEach(function (s) {
                 _remoteStreams.push(s);
-                if (putRemoteObjectURL(s)) {
+                if (putRemoteStream(s)) {
                     updated = true;
                 }
             });
             if (updated) {
-                sendRemoteObjectURL();
+                sendRemoteStreams();
             }
         }
 
-        function deleteRemoteObjectURL(stream) {
+        function deleteRemoteStream(stream) {
             if (!stream) {
                 return;
             }
             var updated = false;
             var videoTrackId = WebRTCAdapter.getVideoStreamTrackId(stream);
             if (videoTrackId) {
-                _remoteVideoUrls.some(function (v, index) {
+                _remoteVideoStreams.some(function (v, index) {
                     if (v.streamId === videoTrackId) {
-                        _remoteVideoUrls.splice(index, 1);
+                        _remoteVideoStreams.splice(index, 1);
                         updated = true;
                         return true;
                     }
                 });
             }
             var audioTrackId = WebRTCAdapter.getAudioStreamTrackId(stream);
-            if (_remoteAudioUrl && (_remoteAudioUrl.streamId === audioTrackId)) {
-                _remoteAudioUrl = null;
+            if (_remoteAudioStream && (_remoteAudioStream.streamId === audioTrackId)) {
+                _remoteAudioStream = null;
                 updated = true;
             }
 
             if (updated) {
-                sendRemoteObjectURL();
+                sendRemoteStreams();
             }
         }
 
@@ -14615,13 +15076,13 @@ var Circuit = (function (circuit) {
             _oldMediaConstraints = null;
             _oldActiveMediaType = null;
 
-            // Update the local and remote object URLs
-            setLocalVideoUrl(_localStreams);
+            // Update the local and remote streams
+            setLocalVideoStreams(_localStreams);
             var remoteStreams = _pc.getRemoteStreams();
             if (_desktopPc) {
                 remoteStreams = remoteStreams.concat(_desktopPc.getRemoteStreams());
             }
-            putRemoteObjectURLs(remoteStreams, true);
+            putRemoteStreams(remoteStreams, true);
             enableAudioTrack(!_isMuted);
 
             _holdInProgress = false;
@@ -14657,8 +15118,8 @@ var Circuit = (function (circuit) {
             _localStreams = _oldLocalStreams;
             _oldLocalStreams = null;
 
-            // Update the local and remote object URLs
-            setLocalVideoUrl(_localStreams);
+            // Update the local and remote streams
+            setLocalVideoStreams(_localStreams);
 
             //Restore media constraints and active media type
             _mediaConstraints = Utils.shallowCopy(_oldMediaConstraints);
@@ -14759,6 +15220,9 @@ var Circuit = (function (circuit) {
                 // Workaround: Chrome is now including UDP/TLS in the media protocols, which breaks outgoing calls to GTC/ATC
                 // For now, we're removing UDP/TLS until SBC (SSM) supports it
                 sdpParser.removeAudioMediaProtocols(parsedSdp, ['UDP', 'TLS']);
+                if (pc.connectionBypassed) {
+                    sdpParser.setConnectionMode(parsedSdp, 'audio', 'inactive');
+                }
             }
 
             if (_holding) {
@@ -14862,9 +15326,9 @@ var Circuit = (function (circuit) {
 
             // Check if the remote party is adding or removing video
             if (sdpType === 'offer' && _sdpStatus === SdpStatus.Connected && !_holding && !_held) {
-                if ((_remoteVideoUrls.length) && !hasVideo) {
+                if ((_remoteVideoStreams.length) && !hasVideo) {
                     sendRemoteVideoRemoved();
-                } else if (!_remoteVideoUrls.length && hasVideo) {
+                } else if (!_remoteVideoStreams.length && hasVideo) {
                     sendRemoteVideoAdded();
                 }
             }
@@ -15031,7 +15495,8 @@ var Circuit = (function (circuit) {
         }
 
         function getOfferToReceiveVideo(constraints) {
-            return (!_remoteVideoDisabled || !!(constraints && constraints.video)) && (Utils.isMobile() || !_largeConference);
+            return (!_remoteVideoDisabled || !!(constraints && constraints.video))
+                    && (Utils.isMobile() || !_largeConference) && !_isTelephonyCall;
         }
 
         function setRemoteDescription(rtcSdp) {
@@ -15378,7 +15843,7 @@ var Circuit = (function (circuit) {
 
             setLocalStream(null, LOCAL_AUDIO_VIDEO);
             setLocalStream(null, LOCAL_SCREEN_SHARE);
-            clearRemoteObjectURL();
+            clearRemoteStreams();
             sendClosed();
             _sessionTerminated = true;
 
@@ -15534,43 +15999,41 @@ var Circuit = (function (circuit) {
         function combineDescriptions() {
             var parsedSdp;
             var type;
-            if (_pc) {
-                var mainSdp = _pc.localDescription;
+
+            var mainSdp = _pc && _pc.localDescription;
+            if (mainSdp && mainSdp.sdp) {
                 type = mainSdp.type;
                 parsedSdp = sdpParser.parse(mainSdp.sdp);
-
-                if (!_desktopPc && _disabledVideoMline) {
-                    // Include the disabled video m-line from the offer
-                    parsedSdp.m.splice(DIRECT_CALL_SDP_M_LINE_INDEX.video, 0, _disabledVideoMline);
-                    _disabledVideoMline = null;
-                }
             }
-            if (_desktopPc) {
-                var desktopSdp = _desktopPc.localDescription.sdp;
-                if (desktopSdp) {
-                    if (!type) {
-                        type = _desktopPc.localDescription.type;
-                    }
-                    desktopSdp = sdpParser.parse(desktopSdp);
-                    desktopSdp = sdpParser.verifyFingerprintInMLines(desktopSdp);
 
-                    ///////////////////////////////////////////////////////////////////////////////////////////
-                    // WORKAROUND!!!
-                    // To ensure better screenshare quality for calls that go through the media server, we need to
-                    // allow only relay candidates from TCP or TLS TURN Servers.
-                    var removeUdpVideoIce = !_isDirectCall && !RtcSessionController.allowAllIceCandidatesScreenShare;
-                    logger.info('[RtcSessionController]: Remove UDP video candidates for screenshare: ', removeUdpVideoIce);
+            var desktopSdp = _desktopPc && _desktopPc.localDescription;
+            if (desktopSdp && desktopSdp.sdp) {
+                type = type || desktopSdp.type;
 
-                    var trickleIce = useTrickleIce(type) && !_desktopPc.endOfCandidates;
-                    sdpParser.validateIceCandidates(desktopSdp, removeUdpVideoIce, trickleIce);
+                var parsedDesktopSdp = sdpParser.parse(desktopSdp.sdp);
+                parsedDesktopSdp = sdpParser.verifyFingerprintInMLines(parsedDesktopSdp);
 
-                    if (parsedSdp) {
-                        parsedSdp.m = parsedSdp.m.concat(desktopSdp.m);
-                    } else {
-                        parsedSdp = desktopSdp;
-                    }
+                ///////////////////////////////////////////////////////////////////////////////////////////
+                // WORKAROUND!!!
+                // To ensure better screenshare quality for calls that go through the media server, we need to
+                // allow only relay candidates from TCP or TLS TURN Servers.
+                var removeUdpVideoIce = !_isDirectCall && !RtcSessionController.allowAllIceCandidatesScreenShare;
+                logger.info('[RtcSessionController]: Remove UDP video candidates for screenshare: ', removeUdpVideoIce);
+
+                var trickleIce = useTrickleIce(type) && !_desktopPc.endOfCandidates;
+                sdpParser.validateIceCandidates(parsedDesktopSdp, removeUdpVideoIce, trickleIce);
+
+                if (parsedSdp) {
+                    Array.prototype.push.apply(parsedSdp.m, parsedDesktopSdp.m);
+                } else {
+                    parsedSdp = parsedDesktopSdp;
                 }
+            } else if (parsedSdp && _disabledVideoMline) {
+                // Include the disabled video m-line from the offer
+                parsedSdp.m.splice(DIRECT_CALL_SDP_M_LINE_INDEX.video, 0, _disabledVideoMline);
+                _disabledVideoMline = null;
             }
+
             return {type: type, parsedSdp: parsedSdp};
         }
 
@@ -15622,8 +16085,8 @@ var Circuit = (function (circuit) {
             'onLocalStreamEnded',
             'onScreenSharePointerStatus',
             'onMediaUpdate',
-            'onLocalVideoURL',
-            'onRemoteObjectURL',
+            'onLocalVideoStream',
+            'onRemoteStreams',
             'onGetUserMediaException',
             // CallStats events
             'onQosAvailable',
@@ -15660,18 +16123,18 @@ var Circuit = (function (circuit) {
             _turnUris = uris;
         };
 
-        this.getLocalVideoUrl = function () {
-            // The local desktop (screen share) URL has precedence over the local video URL
-            return _localDesktopUrl || _localVideoUrl;
+        this.getLocalVideoStream = function () {
+            // The local desktop (screen share) stream has precedence over the local video stream
+            return _localDesktopStream || _localVideoStream;
         };
 
-        this.getLocalDesktopUrl = function () {
-            return _localDesktopUrl;
+        this.getLocalDesktopStream = function () {
+            return _localDesktopStream;
         };
 
-        this.getRemoteAudioUrl = function () { return _remoteAudioUrl; };
+        this.getRemoteAudioStream = function () { return _remoteAudioStream; };
 
-        this.getRemoteVideoUrls = function () { return _remoteVideoUrls; };
+        this.getRemoteVideoStreams = function () { return _remoteVideoStreams; };
 
         this.getSdpStatus = function () { return _sdpStatus; };
 
@@ -15707,7 +16170,7 @@ var Circuit = (function (circuit) {
         };
 
         this.hasScreenShare = function () {
-            return !!_localDesktopUrl;
+            return !!_localDesktopStream;
         };
 
         this.warmup = function (mediaType, remoteSdp, successCb, errorCb, screenConstraint) {
@@ -15800,6 +16263,9 @@ var Circuit = (function (circuit) {
                     // We can continue using the MediaStream object allocated during the warmup.
                     startConn(remoteSdp);
                     return true;
+                } else {
+                    // Stop stream created during warmup to avoid it being accidentally reused
+                    setLocalStream(null, LOCAL_AUDIO_VIDEO);
                 }
             }
 
@@ -15837,17 +16303,24 @@ var Circuit = (function (circuit) {
                         if (!candidate.candidate || candidate.candidate === 'end-of-candidates') {
                             logger.debug('[RtcSessionController]: Ignoring end-of-remote-candidates indication.');
                         } else {
-                            _pc.addIceCandidate(candidate);
+                            if (_desktopPc && candidate.sdpMid === SCREEN_SHARE_MEDIA_ID) {
+                                candidate.sdpMLineIndex = 0;
+                                _desktopPc.addIceCandidate(candidate);
+                            } else if (_pc) {
+                                _pc.addIceCandidate(candidate);
+                            } else {
+                                logger.warn('[RtcSessionController]: Ignoring remote ICE candidate - no peer connection found.');
+                            }
                         }
                     });
                     waitConnectedState();
                 } else {
-                    logger.warn('[RtcSessionController]: Ignoring remote ICE candidate - origin does not match.');
+                    logger.warn('[RtcSessionController]: Ignoring remote ICE candidates - origin does not match.');
                     logger.debug('[RtcSessionController]: ICE candidate origin: ', origin);
                     logger.debug('[RtcSessionController]: SDP origin: ', sdpOrigin);
                 }
             } else {
-                logger.warn('[RtcSessionController]: Ignoring remote ICE candidate - no peer connection found.');
+                logger.warn('[RtcSessionController]: Ignoring remote ICE candidates - no peer connection found.');
             }
         };
 
@@ -16303,6 +16776,10 @@ var Circuit = (function (circuit) {
 
     // Allow application to disable separate media line for screenshare
     RtcSessionController.disableDesktopPc = false;
+
+    // Used for logging purposes to identify how the browser/DA is configured.
+    // This value needs to be retrieved from the application.
+    RtcSessionController.webRTCIPHandlingPolicy = null;
 
     // Process the client settings returned by the access server
     RtcSessionController.processClientSettings = function (settings) {
@@ -17298,15 +17775,16 @@ var Circuit = (function (circuit) {
         ///////////////////////////////////////////////////////////////////////////
         // Constants
         ///////////////////////////////////////////////////////////////////////////
-        var SP88_API_VERSION = 2090058; // 2.9.58-x
-        var SP89_API_VERSION = 2090062; // 2.9.62-x
-        var SP91_API_VERSION = 2090067; // 2.9.67-x
+        var SP92_API_VERSION = 2090069; // 2.9.69-x
+        var SP94_API_VERSION = 2090075; // 2.9.75-x
+        var SP95_API_VERSION = 2090076; // 2.9.76-x
 
         var NOP = function () {};
 
         ///////////////////////////////////////////////////////////////////////////
         // Local variables
         ///////////////////////////////////////////////////////////////////////////
+        var _self = this;
         var _connHandler = new ConnectionHandler(config);
         var _developmentMode = false; // Assume production mode by default
         var _lastError;
@@ -17471,7 +17949,8 @@ var Circuit = (function (circuit) {
                 transactionId: data.transactionId,
                 screenSharePointerSupported: data.screenSharePointerSupported,
                 asyncSupported: true,
-                noCallLog: data.noCallLog || undefined
+                noCallLog: data.noCallLog || undefined,
+                guestToken: data.guestToken || undefined
             };
             return joinData;
         }
@@ -17521,11 +18000,6 @@ var Circuit = (function (circuit) {
                 ];
             }
 
-            if (_clientApiVersion <= SP89_API_VERSION) {
-                logger.debug('[ClientApiHandler]: Backend does not support PENDING_SYSTEM_NOTIFICATIONS type');
-                Utils.removeArrayElement(types, Constants.GetStuffType.PENDING_SYSTEM_NOTIFICATIONS);
-            }
-
             var request = {
                 type: Constants.UserActionType.GET_STUFF,
                 getStuff: {
@@ -17536,6 +18010,7 @@ var Circuit = (function (circuit) {
             var keysToOmitFromResponse = [
                 'response.user.getStuff.accounts.[].telephonyConfiguration.onsSipAuthenticationHash',
                 'response.user.getStuff.accounts.[].telephonyConfiguration.ondSipAuthenticationHash',
+                'response.user.getStuff.pendingSystemNotifications.[].systemNotificationEvent.broadcastText',
                 'response.user.getStuff.recentSearches',
                 'response.user.getStuff.userPresenceState.longitude',
                 'response.user.getStuff.userPresenceState.latitude',
@@ -17561,6 +18036,15 @@ var Circuit = (function (circuit) {
                     cb(null, stuff);
                 }
             }, null, keysToOmitFromResponse);
+        }
+
+        function checkAPISupportForScreenTakeOver(operation, cb) {
+            if (!_self.isScreenTakeOverSupported()) {
+                logger.warn('[ClientApiHandler]: The ' + operation + ' operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return false;
+            }
+            return true;
         }
 
         ///////////////////////////////////////////////////////////////////////////////
@@ -17607,6 +18091,7 @@ var Circuit = (function (circuit) {
         this.setRelativeUrl = _connHandler.setRelativeUrl.bind(_connHandler);
         this.addEventListener = _connHandler.addEventListener.bind(_connHandler);
         this.removeEventListener = _connHandler.removeEventListener.bind(_connHandler);
+        this.onMessage = _connHandler.onMessage.bind(_connHandler);
 
         this.setDevelopmentMode = function (developmentMode) {
             _developmentMode = !!developmentMode;
@@ -17651,13 +18136,18 @@ var Circuit = (function (circuit) {
                     'event.rtcSession.questionEvent.question.questionText'
                 ];
                 break;
-            case 'User.USER_PRESENCE_CHANGE':
-                keysToOmitFromEvent = '*';
-                break;
             case 'Search.BASIC_SEARCH_RESULT':
                 keysToOmitFromEvent = [
                     'event.search.basicSearchResult.searchResults'
                 ];
+                break;
+            case 'System.BROADCAST':
+                keysToOmitFromEvent = [
+                    'event.system.systemNotificationEvent.broadcastText'
+                ];
+                break;
+            case 'User.USER_PRESENCE_CHANGE':
+                keysToOmitFromEvent = '*';
                 break;
             case 'ThirdParty.CONNECTED_TO_THIRDPARTY':
                 keysToOmitFromEvent = [
@@ -17669,28 +18159,36 @@ var Circuit = (function (circuit) {
             _connHandler.on(msgType, cb, keysToOmitFromEvent);
         };
 
-        this.isCMRSettingsSupported = function () {
-            return _clientApiVersion > SP88_API_VERSION;
-        };
-
-        this.isUpdateTrunkSupported = function () {
-            return _clientApiVersion > SP88_API_VERSION;
-        };
-
-        this.isDeskphoneSupported = function () {
-            return _clientApiVersion > SP89_API_VERSION;
-        };
-
-        this.isSbcAutoUpdateSupported = function () {
-            return _clientApiVersion > SP88_API_VERSION;
-        };
-
-        this.isMuteOnEntryConfigSupported = function () {
-            return _clientApiVersion > SP91_API_VERSION;
-        };
-
         this.isEnhancedNotificationSupported = function () {
-            return _clientApiVersion > SP91_API_VERSION;
+            return _clientApiVersion > SP92_API_VERSION;
+        };
+
+        this.isClientCapabilitiesSupported = function () {
+            return _clientApiVersion > SP92_API_VERSION;
+        };
+
+        this.isHuntGroupsSupported = function () {
+            return _clientApiVersion > SP94_API_VERSION;
+        };
+
+        this.isSystemNotificationsSupported = function () {
+            return _clientApiVersion > SP94_API_VERSION;
+        };
+
+        this.isSubscribeTenantPresenceSupported = function () {
+            return _clientApiVersion >= SP94_API_VERSION;
+        };
+
+        this.isModerationTakeOverSupported = function () {
+            return _clientApiVersion > SP94_API_VERSION;
+        };
+
+        this.isScreenTakeOverSupported = function () {
+            return _clientApiVersion > SP95_API_VERSION;
+        };
+
+        this.isCallConnectedInfoSupported = function () {
+            return _clientApiVersion > SP95_API_VERSION;
         };
 
         ///////////////////////////////////////////////////////////////////////////////
@@ -17878,6 +18376,48 @@ var Circuit = (function (circuit) {
             var request = {
                 type: Constants.UserActionType.UNSUBSCRIBE_PRESENCE,
                 unsubscribePresence: {userIds: userIdsList}
+            };
+            sendRequest(Constants.ContentType.USER, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null);
+                }
+            });
+        };
+
+        this.subscribeTenantPresence = function (tenantId, cb) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: subscribeTenantPresence...');
+
+            if (!this.isSubscribeTenantPresenceSupported()) {
+                logger.warn('[ClientApiHandler]: The subscribeTenantPresence operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            var request = {
+                type: Constants.UserActionType.SUBSCRIBE_TENANT_PRESENCE,
+                subscribeTenantPresence: {tenantId: tenantId}
+            };
+            sendRequest(Constants.ContentType.USER, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null);
+                }
+            });
+        };
+
+        this.unsubscribeTenantPresence = function (tenantId, cb) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: unsubscribeTenantPresence...');
+
+            if (!this.isSubscribeTenantPresenceSupported()) {
+                logger.warn('[ClientApiHandler]: The unsubscribeTenantPresence operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            var request = {
+                type: Constants.UserActionType.UNSUBSCRIBE_TENANT_PRESENCE,
+                unsubscribeTenantPresence: {tenantId: tenantId}
             };
             sendRequest(Constants.ContentType.USER, request, function (err, rsp) {
                 if (isResponseValid(err, rsp, cb)) {
@@ -18356,12 +18896,6 @@ var Circuit = (function (circuit) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: resetOpenScapeDevicePins...');
 
-            if (!this.isDeskphoneSupported()) {
-                logger.warn('[ClientApiHandler]: The resetOpenScapeDevicePins operation is not supported by the backend');
-                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
-                return;
-            }
-
             var request = {
                 type: Constants.UserActionType.RESET_OPENSCAPE_DEVICE_PINS,
                 resetOpenScapeDevicePins: {
@@ -18377,6 +18911,30 @@ var Circuit = (function (circuit) {
                     cb(null, rsp.user.resetOpenScapeDevicePins.openScapeDevicePins);
                 }
             }, null, keysToOmitFromResponse);
+        };
+
+        this.setClientCapabilities = function (capabilities, cb) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: setClientCapabilities...');
+
+            if (!this.isClientCapabilitiesSupported()) {
+                logger.warn('[ClientApiHandler]: The setClientCapabilities operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            var request = {
+                type: Constants.UserActionType.SET_CLIENT_CAPABILITIES,
+                setClientCapabilities: {
+                    capabilities: capabilities
+                }
+            };
+
+            sendRequest(Constants.ContentType.USER, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null);
+                }
+            });
         };
 
         ///////////////////////////////////////////////////////////////////////////////
@@ -19722,7 +20280,7 @@ var Circuit = (function (circuit) {
             });
         };
 
-        this.getConversationSummary = function (convId, cb) {
+        this.getConversationSummary = function (convId, guestToken, cb) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: getConversationSummary...');
             var request = {
@@ -19731,6 +20289,17 @@ var Circuit = (function (circuit) {
                     convId: convId
                 }
             };
+
+            if (guestToken) {
+                if (_clientApiVersion > SP94_API_VERSION) {
+                    request.getConversationSummary.inviteToken = {
+                        token: guestToken
+                    };
+                } else {
+                    logger.warn('[ClientApiHandler]: Backend does not support the guestToken parameter');
+                }
+            }
+
             sendRequest(Constants.ContentType.CONVERSATION, request, function (err, rsp) {
                 if (isResponseValid(err, rsp, cb)) {
                     cb(null, rsp.conversation.getConversationSummary.conversationSummary);
@@ -19774,6 +20343,29 @@ var Circuit = (function (circuit) {
             sendRequest(Constants.ContentType.CONVERSATION, request, function (err, rsp) {
                 if (isResponseValid(err, rsp, cb)) {
                     cb(null, rsp.conversation.dropModeratorRightsResult);
+                }
+            });
+        };
+
+        this.takeModerationRight = function (convId, cb) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: takeModerationRight...');
+
+            if (!this.isModerationTakeOverSupported()) {
+                logger.warn('[ClientApiHandler]: The takeModerationRight operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            var request = {
+                type: Constants.ConversationActionType.TAKE_MODERATION_RIGHT,
+                takeModerationRight: {
+                    convId: convId
+                }
+            };
+            sendRequest(Constants.ContentType.CONVERSATION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null, rsp.conversation.takeModerationRightResult.moderationTakenResult);
                 }
             });
         };
@@ -20231,6 +20823,7 @@ var Circuit = (function (circuit) {
                     rtcSessionId: data.rtcSessionId,
                     ownerId: data.ownerId,
                     mediaNode: data.mediaNode,
+                    desiredRegion: data.desiredRegion || '',
                     isTelephonyConversation: data.isTelephonyConversation,
                     replaces: data.replaces
                 }
@@ -20295,6 +20888,125 @@ var Circuit = (function (circuit) {
                 }
             };
             sendRequest(Constants.ContentType.RTC_CALL, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null);
+                }
+            });
+        };
+
+        this.requestScreenControl = function (data, cb) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: requestScreenControl ...');
+            if (!checkAPISupportForScreenTakeOver('requestScreenControl', cb)) {
+                return;
+            }
+            var request = {
+                type: Constants.RTCSessionActionType.REQUEST_SCREEN_CONTROL,
+                requestScreenControl: {
+                    rtcSessionId: data.rtcSessionId,
+                    ownerId: data.ownerId
+                }
+            };
+            sendRequest(Constants.ContentType.RTC_SESSION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null);
+                }
+            });
+        };
+
+        this.offerScreenControl = function (data, cb) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: offerScreenControl ...');
+            if (!checkAPISupportForScreenTakeOver('offerScreenControl', cb)) {
+                return;
+            }
+            var request = {
+                type: Constants.RTCSessionActionType.OFFER_SCREEN_CONTROL,
+                offerScreenControl: {
+                    sdp: data.sdp,
+                    rtcSessionId: data.rtcSessionId,
+                    controllerId: data.controllerId || undefined
+                }
+            };
+            sendRequest(Constants.ContentType.RTC_SESSION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null);
+                }
+            });
+        };
+
+        this.acceptScreenControl = function (data, cb) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: acceptScreenControl ...');
+            if (!checkAPISupportForScreenTakeOver('acceptScreenControl', cb)) {
+                return;
+            }
+            var request = {
+                type: Constants.RTCSessionActionType.ACCEPT_SCREEN_CONTROL,
+                acceptScreenControl: {
+                    sdp: data.sdp,
+                    rtcSessionId: data.rtcSessionId
+                }
+            };
+            sendRequest(Constants.ContentType.RTC_SESSION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null);
+                }
+            });
+        };
+
+        this.rejectScreenControl = function (data, cb) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: rejectScreenControl ...');
+            if (!checkAPISupportForScreenTakeOver('rejectScreenControl', cb)) {
+                return;
+            }
+            var request = {
+                type: Constants.RTCSessionActionType.REJECT_SCREEN_CONTROL,
+                rejectScreenControl: {
+                    rtcSessionId: data.rtcSessionId
+                }
+            };
+            sendRequest(Constants.ContentType.RTC_SESSION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null);
+                }
+            });
+        };
+
+        this.rejectScreenControlRequest = function (data, cb) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: rejectScreenControlRequest ...');
+            if (!checkAPISupportForScreenTakeOver('rejectScreenControlRequest', cb)) {
+                return;
+            }
+            var request = {
+                type: Constants.RTCSessionActionType.REJECT_SCREEN_CONTROL_REQUEST,
+                rejectScreenControlRequest: {
+                    rtcSessionId: data.rtcSessionId,
+                    controllerId: data.controllerId
+                }
+            };
+            sendRequest(Constants.ContentType.RTC_SESSION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null);
+                }
+            });
+        };
+
+        this.stopScreenControl = function (data, cb) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: stopScreenControl ...');
+            if (!checkAPISupportForScreenTakeOver('stopScreenControl', cb)) {
+                return;
+            }
+            var request = {
+                type: Constants.RTCSessionActionType.STOP_SCREEN_CONTROL,
+                stopScreenControl: {
+                    rtcSessionId: data.rtcSessionId
+                }
+            };
+            sendRequest(Constants.ContentType.RTC_SESSION, request, function (err, rsp) {
                 if (isResponseValid(err, rsp, cb)) {
                     cb(null);
                 }
@@ -21314,12 +22026,6 @@ var Circuit = (function (circuit) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: getTenantVoicemailNumbers...');
 
-            if (!this.isSbcAutoUpdateSupported()) {
-                logger.warn('[ClientApiHandler]: The getTenantVoicemailNumbers operation is not supported by the backend');
-                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
-                return;
-            }
-
             var request = {
                 type: Constants.AdministrationActionType.GET_TENANT_VOICEMAIL_NUMBERS
             };
@@ -21334,12 +22040,6 @@ var Circuit = (function (circuit) {
         this.setTenantVoicemailNumbers = function (voicemailNumberList, cb, tenantContext) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: setTenantVoicemailNumbers...');
-
-            if (!this.isSbcAutoUpdateSupported()) {
-                logger.warn('[ClientApiHandler]: The setTenantVoicemailNumbers operation is not supported by the backend');
-                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
-                return;
-            }
 
             var request = {
                 type: Constants.AdministrationActionType.SET_TENANT_VOICEMAIL_NUMBERS,
@@ -21560,12 +22260,6 @@ var Circuit = (function (circuit) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: updateTrunk...');
 
-            if (!this.isUpdateTrunkSupported()) {
-                logger.warn('[ClientApiHandler]: The update trunk operation is not supported by the backend');
-                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
-                return;
-            }
-
             var request = {
                 type: Constants.AdministrationActionType.UPDATE_TRUNK,
                 updateTrunk: {
@@ -21725,12 +22419,6 @@ var Circuit = (function (circuit) {
         this.getOpenScapeUserV2 = function (dn, circuitUserId, cb, tenantContext) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: getOpenScapeUserV2...');
-
-            if (!this.isDeskphoneSupported()) {
-                logger.warn('[ClientApiHandler]: The getOpenScapeUserV2 operation is not supported by the backend');
-                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
-                return;
-            }
 
             if (!dn) {
                 logger.warn('[ClientApiHandler]: No dn was provided');
@@ -22068,12 +22756,6 @@ var Circuit = (function (circuit) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: getCMRSettings...');
 
-            if (!this.isCMRSettingsSupported()) {
-                logger.warn('[ClientApiHandler]: The getCMRSettings operation is not supported by the backend');
-                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
-                return;
-            }
-
             var request = {
                 type: Constants.AdministrationActionType.GET_CMR_SETTINGS,
                 getCMRSettings: {
@@ -22092,12 +22774,6 @@ var Circuit = (function (circuit) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: setCMRSettings...');
 
-            if (!this.isCMRSettingsSupported()) {
-                logger.warn('[ClientApiHandler]: The setCMRSettings operation is not supported by the backend');
-                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
-                return;
-            }
-
             var request = {
                 type: Constants.AdministrationActionType.SET_CMR_SETTINGS,
                 setCMRSettings: {
@@ -22111,6 +22787,302 @@ var Circuit = (function (circuit) {
                     cb(null);
                 }
             });
+        };
+
+        this.getHuntGroups = function (cb, tenantContext) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: getHuntGroups...');
+
+            if (!this.isHuntGroupsSupported()) {
+                logger.warn('[ClientApiHandler]: The getHuntGroups operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            var request = {
+                type: Constants.AdministrationActionType.GET_TENANT_HUNT_GROUPS,
+                getTenantHuntGroups: {}
+            };
+
+            sendRequest(Constants.ContentType.ADMINISTRATION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb, true)) {
+                    cb(null, rsp.administration.getTenantHuntGroupsResult.queryHuntGroupResponse || []);
+                }
+            }, null, null, tenantContext);
+        };
+
+        this.createHuntGroup = function (huntGroup, cb, tenantContext) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: createHuntGroup...');
+
+            if (!this.isHuntGroupsSupported()) {
+                logger.warn('[ClientApiHandler]: The createHuntGroup operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            if (!huntGroup) {
+                logger.warn('[ClientApiHandler]: No hunt group data were provided');
+                sendAsyncResp(cb, Constants.ReturnCode.INVALID_MESSAGE);
+                return;
+            }
+
+            var request = {
+                type: Constants.AdministrationActionType.CREATE_HUNT_GROUP,
+                createHuntGroup: {
+                    huntGroup: huntGroup
+                }
+            };
+
+            sendRequest(Constants.ContentType.ADMINISTRATION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null, rsp.administration.createHuntGroupResult.huntGroup);
+                }
+            }, null, null, tenantContext);
+        };
+
+        this.deleteHuntGroup = function (huntGroups, cb, tenantContext) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: deleteHuntGroup...');
+
+            if (!this.isHuntGroupsSupported()) {
+                logger.warn('[ClientApiHandler]: The deleteHuntGroup operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            if (!huntGroups || !huntGroups.length) {
+                logger.warn('[ClientApiHandler]: No hunt group pilot DNs were provided');
+                sendAsyncResp(cb, Constants.ReturnCode.INVALID_MESSAGE);
+                return;
+            }
+
+            var request = {
+                type: Constants.AdministrationActionType.DELETE_HUNT_GROUP,
+                deleteHuntGroup: {
+                    huntGroupPilots: huntGroups
+                }
+            };
+
+            sendRequest(Constants.ContentType.ADMINISTRATION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null);
+                }
+            }, null, null, tenantContext);
+        };
+
+        this.getHuntGroupPilotDNs = function (cb, tenantContext) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: getHuntGroupPilotDNs...');
+
+            if (!this.isHuntGroupsSupported()) {
+                logger.warn('[ClientApiHandler]: The getHuntGroupPilotDNs operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            var request = {
+                type: Constants.AdministrationActionType.GET_HUNT_GROUP_PILOT_CANDIDATES,
+                getHuntGroupPilotCandidates: {}
+            };
+
+            sendRequest(Constants.ContentType.ADMINISTRATION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb, true)) {
+                    cb(null, rsp.administration.getHuntGroupPilotCandidatesResult.huntGroupUsers || []);
+                }
+            }, null, null, tenantContext);
+        };
+
+        this.getHuntGroupMemberDNs = function (cb, tenantContext) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: getHuntGroupMemberDNs...');
+
+            if (!this.isHuntGroupsSupported()) {
+                logger.warn('[ClientApiHandler]: The getHuntGroupMemberDNs operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            var request = {
+                type: Constants.AdministrationActionType.GET_HUNT_GROUP_MEMBER_CANDIDATES,
+                getHuntGroupMemberCandidates: {}
+            };
+
+            sendRequest(Constants.ContentType.ADMINISTRATION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb, true)) {
+                    cb(null, rsp.administration.getHuntGroupMemberCandidatesResult.huntGroupUsers || []);
+                }
+            }, null, null, tenantContext);
+        };
+
+        this.getHuntGroup = function (pilotDn, cb, tenantContext) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: getHuntGroup...');
+
+            if (!this.isHuntGroupsSupported()) {
+                logger.warn('[ClientApiHandler]: The getHuntGroup operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            if (!pilotDn) {
+                logger.warn('[ClientApiHandler]: Hunt group pilot DN was not provided');
+                sendAsyncResp(cb, Constants.ReturnCode.INVALID_MESSAGE);
+                return;
+            }
+
+            var request = {
+                type: Constants.AdministrationActionType.GET_HUNT_GROUP,
+                getHuntGroup: {
+                    pilotDn: pilotDn
+                }
+            };
+
+            sendRequest(Constants.ContentType.ADMINISTRATION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null, rsp.administration.getHuntGroupResult.huntGroup);
+                }
+            }, null, null, tenantContext);
+        };
+
+        this.updateHuntGroup = function (huntGroup, cb, tenantContext) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: updateHuntGroup...');
+
+            if (!this.isHuntGroupsSupported()) {
+                logger.warn('[ClientApiHandler]: The updateHuntGroup operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            if (!huntGroup) {
+                logger.warn('[ClientApiHandler]: No hunt group data were provided');
+                sendAsyncResp(cb, Constants.ReturnCode.INVALID_MESSAGE);
+                return;
+            }
+
+            var request = {
+                type: Constants.AdministrationActionType.UPDATE_HUNT_GROUP,
+                updateHuntGroup: {
+                    updatedHuntGroup: huntGroup
+                }
+            };
+
+            sendRequest(Constants.ContentType.ADMINISTRATION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null, rsp.administration.updateHuntGroupResult.huntGroup);
+                }
+            }, null, null, tenantContext);
+        };
+
+        this.getSystemNotifications = function (systemNotificationType, cb, tenantContext) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: getSystemNotifications...');
+
+            if (!this.isSystemNotificationsSupported()) {
+                logger.warn('[ClientApiHandler]: The getSystemNotifications operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            var request = {
+                type: Constants.AdministrationActionType.GET_SYSTEM_NOTIFICATIONS,
+                getSystemNotifications: {
+                    systemNotificationType: systemNotificationType
+                }
+            };
+
+            var keysToOmitFromResponse = ['response.administration.getSystemNotificationsResult.systemNotifications.[].broadcastText'];
+
+            sendRequest(Constants.ContentType.ADMINISTRATION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb, true)) {
+                    cb(null, rsp.administration.getSystemNotificationsResult.systemNotifications || []);
+                }
+            }, null, keysToOmitFromResponse, tenantContext);
+        };
+
+        this.addSystemNotification = function (data, cb, tenantContext) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: addSystemNotification...');
+
+            if (!this.isSystemNotificationsSupported()) {
+                logger.warn('[ClientApiHandler]: The addSystemNotification operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            var request = {
+                type: Constants.AdministrationActionType.ADD_SYSTEM_NOTIFICATION,
+                addSystemNotification: {
+                    type: data.type,
+                    startTime: data.startTime,
+                    endTime: data.endTime,
+                    broadcastText: data.broadcastText
+                }
+            };
+
+            var keysToOmitFromRequest = ['request.administration.addSystemNotification.broadcastText'];
+            var keysToOmitFromResponse = ['response.administration.addSystemNotificationResult.systemNotification.broadcastText'];
+
+            sendRequest(Constants.ContentType.ADMINISTRATION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null, rsp.administration.addSystemNotificationResult.systemNotification);
+                }
+            }, keysToOmitFromRequest, keysToOmitFromResponse, tenantContext);
+        };
+
+        this.removeSystemNotification = function (notificationId, cb, tenantContext) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: removeSystemNotification...');
+
+            if (!this.isSystemNotificationsSupported()) {
+                logger.warn('[ClientApiHandler]: The removeSystemNotification operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            var request = {
+                type: Constants.AdministrationActionType.REMOVE_SYSTEM_NOTIFICATION,
+                removeSystemNotification: {
+                    id: notificationId
+                }
+            };
+
+            sendRequest(Constants.ContentType.ADMINISTRATION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null);
+                }
+            }, null, null, tenantContext);
+        };
+
+        this.updateSystemNotification = function (data, cb, tenantContext) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: updateSystemNotification...');
+
+            if (!this.isSystemNotificationsSupported()) {
+                logger.warn('[ClientApiHandler]: The updateSystemNotification operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            var request = {
+                type: Constants.AdministrationActionType.UPDATE_SYSTEM_NOTIFICATION,
+                updateSystemNotification: {
+                    id: data.id,
+                    startTime: data.startTime,
+                    endTime: data.endTime,
+                    broadcastText: data.broadcastText
+                }
+            };
+
+            var keysToOmitFromRequest = ['request.administration.updateSystemNotification.broadcastText'];
+            var keysToOmitFromResponse = ['response.administration.updateSystemNotificationResult.systemNotification.broadcastText'];
+
+            sendRequest(Constants.ContentType.ADMINISTRATION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null, rsp.administration.updateSystemNotificationResult.systemNotification);
+                }
+            }, keysToOmitFromRequest, keysToOmitFromResponse, tenantContext);
         };
 
         ///////////////////////////////////////////////////////////////////////////////
@@ -22677,6 +23649,25 @@ var Circuit = (function (circuit) {
             sendRequest(Constants.ContentType.GUEST, request, function (err, rsp) {
                 if (isResponseValid(err, rsp, cb)) {
                     cb(null, rsp.guest.validateSessionInviteToken);
+                }
+            }, null, keysToOmitFromResponse);
+        };
+
+        this.getRegions = function (token, cb) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: getRegions ...');
+            var request = {
+                type: Constants.GuestActionType.GET_REGIONS,
+                getRegions: {
+                    token: {token: token}
+                }
+            };
+
+            var keysToOmitFromResponse = ['response.guest.getRegions.convTopic'];
+
+            sendRequest(Constants.ContentType.GUEST, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null, rsp.guest.getRegions);
                 }
             }, null, keysToOmitFromResponse);
         };
@@ -24932,10 +25923,12 @@ var Circuit = (function (circuit) {
         ///////////////////////////////////////////////////////////////////////////
         // Local variables
         ///////////////////////////////////////////////////////////////////////////
+        // Default response wait time
         var RESPONSE_TIMEOUT = 5000;
-        var EXCHANGE_RESPONSE_TIMEOUT = 65000; // Response wait time for requests to Exchange connector
-        var EXCHANGE_CONNECT_TIMEOUT = 180000; // Response wait time for connect request to Exchange connector
-        var HEADSET_APP_LAUNCH_TIMEOUT = 180000; // Response wait time for launch Circuit Headset App
+        // Response wait time for requests which may require the user to grant new permissions
+        var LONG_RESPONSE_TIMEOUT = 180000;
+        // Response wait time for requests to Exchange connector
+        var EXCHANGE_RESPONSE_TIMEOUT = 65000;
 
         var _that = this;
         var _reqCallbacks = {};
@@ -25074,11 +26067,18 @@ var Circuit = (function (circuit) {
             return true;
         }
 
+        function dispatchInternalEvent(eventName, data) {
+            logger.info('[ExtensionConnHandler]: Dispatching event: ', eventName);
+            var newEvt = _that.createEvent(eventName);
+            newEvt.data = data;
+            _that.dispatch(newEvt);
+        }
+
         function handleExtMessage(msg) {
-            var newEvt;
             // Internal events are supposed to be handled by the ExtensionConnHandler instance.
             // All other events are published to the interested applications
-            if (msg.target === ChromeExtension.BgTarget.INTERNAL) {
+            switch (msg.target) {
+            case ChromeExtension.BgTarget.INTERNAL:
                 switch (msg.data.type) {
                 case ChromeExtension.BgInternalMsgType.INIT_MSG:
                     logger.info('[ExtensionConnHandler]: Received INIT_MSG. Send an INIT_MSG_ACK to the extension.');
@@ -25089,43 +26089,48 @@ var Circuit = (function (circuit) {
                             type: ChromeExtension.BgInternalMsgType.INIT_MSG_ACK
                         }
                     });
-
-                    logger.info('[ExtensionConnHandler]: Dispatching event: extensionInitialized');
-                    newEvt = _that.createEvent('extensionInitialized');
-                    newEvt.data = msg.data;
-                    _that.dispatch(newEvt);
+                    dispatchInternalEvent('extensionInitialized', msg.data);
                     break;
                 case ChromeExtension.BgInternalMsgType.EXTENSION_DISCONNECTED:
                     logger.warning('[ExtensionConnHandler]: Received EXTENSION_DISCONNECTED from ansible-content');
                     onExtensionUnregistered();
                     break;
                 default:
-                    logger.warning('[ExtensionConnHandler]: Received unknown INTERNAL msg type from ansible-content:', msg.data.type);
+                    logger.warning('[ExtensionConnHandler]: Received unknown INTERNAL msg type:', msg.data.type);
                     break;
                 }
-            } else if (msg.target === ChromeExtension.BgTarget.HEADSET_APP) {
+                break;
+
+            case ChromeExtension.BgTarget.HEADSET_APP:
                 switch (msg.data.type) {
                 case ChromeExtension.BgHeadsetAppMsgType.HEADSET_APP_LAUNCHED:
-                    logger.info('[ExtensionConnHandler]: Dispatching event: headsetAppLaunched');
-                    newEvt = _that.createEvent('headsetAppLaunched');
-                    newEvt.data = msg.data;
-                    _that.dispatch(newEvt);
+                    dispatchInternalEvent('headsetAppLaunched', msg.data);
                     break;
                 case ChromeExtension.BgHeadsetAppMsgType.HEADSET_APP_UNINSTALLED:
-                    logger.info('[ExtensionConnHandler]: Dispatching event: headsetAppUninstalled');
-                    newEvt = _that.createEvent('headsetAppUninstalled');
-                    newEvt.data = msg.data;
-                    _that.dispatch(newEvt);
+                    dispatchInternalEvent('headsetAppUninstalled', msg.data);
                     break;
                 default:
-                    logger.warning('[ExtensionConnHandler]: Received unknown HEADSET_APP msg type from ansible-content:', msg.data.type);
+                    logger.warning('[ExtensionConnHandler]: Received unknown HEADSET_APP msg type:', msg.data.type);
                     break;
                 }
-            } else {
+                break;
+
+            case ChromeExtension.BgTarget.PRIVACY_SETTINGS:
+                switch (msg.data.type) {
+                case ChromeExtension.BgPrivacySettingsMsgType.IP_HANDLING_POLICY_CHANGED:
+                    dispatchInternalEvent('webRTCIPHandlingPolicyChanged', msg.data);
+                    break;
+                default:
+                    logger.warning('[ExtensionConnHandler]: Received unknown PRIVACY_SETTINGS msg type:', msg.data.type);
+                    break;
+                }
+                break;
+
+            default:
                 if (!msg.suppressLog) {
                     logger.info('[ExtensionConnHandler]: Dispatching event:', msg.target);
                 }
-                newEvt = _that.createEvent(msg.target);
+                var newEvt = _that.createEvent(msg.target);
                 newEvt.data = msg.data;
                 newEvt.suppressLog = msg.suppressLog;
                 // Just add the request id for an Extension request
@@ -25133,6 +26138,7 @@ var Circuit = (function (circuit) {
                     newEvt.reqId = msg.reqId;
                 }
                 _that.dispatch(newEvt);
+                break;
             }
         }
 
@@ -25295,7 +26301,7 @@ var Circuit = (function (circuit) {
                     }
                 },
                 keysToOmitFromLogging: ['data.object.settings.exchInfo']
-            }, cb, EXCHANGE_CONNECT_TIMEOUT);
+            }, cb, LONG_RESPONSE_TIMEOUT);
         };
 
         this.exchangeDisconnect = function (cb) {
@@ -25328,6 +26334,20 @@ var Circuit = (function (circuit) {
                 data: {
                     method: ChromeExtension.BgExchangeMsgType.GET_CAPABILITIES
                 }
+            }, cb, EXCHANGE_RESPONSE_TIMEOUT);
+        };
+
+        this.exchangeAutodiscoverGetServer = function (settings, cb) {
+            sendMessage({
+                target: ChromeExtension.BgTarget.EXCHANGE_CONNECTOR,
+                type: ChromeExtension.BgMsgType.REQUEST,
+                data: {
+                    method: ChromeExtension.BgExchangeMsgType.AUTODISCOVER_GET_SERVER,
+                    object: {
+                        settings: settings
+                    }
+                },
+                keysToOmitFromLogging: ['data.object.settings.exchInfo']
             }, cb, EXCHANGE_RESPONSE_TIMEOUT);
         };
 
@@ -25516,7 +26536,7 @@ var Circuit = (function (circuit) {
                     type: ChromeExtension.BgHeadsetAppMsgType.GET_HEADSET_APP_STATUS,
                     appId: appId
                 }
-            }, cb, RESPONSE_TIMEOUT);
+            }, cb);
         };
 
         this.launchHeadsetIntegrationApp = function (appId, localizedStrings, cb) {
@@ -25528,7 +26548,43 @@ var Circuit = (function (circuit) {
                     appId: appId,
                     localizedStrings: localizedStrings
                 }
-            }, cb, HEADSET_APP_LAUNCH_TIMEOUT);
+            }, cb, LONG_RESPONSE_TIMEOUT);
+        };
+
+        this.restartHeadsetApp = function (appId, cb) {
+            sendMessage({
+                target: ChromeExtension.BgTarget.HEADSET_APP,
+                type: ChromeExtension.BgMsgType.REQUEST,
+                data: {
+                    type: ChromeExtension.BgHeadsetAppMsgType.RESTART_HEADSET_APP,
+                    appId: appId
+                }
+            }, cb);
+        };
+
+        /******************************************************
+         * Privacy Settings APIs
+         ******************************************************/
+        this.setIPHandlingPolicy = function (policy, localizedStrings, cb) {
+            sendMessage({
+                target: ChromeExtension.BgTarget.PRIVACY_SETTINGS,
+                type: ChromeExtension.BgMsgType.REQUEST,
+                data: {
+                    type: ChromeExtension.BgPrivacySettingsMsgType.SET_IP_HANDLING_POLICY,
+                    policy: policy,
+                    localizedStrings: localizedStrings
+                }
+            }, cb, LONG_RESPONSE_TIMEOUT);
+        };
+
+        this.getIPHandlingPolicy = function (cb) {
+            sendMessage({
+                target: ChromeExtension.BgTarget.PRIVACY_SETTINGS,
+                type: ChromeExtension.BgMsgType.REQUEST,
+                data: {
+                    type: ChromeExtension.BgPrivacySettingsMsgType.GET_IP_HANDLING_POLICY
+                }
+            }, cb);
         };
 
         /******************************************************
@@ -25540,6 +26596,18 @@ var Circuit = (function (circuit) {
                 type: ChromeExtension.BgMsgType.REQUEST,
                 data: {
                     type: ChromeExtension.BgInternalMsgType.BRING_TO_FRONT
+                }
+            }, cb);
+        };
+
+        this.getFile = function (file, lang, cb) {
+            sendMessage({
+                target: ChromeExtension.BgTarget.INTERNAL,
+                type: ChromeExtension.BgMsgType.REQUEST,
+                data: {
+                    type: ChromeExtension.BgInternalMsgType.GET_FILE,
+                    name: file,
+                    lang: lang
                 }
             }, cb);
         };
@@ -25795,6 +26863,7 @@ var Circuit = (function (circuit) {
      * @type {String}
      * @static
      */
+    circuit.Enums.SystemPermission = circuit.Constants.SystemPermission;
 
 
     /**
@@ -25833,6 +26902,8 @@ var Circuit = (function (circuit) {
      * @type {String}
      * @static
      */
+    circuit.Enums.DeviceType = circuit.Constants.DeviceType;
+
 
     /**
      * Enum for call state names.
@@ -25998,7 +27069,6 @@ var Circuit = (function (circuit) {
      * @static
      * @final
      */
-    circuit.Enums.ConversationItemType = circuit.Constants.ConversationItemType;
     /**
      * Text message type
      * @property TEXT
@@ -26017,6 +27087,7 @@ var Circuit = (function (circuit) {
      * @type {String}
      * @static
      */
+    circuit.Enums.ConversationItemType = circuit.Constants.ConversationItemType;
 
 
     /**
@@ -26025,13 +27096,6 @@ var Circuit = (function (circuit) {
      * @static
      * @final
      */
-    circuit.Enums.ConversationType = {
-        DIRECT: 'DIRECT',
-        GROUP: 'GROUP',
-        LARGE: 'LARGE',
-        COMMUNITY: 'COMMUNITY' // Changed from OPEN to COMMUNITY for SDK
-    };
-
     /**
      * Direct Conversation (peer-to-peer)
      * @property DIRECT
@@ -26050,6 +27114,12 @@ var Circuit = (function (circuit) {
      * @type {String}
      * @static
      */
+    circuit.Enums.ConversationType = {
+        DIRECT: 'DIRECT',
+        GROUP: 'GROUP',
+        LARGE: 'LARGE',
+        COMMUNITY: 'COMMUNITY' // Changed from OPEN to COMMUNITY for SDK
+    };
 
 
     /**
@@ -26058,7 +27128,6 @@ var Circuit = (function (circuit) {
      * @static
      * @final
      */
-    circuit.Enums.PresenceState = circuit.Constants.PresenceState;
     /**
      * @property AVAILABLE
      * @type {String}
@@ -26085,6 +27154,7 @@ var Circuit = (function (circuit) {
      * @type {String}
      * @static
      */
+    circuit.Enums.PresenceState = circuit.Constants.PresenceState;
 
 
     /**
@@ -26093,7 +27163,6 @@ var Circuit = (function (circuit) {
      * @static
      * @final
      */
-    circuit.Enums.RTCItemType = circuit.Constants.RTCItemType;
     /**
      * @property STARTED
      * @type {String}
@@ -26124,6 +27193,7 @@ var Circuit = (function (circuit) {
      * @type {String}
      * @static
      */
+    circuit.Enums.RTCItemType = circuit.Constants.RTCItemType;
 
 
     /**
@@ -26132,7 +27202,6 @@ var Circuit = (function (circuit) {
      * @static
      * @final
      */
-    circuit.Enums.RTCParticipantType = circuit.Constants.RTCParticipantType;
     /**
      * Circuit users.
      * @property USER
@@ -26163,6 +27232,7 @@ var Circuit = (function (circuit) {
      * @type {String}
      * @static
      */
+    circuit.Enums.RTCParticipantType = circuit.Constants.RTCParticipantType;
 
 
     /**
@@ -26171,7 +27241,6 @@ var Circuit = (function (circuit) {
      * @static
      * @final
      */
-    circuit.Enums.SystemItemType = circuit.Constants.SystemItemType;
     /**
      * @property CONVERSATION_CREATED
      * @type {String}
@@ -26212,6 +27281,7 @@ var Circuit = (function (circuit) {
      * @type {String}
      * @static
      */
+    circuit.Enums.SystemItemType = circuit.Constants.SystemItemType;
 
 
     /**
@@ -26220,7 +27290,6 @@ var Circuit = (function (circuit) {
      * @static
      * @final
      */
-    circuit.Enums.TextItemContentType = circuit.Constants.TextItemContentType;
     /**
      * Plain text message
      * @property PLAIN
@@ -26233,6 +27302,7 @@ var Circuit = (function (circuit) {
      * @type {String}
      * @static
      */
+    circuit.Enums.TextItemContentType = circuit.Constants.TextItemContentType;
 
 
     /**
@@ -26241,7 +27311,6 @@ var Circuit = (function (circuit) {
      * @static
      * @final
      */
-    circuit.Enums.UserType = circuit.Constants.UserType;
     /**
      * Regular Circuit user
      * @property REGULAR
@@ -26290,6 +27359,7 @@ var Circuit = (function (circuit) {
      * @type {String}
      * @static
      */
+    circuit.Enums.UserType = circuit.Constants.UserType;
 
 
     /**
@@ -26298,7 +27368,6 @@ var Circuit = (function (circuit) {
      * @static
      * @final
      */
-    circuit.Enums.UserState = circuit.Constants.UserState;
     /**
      * User is just created or deleted
      * @property INACTIVE
@@ -26323,6 +27392,7 @@ var Circuit = (function (circuit) {
      * @type {String}
      * @static
      */
+    circuit.Enums.UserState = circuit.Constants.UserState;
 
 
     /**
@@ -26331,7 +27401,6 @@ var Circuit = (function (circuit) {
      * @static
      * @final
      */
-    circuit.Enums.SearchDirection = circuit.Constants.SearchDirection;
     /**
      * Before a specific timestamp
      * @property BEFORE
@@ -26350,6 +27419,7 @@ var Circuit = (function (circuit) {
      * @type {String}
      * @static
      */
+    circuit.Enums.SearchDirection = circuit.Constants.SearchDirection;
 
 
     /**
@@ -26358,7 +27428,6 @@ var Circuit = (function (circuit) {
      * @static
      * @final
      */
-    circuit.Enums.ParticipantCriteria = circuit.Constants.GetConversationParticipantCriteria;
     /**
      * The display name of the search string (e.g. participant). Searches like <Mich> are allowed and would return accounts of users with display name <Michael> and <Michaela> for example.
      * @property DISPLAY_NAME
@@ -26371,6 +27440,7 @@ var Circuit = (function (circuit) {
      * @type {String}
      * @static
      */
+    circuit.Enums.ParticipantCriteria = circuit.Constants.GetConversationParticipantCriteria;
 
 
     /**
@@ -26379,7 +27449,6 @@ var Circuit = (function (circuit) {
      * @static
      * @final
      */
-    circuit.Enums.ConversationParticipantType = circuit.Constants.ConversationParticipantType;
     /**
      * Regular default participant of a conversation.
      * @property REGULAR
@@ -26404,6 +27473,7 @@ var Circuit = (function (circuit) {
      * @type {String}
      * @static
      */
+    circuit.Enums.ConversationParticipantType = circuit.Constants.ConversationParticipantType;
 
 
     /**
@@ -27192,7 +28262,7 @@ var Circuit = (function (circuit) {
                     reject('convId is required');
                     return;
                 }
-                _clientApiHandler.getConversationSummary(convId, function (err, convSummary) {
+                _clientApiHandler.getConversationSummary(convId, null, function (err, convSummary) {
                     if (err) {
                         reject('[SDK] getConversationSummary request failed');
                         return;
@@ -27636,6 +28706,8 @@ var Circuit = (function (circuit) {
         var _inlineInstallInProgress = false;
         var _inlineInstallFailed = false;
 
+        var _ipcRenderer = circuit.isElectron ? require('electron').ipcRenderer : null;
+
         // Pathing extension info to Controller for Screen Sharing
         ScreenSharingController && ScreenSharingController.injectExtensionSvc(this, _extConnHandler);
 
@@ -27773,43 +28845,41 @@ var Circuit = (function (circuit) {
         ///////////////////////////////////////////////////////////////////////////////////////
         // Event Handlers
         ///////////////////////////////////////////////////////////////////////////////////////
-        _extConnHandler && _extConnHandler.addEventListener('extensionInitialized', function (evt) {
-            $rootScope.$apply(function () {
-                _extensionVersion = evt.data.version;
-                validateExtensionVersion();
-                if (_extensionVersionSupported) {
-                    _inlineInstallInProgress = false;
-                    $rootScope.isChromeExtRunning = true;
-                    LogSvc.setExtensionVersion(_extensionVersion);
-                    LogSvc.debug('[ExtensionSvc]: Publish /chromeExt/initialized event');
-                    PubSubSvc.publish('/chromeExt/initialized');
-                }
+        if (_extConnHandler) {
+            _extConnHandler.addEventListener('extensionInitialized', function (evt) {
+                $rootScope.$apply(function () {
+                    _extensionVersion = evt.data.version;
+                    validateExtensionVersion();
+                    if (_extensionVersionSupported) {
+                        _inlineInstallInProgress = false;
+                        $rootScope.isChromeExtRunning = true;
+                        LogSvc.setExtensionVersion(_extensionVersion);
+                        LogSvc.debug('[ExtensionSvc]: Publish /chromeExt/initialized event');
+                        PubSubSvc.publish('/chromeExt/initialized');
+                    }
+                });
             });
-        });
 
-        _extConnHandler && _extConnHandler.addEventListener('extensionUnregistered', function () {
-            $rootScope.$apply(function () {
-                $rootScope.isChromeExtRunning = false;
-                LogSvc.debug('[ExtensionSvc]: Publish /chromeExt/unregistered event');
-                PubSubSvc.publish('/chromeExt/unregistered');
+            _extConnHandler.addEventListener('extensionUnregistered', function () {
+                $rootScope.$apply(function () {
+                    $rootScope.isChromeExtRunning = false;
+                    LogSvc.debug('[ExtensionSvc]: Publish /chromeExt/unregistered event');
+                    PubSubSvc.publish('/chromeExt/unregistered');
+                });
             });
-        });
 
-        _extConnHandler && _extConnHandler.addEventListener('headsetAppLaunched', function (evt) {
-            $rootScope.$apply(function () {
-                var data = evt.data && evt.data.data;
-                LogSvc.debug('[ExtensionSvc]: Publish /chromeExt/headsetAppLaunched event: ', data);
-                PubSubSvc.publish('/chromeExt/headsetAppLaunched', [data]);
-            });
-        });
+            var onConnHandlerEvent = function (eventName, evt) {
+                $rootScope.$apply(function () {
+                    var data = evt.data && evt.data.data;
+                    LogSvc.debug('[ExtensionSvc]: Publish ' + eventName + ' event: ', data);
+                    PubSubSvc.publish(eventName, [data]);
+                });
+            };
 
-        _extConnHandler && _extConnHandler.addEventListener('headsetAppUninstalled', function (evt) {
-            $rootScope.$apply(function () {
-                var data = evt.data && evt.data.data;
-                LogSvc.debug('[ExtensionSvc]: Publish /chromeExt/headsetAppUninstalled event: ', data);
-                PubSubSvc.publish('/chromeExt/headsetAppUninstalled', [data]);
-            });
-        });
+            _extConnHandler.addEventListener('headsetAppLaunched', onConnHandlerEvent.bind(null, '/chromeExt/headsetAppLaunched'));
+            _extConnHandler.addEventListener('headsetAppUninstalled', onConnHandlerEvent.bind(null, '/chromeExt/headsetAppUninstalled'));
+            _extConnHandler.addEventListener('webRTCIPHandlingPolicyChanged', onConnHandlerEvent.bind(null, '/chromeExt/webRTCIPHandlingPolicyChanged'));
+        }
 
         ///////////////////////////////////////////////////////////////////////////////////////
         // Public Interface
@@ -27968,6 +29038,10 @@ var Circuit = (function (circuit) {
             return invokeHandlerApi('exchangeGetCapabilities', [], cb);
         };
 
+        this.exchangeAutodiscoverGetServer = function (settings, cb) {
+            return invokeHandlerApi('exchangeAutodiscoverGetServer', [settings], cb);
+        };
+
         this.exchangeResolveContact = function (key, contactData, cb) {
             return invokeHandlerApi('exchangeResolveContact', [key, contactData], cb);
         };
@@ -28024,6 +29098,11 @@ var Circuit = (function (circuit) {
             return _self.isExtensionRunning();
         };
 
+        this.supportsExchangeAutodiscoverGetServer = function () {
+            // Requires SP96 extension (1.2.3300) or higher
+            return _extensionVersion === ELECTRON_KEY || Utils.convertVersionToNumber(_extensionVersion) >= 1023300;
+        };
+
         this.supportsOOO = function () {
             // OOO requires SP91 extension (1.2.2800) or higher
             return _extensionVersion === ELECTRON_KEY || Utils.convertVersionToNumber(_extensionVersion) >= 1022800;
@@ -28048,16 +29127,56 @@ var Circuit = (function (circuit) {
             return invokeHandlerApi('getHeadsetIntegrationAppStatus', [appId], cb);
         };
 
+        this.restartHeadsetApp = function (appId, cb) {
+            return invokeHandlerApi('restartHeadsetApp', [appId], cb);
+        };
+
+        /******************************************************
+         * Privacy Settings APIs
+         ******************************************************/
+        this.supportsPolicySettings = function () {
+            // Requires SP96 extension (1.2.3300) or higher
+            return _extensionVersion === ELECTRON_KEY || Utils.convertVersionToNumber(_extensionVersion) >= 1023300;
+        };
+
+        this.setIPHandlingPolicy = function (policy, localizedStrings, cb) {
+            if (circuit.isElectron) {
+                _ipcRenderer.send('set-ip-handling-policy', policy);
+                cb && cb(null);
+            } else {
+                return invokeHandlerApi('setIPHandlingPolicy', [policy, localizedStrings], cb);
+            }
+        };
+
+        this.getIPHandlingPolicy = function (cb) {
+            if (typeof cb !== 'function') {
+                return;
+            }
+            if (circuit.isElectron) {
+                _ipcRenderer.send('get-ip-handling-policy');
+                _ipcRenderer.once('get-ip-handling-policy-response', function (event, value) {
+                    $rootScope.$apply(function () {
+                        cb(null, {value: value || null});
+                    });
+                });
+            } else {
+                return invokeHandlerApi('getIPHandlingPolicy', [], cb);
+            }
+        };
+
         /******************************************************
          * Internal APIs
          ******************************************************/
         this.bringToFront = function (cb) {
             if (circuit.isElectron) {
-                var ipcRenderer = require('electron').ipcRenderer;
-                ipcRenderer.send('focus-window');
+                _ipcRenderer.send('focus-window');
             } else {
                 return invokeHandlerApi('bringToFront', [], cb);
             }
+        };
+
+        this.getFileFromExtension = function (file, lang, cb) {
+            return invokeHandlerApi('getFile', [file, lang], cb);
         };
 
         ///////////////////////////////////////////////////////////////////////////////////////
@@ -28282,6 +29401,7 @@ var Circuit = (function (circuit) {
                         if ($rootScope.localUser.PBXCallLogSupported && !$rootScope.localUser.noCallLog) {
                             sendEnablePBXCallLogToATC(true);
                         }
+                        handlePresenceState(Constants.TrunkState.UP);
                         LogSvc.debug('[AtcRegistrationSvc]: Registration refresh will be handled by access server');
 
                     } else {
@@ -29100,6 +30220,44 @@ var Circuit = (function (circuit) {
             }
         }
 
+        function getDeviceStatistics() {
+            if (typeof DeviceStatistics !== 'undefined') {
+                return DeviceStatistics.getStatistics();
+            }
+            return null;
+        }
+
+        function sendCallConnected(call) {
+            if (!_clientApiHandler.isCallConnectedInfoSupported()) {
+                return;
+            }
+
+            LogSvc.debug('[DeviceDiagnosticSvc]: Send call connected event to backend');
+
+            var stats = getDeviceStatistics() || {};
+
+            // Additional data for call connected
+            stats.recordingDevice = call.recordingDevice;
+            stats.playbackDevice = call.playbackDevice;
+            stats.negotiationInfos = [];
+
+            var clientInfo = {
+                userId: $rootScope.localUser.userId,
+                convId: call.convId,
+                clientInfoType: Constants.RtcClientInfoType.CALL_CONNECTED,
+                reason: Constants.RtcClientInfoReason.CALL_CONNECTED,
+                timestamp: Date.now(),
+                sessionId: call.callId,
+                deviceDiagnostics: stats
+            };
+
+            _clientApiHandler.sendClientInfo([clientInfo], function (err) {
+                if (err) {
+                    LogSvc.debug('[DeviceDiagnosticSvc]: Failed to send call connected event. ', err);
+                }
+            });
+        }
+
         ///////////////////////////////////////////////////////////////////////////////////////
         // PubSubSvc Event Handlers
         ///////////////////////////////////////////////////////////////////////////////////////
@@ -29126,6 +30284,8 @@ var Circuit = (function (circuit) {
         this.forceFinishDeviceDiagnostics = forceFinishDeviceDiagnostics;
 
         this.storeClientInfo = storeClientInfo;
+
+        this.sendCallConnected = sendCallConnected;
 
         ///////////////////////////////////////////////////////////////////////////////////////
         // Initialization
@@ -29159,6 +30319,7 @@ var Circuit = (function (circuit) {
     var Enums = circuit.Enums;
     var LocalCall = circuit.LocalCall;
     var Proto = circuit.Proto;
+    var RedirectionTypes = Circuit.Enums.RedirectionTypes;
     var RemoteCall = circuit.RemoteCall;
     var RoutingOptions = circuit.RoutingOptions;
     var RtcParticipant = circuit.RtcParticipant;
@@ -29316,7 +30477,6 @@ var Circuit = (function (circuit) {
                     DeviceDiagnosticSvc.startJoinDelayTimer(localCall);
                 }
 
-
                 var prepareActionInfo = DeviceDiagnosticSvc.createActionInfo(localCall, Constants.RtcDiagnosticsAction.PREPARE);
 
                 _clientApiHandler.prepareSession(prepareSessionData, function (err, servers, newRtcSessionId) {
@@ -29352,8 +30512,45 @@ var Circuit = (function (circuit) {
                         _turnCredentials = servers;
                         updateTurnExpireTime();
 
-                        if (newRtcSessionId) {
-                            localCall.setCallIdForTelephony(newRtcSessionId);
+                        if (localCall.isTelephonyCall && newRtcSessionId && newRtcSessionId !== localCall.callId) {
+                            // For telephony calls, the call ID (i.e. rtc session ID) can be different from the
+                            // conversation's rtcSessionId since we can support up to two calls in the same conversation.
+                            var telephonyConv = getConversation(localCall.convId);
+
+                            if (telephonyConv && (Utils.isMobile() || circuit.isSDK)) {
+                                // For mobile clients and SDK we need to "terminate" the old call and create a new call.
+                                localCall.setCallIdForTelephony(newRtcSessionId);
+
+                                // Create a temporary call object with old rtc session id to raise call ended event to UI
+                                // The "replaced" flag is set to true in the ended message so that the
+                                // mobile client knows this is part of a call update.
+                                var oldCall = new LocalCall(telephonyConv, {clientId: localCall.clientId});
+                                telephonyConv.call = oldCall;
+
+                                // Terminate the call to clear its resources.
+                                oldCall.terminate();
+
+                                // End temporary call associated to old coversation
+                                LogSvc.debug('[CircuitCallControlSvc]: Publish /call/ended event');
+                                PubSubSvc.publish('/call/ended', [oldCall, true]);
+
+                                telephonyConv.call = localCall;
+
+                                publishConversationUpdate(telephonyConv);
+                                publishCallState(localCall);
+
+                                // Inform the UI that call has been moved
+                                LogSvc.debug('[CircuitCallControlSvc]: Publish /call/moved event');
+                                PubSubSvc.publish('/call/moved', [oldCall.callId, localCall.callId]);
+                            } else {
+                                // For web/DA we can simply update the call ID and keep using the same call object
+                                var oldCallId = localCall.callId;
+                                localCall.setCallIdForTelephony(newRtcSessionId);
+
+                                // Events have already been published for the old call ID, so we need to notify the GUI that
+                                // this call has a new call ID
+                                publishCallState(localCall, oldCallId);
+                            }
                         }
                         resolve(_turnCredentials);
                     });
@@ -29555,10 +30752,10 @@ var Circuit = (function (circuit) {
             }
         }
 
-        function publishCallState(call) {
+        function publishCallState(call, oldCallId) {
             if (call && call.state !== Enums.CallState.Terminated) {
                 LogSvc.debug('[CircuitCallControlSvc]: Publish /call/state event. callId = ' + call.callId + ', state = ' + call.state.name);
-                PubSubSvc.publish('/call/state', [call]);
+                PubSubSvc.publish('/call/state', oldCallId ? [call, oldCallId] : [call]);
             }
         }
 
@@ -29823,6 +31020,22 @@ var Circuit = (function (circuit) {
             });
         }
 
+        function setRedirectingUser(call, phoneNumber, fqNumber, displayName, type) {
+            if (call.redirectingUser && call.redirectingUser.redirectionType) {
+                return;
+            }
+            call.setRedirectingUser(phoneNumber, fqNumber, displayName, null, type);
+
+            if (fqNumber) {
+                UserSvc.startReverseLookUp(fqNumber, function (user) {
+                    if (user && call.isPresent()) {
+                        call.setRedirectingUser(phoneNumber, fqNumber, user.displayName, user.userId, type);
+                        publishCallState(call);
+                    }
+                });
+            }
+        }
+
         function normalizeApiParticipant(apiParticipant, mediaType) {
             var isCircuitUser = (!apiParticipant.participantType ||
                 apiParticipant.participantType === Constants.RTCParticipantType.USER ||
@@ -29889,6 +31102,7 @@ var Circuit = (function (circuit) {
             participant.participantType = apiParticipant.participantType || Constants.RTCParticipantType.USER;
             participant.screenSharePointerSupported = !!apiParticipant.screenSharePointerSupported;
             participant.isModerator = !!apiParticipant.isModerator;
+            participant.isMeetingGuest = apiParticipant.isMeetingGuest;
 
             return participant;
         }
@@ -29926,126 +31140,147 @@ var Circuit = (function (circuit) {
             }
         }
 
-        function joinSession(conversation, mediaType, options, cb) {
-            options.callOut = !!options.callOut;
-            options.handover = !!options.handover;
+        function terminateNewLocalCall(newLocalCall, cb) {
+            if (!newLocalCall) {
+                return;
+            }
+            LogSvc.debug('[CircuitCallControlSvc]: New call has been terminated during call setup. Call Id:', newLocalCall.callId);
+            if (newLocalCall.callState !== Enums.CallState.Terminated) {
+                terminateCall(newLocalCall, Enums.CallClientTerminatedReason.USER_ENDED);
+            }
+            cb && cb('Call already terminated');
+        }
 
-            if (!conversation) {
-                LogSvc.warn('[CircuitCallControlSvc]: joinSession invoked without a valid conversation');
-                cb('Missing conversation');
-                return;
-            }
-            if (!canInitiateCall(conversation, options.replaces, cb)) {
-                return;
-            }
-            if (conversation.isTelephonyConv) {
-                if (!options.handover) {
-                    options.dialedDn = options.dialedDn ? options.dialedDn.trim() : null;
-                    if (!options.dialedDn) {
-                        cb('Missing Dialed DN');
-                        return;
+        function createLocalCall(conversation, mediaType, options, cb) {
+            if (canInitiateCall(conversation, options, cb)) {
+                if (_primaryLocalCall) {
+                    _secondaryLocalCall = _primaryLocalCall;
+                }
+                var newCallOptions = {clientId: _clientApiHandler.clientId};
+                if (options.replaces && mediaType.desktop) {
+                    // This call should reuse the desktop stream from the call it's replacing (option used by VDI)
+                    newCallOptions.reuseDesktopStreamFrom = options.replaces.sessionCtrl;
+                }
+                _primaryLocalCall = new LocalCall(conversation, newCallOptions);
+                _primaryLocalCall.setState(Enums.CallState.Initiated);
+                addCallToList(_primaryLocalCall);
+
+                var call = conversation.call;
+
+                if (call && call.isRemote && !call.isAtcRemote) {
+                    LogSvc.debug('[CircuitCallControlSvc]: Terminate the remote call and add the new local call to the conversation');
+                    if (options.handover) {
+                        _primaryLocalCall.activeClient = call.activeClient; // Indicates pull in progress
+                        if (call.isTelephonyCall) {
+                            _primaryLocalCall.atcCallInfo = call.atcCallInfo;
+                            setCallPeerUser(_primaryLocalCall, call.peerUser.phoneNumber, null, call.peerUser.displayName);
+                            _primaryLocalCall.participants = call.participants;
+                        }
+                        conversation.call = _primaryLocalCall;
+                    }
+                    _primaryLocalCall.hadRemoteCall = true;
+                    if (!call.isTelephonyCall) {
+                        terminateCall(call);
                     }
                 }
-                if (!$rootScope.localUser.callerId) {
-                    cb('Missing Caller ID');
-                    return;
+
+                _primaryLocalCall.setCallIdForTelephony(options.callId);
+                _primaryLocalCall.setTransactionId();
+
+                if (($rootScope.isSessionGuest || $rootScope.localUser.isCMP || conversation.isTemporary) && !conversation.testCall) {
+                    // For session guests and Meeting Rooms, we don't have the actual number of participants
+                    // in the conversation so allocate the max number of extra channels in order to avoid
+                    // too many media renegotiations.
+                    _primaryLocalCall.sessionCtrl.useMaxNumberOfExtraVideoChannels();
                 }
+                if (_disableRemoteVideoByDefault || conversation.isTelephonyConv) {
+                    LogSvc.info('[CircuitCallControlSvc] Disabling remote video for outgoing call');
+                    _primaryLocalCall.disableRemoteVideo();
+                }
+                _primaryLocalCall.direction = Enums.CallDirection.OUTGOING;
+                _primaryLocalCall.mediaType = mediaType;
+                if (options.replaces) {
+                    _primaryLocalCall.replaces = options.replaces;
+                    var oldStream = options.replaces.sessionCtrl.getLocalStream(RtcSessionController.LOCAL_STREAMS.DESKTOP);
+                    if (oldStream) {
+                        LogSvc.debug('[CircuitCallControlSvc] Reusing desktop stream from call ID=', options.replaces.callId);
+                        _primaryLocalCall.sessionCtrl.setLocalStream(RtcSessionController.LOCAL_STREAMS.DESKTOP, oldStream);
+                        // Set old desktop stream to null so it won't be stopped by the old RtcSessionController
+                        options.replaces.sessionCtrl.setLocalStream(RtcSessionController.LOCAL_STREAMS.DESKTOP, null);
+                    }
+                    oldStream = options.replaces.sessionCtrl.getLocalStream(RtcSessionController.LOCAL_STREAMS.AUDIO_VIDEO);
+                    if (oldStream) {
+                        LogSvc.debug('[CircuitCallControlSvc] Reusing audio/video stream from call ID=', options.replaces.callId);
+                        _primaryLocalCall.sessionCtrl.setLocalStream(RtcSessionController.LOCAL_STREAMS.AUDIO_VIDEO, oldStream);
+                        // Set old audio/video stream to null so it won't be stopped by the old RtcSessionController
+                        options.replaces.sessionCtrl.setLocalStream(RtcSessionController.LOCAL_STREAMS.AUDIO_VIDEO, null);
+                    }
+                }
+                if (options.joiningGroupCall) {
+                    _primaryLocalCall.isJoiningGroupCall = true;
+                }
+
+                if (options.callOut) {
+                    // For call out scenarios, add all the conversation participants
+                    // to the call object...
+                    _primaryLocalCall.setPeerUsersAsParticipants();
+                    // ... and save this flag in the call obj
+                    _primaryLocalCall.isCallOut = true;
+                }
+
+                if (_primaryLocalCall.isTelephonyCall) {
+                    if (!options.handover) {
+                        setCallPeerUser(_primaryLocalCall, options.dialedDn, null, options.toName, options.userId);
+                        // Store the DTMF digits on call object
+                        if (options.dtmfDigits) {
+                            _primaryLocalCall.dtmfDigits = options.dtmfDigits;
+                        }
+                    } else {
+                        var activeRemoteCall = getActiveRemoteCall(_primaryLocalCall.callId);
+                        if (activeRemoteCall && !activeRemoteCall.isAtcConferenceCall()) {
+                            _primaryLocalCall.atcCallInfo = activeRemoteCall.atcCallInfo;
+                            setCallPeerUser(_primaryLocalCall, activeRemoteCall.peerUser.phoneNumber, null, activeRemoteCall.peerUser.displayName);
+                            terminateCall(activeRemoteCall);
+                        }
+                        _primaryLocalCall.handover = true;
+                    }
+                }
+
+                publishCallState(_primaryLocalCall);
+
+                if ((!conversation.call || !(conversation.call.isRemote && options.handover)) && !_primaryLocalCall.conferenceCall) {
+                    LogSvc.debug('[CircuitCallControlSvc]: Publish /call/outgoing event');
+                    PubSubSvc.publish('/call/outgoing', [_primaryLocalCall]);
+                }
+
+                _primaryLocalCall.isNewSession = !conversation.call || conversation.call !== _primaryLocalCall && !options.handover;
+                conversation.call = _primaryLocalCall;
+                publishConversationUpdate(conversation);
+                return true;
             }
+        }
+
+        function joinSession(conversation, mediaType, options, cb) {
+            if (!_primaryLocalCall) {
+                cb(getJoinErrorText());
+                LogSvc.error('[CircuitCallControlSvc]: joinSession failed because there\'s no local call');
+                return;
+            }
+            cb = cb || function () {};
 
             LogSvc.debug('[CircuitCallControlSvc]: joinSession - rtcSessionId=', options.callId || conversation.rtcSessionId);
 
-            var newCallOptions;
-            if (options.replaces && mediaType.desktop) {
-                // This call should reuse the desktop stream from the call it's replacing (option used by VDI)
-                newCallOptions = {
-                    reuseDesktopStreamFrom: options.replaces.sessionCtrl
-                };
-            }
-            var newLocalCall = new LocalCall(conversation, newCallOptions);
-            if (_primaryLocalCall) {
-                // All pre-requisites were already checked by canInitiateCall(), so here we can move the primary call to secondary
-                _secondaryLocalCall = _primaryLocalCall;
-            }
-            _primaryLocalCall = newLocalCall;
-            _primaryLocalCall.setCallIdForTelephony(options.callId);
-            _primaryLocalCall.setTransactionId();
-
-            var call = conversation.call;
-            var hadRemoteCall = false;
-            if (call && call.isRemote && !call.isAtcRemote) {
-                LogSvc.debug('[CircuitCallControlSvc]: Terminate the remote call and add the new local call to the conversation');
-                if (options.handover) {
-                    _primaryLocalCall.activeClient = call.activeClient; // Indicates pull in progress
-                    if (call.isTelephonyCall) {
-                        _primaryLocalCall.atcCallInfo = call.atcCallInfo;
-                        setCallPeerUser(_primaryLocalCall, call.peerUser.phoneNumber, null, call.peerUser.displayName);
-                        _primaryLocalCall.participants = call.participants;
-                    }
-                    addCallToList(_primaryLocalCall);
-                    conversation.call = _primaryLocalCall;
-
-                    publishConversationUpdate(conversation);
-                }
-                hadRemoteCall = true;
-                if (!call.isTelephonyCall) {
-                    terminateCall(call);
-                }
-            }
-
-            if (($rootScope.isSessionGuest || $rootScope.localUser.isCMP || conversation.isTemporary) && !conversation.testCall) {
-                // For session guests and Meeting Rooms, we don't have the actual number of participants
-                // in the conversation so allocate the max number of extra channels in order to avoid
-                // too many media renegotiations.
-                _primaryLocalCall.sessionCtrl.useMaxNumberOfExtraVideoChannels();
-            }
-            if (_disableRemoteVideoByDefault || conversation.isTelephonyConv) {
-                LogSvc.info('[CircuitCallControlSvc] Disabling remote video for outgoing call');
-                _primaryLocalCall.disableRemoteVideo();
-            }
-            _primaryLocalCall.setState(Enums.CallState.Initiated);
-            _primaryLocalCall.direction = Enums.CallDirection.OUTGOING;
-            _primaryLocalCall.mediaType = mediaType;
-            if (options.replaces) {
-                _primaryLocalCall.replaces = options.replaces;
-                var oldStream = options.replaces.sessionCtrl.getLocalStream(RtcSessionController.LOCAL_STREAMS.DESKTOP);
-                if (oldStream) {
-                    LogSvc.debug('[CircuitCallControlSvc] Reusing desktop stream from call ID=', options.replaces.callId);
-                    _primaryLocalCall.sessionCtrl.setLocalStream(RtcSessionController.LOCAL_STREAMS.DESKTOP, oldStream);
-                    // Set old desktop stream to null so it won't be stopped by the old RtcSessionController
-                    options.replaces.sessionCtrl.setLocalStream(RtcSessionController.LOCAL_STREAMS.DESKTOP, null);
-                }
-            }
-            if (options.joiningGroupCall) {
-                _primaryLocalCall.isJoiningGroupCall = true;
-            }
-
-            if (options.callOut) {
-                // For call out scenarios, add all the conversation participants
-                // to the call object...
-                _primaryLocalCall.setPeerUsersAsParticipants();
-                // ... and save this flag in the call obj
-                _primaryLocalCall.isCallOut = true;
-            }
-
-            if (_primaryLocalCall.isTelephonyCall) {
-                if (!options.handover) {
-                    setCallPeerUser(_primaryLocalCall, options.dialedDn, null, options.toName, options.userId);
-                } else {
-                    var activeRemoteCall = getActiveRemoteCall(_primaryLocalCall.callId);
-                    if (activeRemoteCall && !activeRemoteCall.isAtcConferenceCall()) {
-                        _primaryLocalCall.atcCallInfo = activeRemoteCall.atcCallInfo;
-                        setCallPeerUser(_primaryLocalCall, activeRemoteCall.peerUser.phoneNumber, null, activeRemoteCall.peerUser.displayName);
-                        terminateCall(activeRemoteCall);
-                    }
-                    _primaryLocalCall.handover = true;
-                }
-            }
-
+            var newLocalCall = _primaryLocalCall;
             var sessionCtrl = _primaryLocalCall.sessionCtrl;
 
             var onSdpOffer = function (evt) {
                 sessionCtrl.onSessionDescription = null;
                 sessionCtrl.onClosed = null;
+
+                if (_primaryLocalCall !== newLocalCall) {
+                    terminateNewLocalCall(newLocalCall, cb);
+                    return;
+                }
 
                 // Let's update the local call's mediaType in case we were not
                 // able to access all required media streams.
@@ -30077,6 +31312,10 @@ var Circuit = (function (circuit) {
                     joinData.noCallLog = $rootScope.localUser.noCallLog;
                 }
 
+                if (conversation.isTemporary && conversation.guestToken) {
+                    joinData.guestToken = conversation.guestToken;
+                }
+
                 // For testing incoming telephony calls from vgtc user: Send fromDn and fromName if localUser has role: VIRTUAL_TELEPHONY_CONNECTOR
                 if ($rootScope.localUser.hasTelephonyRole) {
                     joinData.fromName = 'Gru';
@@ -30092,10 +31331,14 @@ var Circuit = (function (circuit) {
                     $rootScope.$apply(function () {
                         DeviceDiagnosticSvc.finishActionInfo(_primaryLocalCall, joinInfo);
 
+                        if (_primaryLocalCall !== newLocalCall) {
+                            terminateNewLocalCall(newLocalCall, cb);
+                            return;
+                        }
                         if (err) {
                             var replaces = _primaryLocalCall.replaces;
                             var reason = getClientTerminatedReason(err);
-                            if (hadRemoteCall) {
+                            if (_primaryLocalCall.hadRemoteCall) {
                                 // This method will re-create the remote call
                                 _that.endCallWithCauseCode(_primaryLocalCall.callId, reason);
                             } else {
@@ -30107,13 +31350,10 @@ var Circuit = (function (circuit) {
                             cb(getJoinErrorText(err));
                         } else {
                             LogSvc.debug('[CircuitCallControlSvc]: Join RTC session call was successful');
-                            if (_primaryLocalCall) {
-                                publishCallState(_primaryLocalCall);
 
-                                if (_primaryLocalCall.conferenceCall) {
-                                    LogSvc.debug('[CircuitCallControlSvc]: Publish /conference/participant/joining event');
-                                    PubSubSvc.publish('/conference/participant/joining', [_primaryLocalCall]);
-                                }
+                            if (_primaryLocalCall.conferenceCall) {
+                                LogSvc.debug('[CircuitCallControlSvc]: Publish /conference/participant/joining event');
+                                PubSubSvc.publish('/conference/participant/joining', [_primaryLocalCall]);
                             }
                             cb(null, options.warning, _primaryLocalCall);
                         }
@@ -30122,13 +31362,12 @@ var Circuit = (function (circuit) {
             };
 
             var errorCb = function (err) {
-                var reason = getClientTerminatedReason(err);
-                LogSvc.warn('[CircuitCallControlSvc]: Failed to initiate call. ', err);
-
                 if (_primaryLocalCall === newLocalCall) {
+                    var reason = getClientTerminatedReason(err);
+                    LogSvc.warn('[CircuitCallControlSvc]: Failed to initiate call. ', err);
                     if (!options.handover) {
                         _primaryLocalCall.setDisconnectCause(Constants.DisconnectCause.CALL_SETUP_FAILED, err);
-                        if (hadRemoteCall) {
+                        if (_primaryLocalCall.hadRemoteCall) {
                             // This method will re-create the remote call
                             _that.endCallWithCauseCode(_primaryLocalCall.callId, reason);
                         } else {
@@ -30141,6 +31380,9 @@ var Circuit = (function (circuit) {
                     } else {
                         terminateCall(_primaryLocalCall, reason);
                     }
+                } else {
+                    terminateNewLocalCall(newLocalCall, cb);
+                    return;
                 }
                 cb(getJoinErrorText(err));
             };
@@ -30152,7 +31394,7 @@ var Circuit = (function (circuit) {
             };
 
             var turnPromise;
-            if (!conversation.call || conversation.call !== _primaryLocalCall && !options.handover) {
+            if (_primaryLocalCall.isNewSession) {
                 // Session initiating side
                 turnPromise = prepareSession(conversation, _primaryLocalCall, options);
             } else {
@@ -30166,27 +31408,13 @@ var Circuit = (function (circuit) {
                 }
 
                 sessionCtrl.warmup(mediaType, null, function () {
-                    if (!_primaryLocalCall) {
-                        LogSvc.debug('[CircuitCallControlSvc]: Call has already been terminated');
+                    if (_primaryLocalCall !== newLocalCall) {
+                        terminateNewLocalCall(newLocalCall, cb);
                         return;
                     }
 
                     $rootScope.$apply(function () {
                         LogSvc.debug('[CircuitCallControlSvc]: The connection warmup was successful. Start the call.');
-
-                        if (!conversation.call || !(conversation.call.isRemote && options.handover)) {
-                            addCallToList(_primaryLocalCall);
-                            conversation.call = _primaryLocalCall;
-                            publishConversationUpdate(conversation);
-
-                            if (!_primaryLocalCall.conferenceCall) {
-                                LogSvc.debug('[CircuitCallControlSvc]: Publish /call/outgoing event');
-                                PubSubSvc.publish('/call/outgoing', [_primaryLocalCall]);
-                            }
-
-                            publishCallState(_primaryLocalCall);
-                        }
-
                         sessionCtrl.onSessionDescription = onSdpOffer;
                         sessionCtrl.onClosed = onClosed;
                         registerSessionController(_primaryLocalCall);
@@ -30270,6 +31498,7 @@ var Circuit = (function (circuit) {
                         }
                     });
                 } else {
+                    call.lastMediaType = call.mediaType;
                     sessionCtrl.changeMediaType(mediaType, changeDesktopMedia, function (err) {
                         if (!err) {
                             if (screenShareWasActive && !call.localMediaType.desktop) {
@@ -30297,7 +31526,8 @@ var Circuit = (function (circuit) {
         }
 
         function joinSessionCalled(conversation, mediaType, options, cb) {
-            var sessionCtrl = _primaryLocalCall.sessionCtrl;
+            var call = _primaryLocalCall;
+            var sessionCtrl = call.sessionCtrl;
             options = options || {};
 
             var onSdp = function (evt) {
@@ -30305,7 +31535,7 @@ var Circuit = (function (circuit) {
 
                 var data = {
                     convId: conversation.convId,
-                    rtcSessionId: _primaryLocalCall.callId || conversation.rtcSessionId,
+                    rtcSessionId: call.callId || conversation.rtcSessionId,
                     ownerId: conversation.creatorId,
                     sdp: evt.sdp,
                     mediaType: mediaType,
@@ -30314,14 +31544,14 @@ var Circuit = (function (circuit) {
                     sendInviteCancel: true,
                     isTelephonyConversation: conversation.isTelephonyConv,
                     displayName: $rootScope.localUser.displayName,
-                    transactionId: _primaryLocalCall.transactionId
+                    transactionId: call.transactionId
                 };
 
                 function joinAnswerCb(err) {
                     $rootScope.$apply(function () {
-                        _primaryLocalCall.clearTransactionId();
+                        call.clearTransactionId();
                         if (err) {
-                            terminateCall(_primaryLocalCall, getClientTerminatedReason(err));
+                            terminateCall(call, getClientTerminatedReason(err));
                             cb(getJoinErrorText(err));
                         } else {
                             LogSvc.debug('[CircuitCallControlSvc]: Join/Answer RTC session was successful.');
@@ -30333,7 +31563,7 @@ var Circuit = (function (circuit) {
                 if (data.sdp && data.sdp.type === 'offer') {
                     _clientApiHandler.joinRtcCall(data, joinAnswerCb);
                 } else {
-                    DeviceDiagnosticSvc.startJoinDelayTimer(_primaryLocalCall);
+                    DeviceDiagnosticSvc.startJoinDelayTimer(call);
 
                     _clientApiHandler.answerRtcCall(data, joinAnswerCb);
                 }
@@ -30341,16 +31571,16 @@ var Circuit = (function (circuit) {
 
             sessionCtrl.onSessionDescription = onSdp;
             if (!sessionCtrl.start(mediaType, null)) {
-                terminateCall(_primaryLocalCall, Enums.CallClientTerminatedReason.RTC_SESSION_START_FAILED);
+                terminateCall(call, Enums.CallClientTerminatedReason.RTC_SESSION_START_FAILED);
                 cb(getJoinErrorText());
             }
         }
 
-        function addRemoteCall(conversation, activeClient, session, preprocessor) {
+        function addRemoteCall(conversation, activeClient, session, sessionId, preprocessor) {
             if (!conversation) {
                 return null;
             }
-            if (conversation.isTemporary && !activeClient) {
+            if (conversation.isTemporary && !activeClient && (!conversation.guestToken || !$rootScope.circuitLabs.CIRCUIT_GUEST)) {
                 LogSvc.debug('[CircuitCallControlSvc]: Publish /conversation/temporary/ended event');
                 PubSubSvc.publish('/conversation/temporary/ended', [conversation]);
                 return null;
@@ -30362,6 +31592,9 @@ var Circuit = (function (circuit) {
             // Ensure remoteCalls get the instanceId to store join failures in state disconnected
             if (session && session.instanceId) {
                 remoteCall.setInstanceId(session.instanceId);
+            }
+            if (sessionId) {
+                remoteCall.setCallIdForTelephony(sessionId);
             }
 
             addCallToList(remoteCall);
@@ -30419,7 +31652,7 @@ var Circuit = (function (circuit) {
         }
 
         function publishAtcCall(conversation, inviteEvt, first) {
-            var call = new LocalCall(conversation, inviteEvt.sessionId);
+            var call = new LocalCall(conversation, {clientId: _clientApiHandler.clientId});
             call.setInstanceId(inviteEvt.instanceId);
             call.setTransactionId(inviteEvt.transactionId);
             call.setState(Enums.CallState.Ringing);
@@ -30502,7 +31735,7 @@ var Circuit = (function (circuit) {
             if (localCall.activeClient) {
                 // Call terminated while pull in progress, create an active remote call so user can pull again
                 conversation = getConversation(localCall.convId);
-                addRemoteCall(conversation, localCall.activeClient, null, function (call) {
+                addRemoteCall(conversation, localCall.activeClient, null, null, function (call) {
                     if (_primaryLocalCall.isTelephonyCall) {
                         call.atcCallInfo = _primaryLocalCall.atcCallInfo;
                         call.peerUser = _primaryLocalCall.peerUser;
@@ -30522,11 +31755,12 @@ var Circuit = (function (circuit) {
                     });
                 });
             } else {
-                if (localCall.participants.length) {
-                    // Always create the remote call to show that the session is still active for group sessions
-                    // (except for temporary conversations / guest invitation / calls without participants)
+                if (!localCall.isTestCall) {
                     conversation = getConversation(localCall.convId);
-                    addRemoteCall(conversation);
+                    if (conversation && (localCall.participants.length || conversation.isTemporary)) {
+                        // Create the remote call to show that the session is still active for group sessions and guest conferences.
+                        addRemoteCall(conversation);
+                    }
                 }
                 _clientApiHandler.leaveRtcCall(localCall.callId, localCall.disconnectCause, function (err) {
                     $rootScope.$apply(function () {
@@ -30739,7 +31973,7 @@ var Circuit = (function (circuit) {
                     if (p.streamId === participant.streamId && p.userId !== participant.userId) {
                         p.streamId = '';
                         LogSvc.debug('[CircuitCallControlSvc]: The video stream has been re-assigned. Clear the streamId for previous participant. [userId, streamId] = ', [p.userId, participant.streamId]);
-                        _primaryLocalCall.setParticipantRemoteVideoURL(p);
+                        _primaryLocalCall.setParticipantRemoteVideoStream(p);
                         LogSvc.debug('[CircuitCallControlSvc]: Publish /call/participant/updated event. userId =', p.userId);
                         PubSubSvc.publish('/call/participant/updated', [call.callId, p]);
                     }
@@ -30932,6 +32166,56 @@ var Circuit = (function (circuit) {
             });
         }
 
+        function testCandidatesCollection(turnCredentials) {
+            return new $q(function (resolve, reject) {
+                var sessionCtrl = new RtcSessionController({disableTrickleIce: true, isDirectCall: true, candidatesCollectionTest: true});
+
+                var terminate = function () {
+                    LogSvc.debug('[CircuitCallControlSvc]: Terminate ICE candidates collection test');
+                    sessionCtrl.onSessionDescription = null;
+                    sessionCtrl.onRtcError = null;
+                    sessionCtrl.terminate();
+                };
+
+                if (turnCredentials) {
+                    sessionCtrl.setTurnUris(turnCredentials.turnServer);
+                    sessionCtrl.setTurnCredentials(turnCredentials);
+                }
+                sessionCtrl.disableRemoteVideo();
+                sessionCtrl.onSessionDescription = function (event) {
+                    var candidates = Circuit.sdpParser.getIceCandidates(event.sdp.sdp);
+                    LogSvc.debug('[CircuitCallControlSvc]: testIceCandidates - candidates: ', candidates);
+                    terminate();
+                    resolve({
+                        turnServers: (turnCredentials && turnCredentials.turnServer) || [],
+                        candidates: candidates
+                    });
+                };
+                sessionCtrl.onRtcError = function (event) {
+                    LogSvc.error('[CircuitCallControlSvc]: Error collecting candidates. ', event.error);
+                    terminate();
+                    reject(event.error);
+                };
+
+                LogSvc.debug('[CircuitCallControlSvc]: testIceCandidates - Start collection');
+                sessionCtrl.start({audio: false});
+            });
+        }
+
+        function terminateReplacedCall(localCall) {
+            if (!localCall || !localCall.replaces) {
+                return;
+            }
+            var replaceCall = findCall(localCall.replaces.callId);
+            if (replaceCall) {
+                leaveCall(replaceCall, null, Enums.CallClientTerminatedReason.CALL_MOVED_TO_ANOTHER_CONV);
+            }
+            // Inform the UI that call has been moved
+            LogSvc.debug('[CircuitCallControlSvc]: Publish /call/moved event');
+            PubSubSvc.publish('/call/moved', [localCall.replaces.callId, localCall.callId]);
+            localCall.replaces = null;
+        }
+
         /////////////////////////////////////////////////////////////////////////////
         // RtcSessionController event handlers
         /////////////////////////////////////////////////////////////////////////////
@@ -31030,6 +32314,7 @@ var Circuit = (function (circuit) {
                 }
                 publishCallState(call);
                 DeviceDiagnosticSvc.finishDeviceDiagnostics(call);
+                DeviceDiagnosticSvc.sendCallConnected(call);
             });
         }
 
@@ -31043,7 +32328,6 @@ var Circuit = (function (circuit) {
                 publishIceConnectionState(call, 'connected');
             }
         }
-
 
         function onIceDisconnected(call, event) {
             LogSvc.debug('[CircuitCallControlSvc]: RtcSessionController - onIceDisconnected. pcType:', event.pcType);
@@ -31182,6 +32466,11 @@ var Circuit = (function (circuit) {
             }
         }
 
+        function onGetUserMediaException(call, event) {
+            LogSvc.debug('[CircuitCallControlSvc]: RtcSessionController - onGetUserMediaException. Publish /call/getUserMediaException event');
+            PubSubSvc.publish('/call/getUserMediaException', [call, event.info]);
+        }
+
         function onActiveSpeakerEvent(evt) {
             try {
                 LogSvc.debug('[CircuitCallControlSvc]: Received RTCSession.ACTIVE_SPEAKER');
@@ -31242,7 +32531,7 @@ var Circuit = (function (circuit) {
                 $rootScope.$apply(function () {
                     participant.streamId = evt.videoStreamId;
                     verifyStreamIds(localCall, participant);
-                    localCall.setParticipantRemoteVideoURL(participant);
+                    localCall.setParticipantRemoteVideoStream(participant);
                     localCall.checkForActiveRemoteVideo();
 
                     LogSvc.debug('[CircuitCallControlSvc]: Publish /call/participant/updated event. userId =', participant.userId);
@@ -31317,8 +32606,7 @@ var Circuit = (function (circuit) {
             }
 
             // If remote call is active on another client
-            addRemoteCall(conversation, activeClient, session, function (call) {
-                call.setCallIdForTelephony(session.rtcSessionId);
+            addRemoteCall(conversation, activeClient, session, session.rtcSessionId, function (call) {
                 if (activeClient) {
                     setPeerUserForTelephonyCall(call, session);
                 }
@@ -31338,7 +32626,7 @@ var Circuit = (function (circuit) {
             }
         }
 
-        function findLocalCall(session) {
+        function hasLocalCall(session) {
             var foundLocalCall = false;
             var localCall = findLocalCallByCallId(session.rtcSessionId);
             if (localCall && session.participants) {
@@ -31379,7 +32667,7 @@ var Circuit = (function (circuit) {
                         activeSessions.forEach(function (s) {
                             var localCall = findLocalCallByCallId(s.rtcSessionId);
                             if (localCall) {
-                                if (findLocalCall(s)) {
+                                if (hasLocalCall(s)) {
                                     foundLocalPrimaryCall = foundLocalPrimaryCall || localCall === _primaryLocalCall;
                                     foundLocalSecondaryCall = foundLocalSecondaryCall || localCall === _secondaryLocalCall;
                                     LogSvc.info('[CircuitCallControlSvc]: Found localCall in active sessions. Trigger media renegotiation.');
@@ -31435,7 +32723,7 @@ var Circuit = (function (circuit) {
                                             if (convIDs.indexOf(s.convId) === -1) {
                                                 return;
                                             }
-                                            if (!findLocalCall(s)) {
+                                            if (!hasLocalCall(s)) {
                                                 processInitActiveSession(s);
                                             }
                                         });
@@ -31462,7 +32750,7 @@ var Circuit = (function (circuit) {
             if (call.isRemote) {
                 oldCall = new RemoteCall(oldConversation);
             } else {
-                oldCall = new LocalCall(oldConversation);
+                oldCall = new LocalCall(oldConversation, {clientId: call.clientId});
             }
             oldConversation.call = oldCall;
 
@@ -31507,7 +32795,7 @@ var Circuit = (function (circuit) {
         function presentIncomingCall(conversation, userId) {
             LogSvc.debug('[CircuitCallControlSvc]: Publish /call/incoming event');
             PubSubSvc.publish('/call/incoming', [conversation.call]);
-            if (!conversation.muted && NotificationSvc) {
+            if (NotificationSvc) {
                 var notificationType = conversation.call.isGuestInvite ? Enums.NotificationType.INCOMING_INVITATION_AS_GUEST :
                     (conversation.call.mediaType.video ? Enums.NotificationType.INCOMING_VIDEO_CALL : Enums.NotificationType.INCOMING_VOICE_CALL);
                 var notification = {
@@ -31633,7 +32921,8 @@ var Circuit = (function (circuit) {
             }
 
             var options = {
-                isAtcPullCall: conversation.isTelephonyConv && autoAnswer && evt.sdp.type === 'offer'
+                isAtcPullCall: conversation.isTelephonyConv && autoAnswer && evt.sdp.type === 'offer',
+                clientId: _clientApiHandler.clientId
             };
             if (replaces && replaces.localMediaType.desktop) {
                 // This call should reuse the desktop stream from the call it's replacing (option used by VDI)
@@ -31736,7 +33025,13 @@ var Circuit = (function (circuit) {
 
                     if (autoAnswer) {
                         if (incomingCall.isTelephonyCall && evt.from) {
-                            setCallPeerUser(incomingCall, evt.from.phoneNumber, evt.from.fullyQualifiedNumber, evt.from.displayName);
+                            setCallPeerUser(incomingCall, evt.from.phoneNumber, evt.from.fullyQualifiedNumber, evt.from.displayName, null, function () {
+                                if (evt.telephonyInfo && evt.telephonyInfo.redirectingUser) {
+                                    var redirectingUser = evt.telephonyInfo.redirectingUser;
+                                    setRedirectingUser(incomingCall, redirectingUser.phoneNumber, redirectingUser.fullyQualifiedNumber,
+                                        redirectingUser.displayName, RedirectionTypes.CallForward);
+                                }
+                            });
                         }
                         _that.answerCall(incomingCall.callId, mediaType);
                         return;
@@ -31753,6 +33048,11 @@ var Circuit = (function (circuit) {
                         setCallPeerUser(incomingCall, evt.from.phoneNumber, evt.from.fullyQualifiedNumber, evt.from.displayName, null, function () {
                             if (conversation.call === incomingCall) {
                                 presentIncomingCall(conversation, evt.userId);
+                            }
+                            if (evt.telephonyInfo && evt.telephonyInfo.redirectingUser) {
+                                var redirectingUser = evt.telephonyInfo.redirectingUser;
+                                setRedirectingUser(incomingCall, redirectingUser.phoneNumber, redirectingUser.fullyQualifiedNumber,
+                                    redirectingUser.displayName, RedirectionTypes.CallForward);
                             }
                         });
                         return;
@@ -31866,7 +33166,7 @@ var Circuit = (function (circuit) {
                         return true;
                     }
 
-                    addRemoteCall(conversation, activeClient, s, function (call) {
+                    addRemoteCall(conversation, activeClient, s, null, function (call) {
                         if (activeClient) {
                             setPeerUserForTelephonyCall(call, s);
                         } else if (call.conferenceCall) {
@@ -32016,7 +33316,7 @@ var Circuit = (function (circuit) {
                     type: Enums.NotificationType.HIGH_PRIORITY,
                     user: $rootScope.localUser,
                     extras: {
-                        title: $rootScope.i18n.map.res_ScreenShareRemotelyDisabledTitle,
+                        title: $rootScope.i18n.map.res_ScreenShareNotificationTitle,
                         text: participantName ? $rootScope.i18n.localize('res_ScreenShareRemotelyDisabledByUser', [participantName]) :
                             $rootScope.i18n.map.res_ScreenShareRemotelyDisabled
                     }
@@ -32123,7 +33423,7 @@ var Circuit = (function (circuit) {
             PubSubSvc.publish('/call/localUser/muted', [call.callId, call.remotelyMuted, call.locallyMuted]);
         }
 
-        function canInitiateCall(conversation, isReplacingAnotherCall, cb) {
+        function canInitiateCall(conversation, options, cb) {
             cb = cb || function () {};
             if (_incomingCalls.length >= 1) {
                 cb('res_CannotJoinMultipleSessions');
@@ -32141,7 +33441,7 @@ var Circuit = (function (circuit) {
                         cb('res_CannotInitiateThirdPhoneCall');
                         return false;
                     }
-                } else if (!isReplacingAnotherCall) {
+                } else if (!options.replaces) {
                     cb('res_CannotJoinMultipleSessions');
                     return false;
                 }
@@ -32154,11 +33454,28 @@ var Circuit = (function (circuit) {
                     return false;
                 }
             }
+
+            if (conversation.isTelephonyConv) {
+                if (!options.handover) {
+                    options.dialedDn = options.dialedDn ? options.dialedDn.trim() : null;
+                    if (!options.dialedDn) {
+                        cb('Missing Dialed DN');
+                        return false;
+                    }
+                }
+                if (!$rootScope.localUser.callerId) {
+                    cb('Missing Caller ID');
+                    return false;
+                }
+            }
             return true;
         }
 
-        function onGetUserMediaException(call, event) {
-            PubSubSvc.publish('/call/getUserMediaException', [call, event.info]);
+        function createCallOptions(options) {
+            options = options || {};
+            options.callOut = !!options.callOut;
+            options.handover = !!options.handover;
+            return options;
         }
 
         ///////////////////////////////////////////////////////////////////////////////////////
@@ -32200,13 +33517,16 @@ var Circuit = (function (circuit) {
 
                 LogSvc.debug('[CircuitCallControlSvc]: Move Session');
                 if (oldConversation.type === Constants.ConversationType.DIRECT && newConversation.type === Constants.ConversationType.GROUP) {
-                    joinSession(newConversation, oldConversation.call.localMediaType, {callOut: true, handover: false, replaces: oldConversation.call}, function (err) {
-                        if (!err) {
-                            if (oldConversation.call.sessionCtrl && oldConversation.call.sessionCtrl.isMuted()) {
-                                newConversation.call.sessionCtrl && newConversation.call.sessionCtrl.mute();
+                    var options = createCallOptions({callOut: true, handover: false, replaces: oldConversation.call});
+                    if (createLocalCall(newConversation, oldConversation.call.localMediaType, options)) {
+                        joinSession(newConversation, oldConversation.call.localMediaType, options, function (err) {
+                            if (!err) {
+                                if (oldConversation.call.sessionCtrl && oldConversation.call.sessionCtrl.isMuted()) {
+                                    newConversation.call.sessionCtrl && newConversation.call.sessionCtrl.mute();
+                                }
                             }
-                        }
-                    });
+                        });
+                    }
                 } else {
                     var data = {
                         sessionId: oldConversation.rtcSessionId,
@@ -32419,6 +33739,8 @@ var Circuit = (function (circuit) {
                             localCall.setMockedCall();
                         }
 
+                        terminateReplacedCall(localCall);
+
                         localCall.setInstanceId(evt.instanceId);
                         // We also need to call setRemoteDescription for mock scenarios in order
                         // to clear the media renegotiation flags.
@@ -32518,8 +33840,7 @@ var Circuit = (function (circuit) {
                                 return;
                             }
 
-                            addRemoteCall(conversation, activeClient, evt.session, function (call) {
-                                call.setCallIdForTelephony(evt.sessionId);
+                            addRemoteCall(conversation, activeClient, evt.session, evt.sessionId, function (call) {
                                 setPeerUserForTelephonyCall(call, evt.session);
                             });
                             return;
@@ -32543,8 +33864,7 @@ var Circuit = (function (circuit) {
                             var atcCallInfo = localCall.atcCallInfo;
                             terminateCall(localCall, Enums.CallClientTerminatedReason.ANOTHER_CLIENT_PULLED_CALL);
 
-                            addRemoteCall(conversation, activeClient, evt.session, function (call) {
-                                call.setCallIdForTelephony(evt.sessionId);
+                            addRemoteCall(conversation, activeClient, evt.session, evt.sessionId, function (call) {
                                 call.atcCallInfo = atcCallInfo;
                                 if (call.isTelephonyCall) {
                                     setCallPeerUser(call, phoneNumber, null, displayName);
@@ -32633,16 +33953,7 @@ var Circuit = (function (circuit) {
                         localCall.mediaType = mediaType;
                         localCall.activeClient = null;
 
-                        if (localCall.replaces) {
-                            var replaceCall = findCall(localCall.replaces.callId);
-                            if (replaceCall) {
-                                leaveCall(replaceCall, null, Enums.CallClientTerminatedReason.CALL_MOVED_TO_ANOTHER_CONV);
-                            }
-                            // Inform the UI that call has been moved
-                            LogSvc.debug('[CircuitCallControlSvc]: Publish /call/moved event');
-                            PubSubSvc.publish('/call/moved', [localCall.replaces.callId, localCall.callId]);
-                            localCall.replaces = null;
-                        }
+                        terminateReplacedCall(localCall);
 
                         if (!localCall.isAtcConferenceCall()) {
                             sessionParticipants.forEach(function (p) {
@@ -32658,14 +33969,14 @@ var Circuit = (function (circuit) {
                                     Utils.removeArrayElement(removedParticipantIds, p.userId);
 
                                     var oldPcState = callParticipant.pcState;
-                                    var oldVideoUrl = callParticipant.videoUrl;
+                                    var oldVideoStream = callParticipant.videoStream;
 
                                     if (callParticipant.streamId !== normalizedParticipant.streamId || !callParticipant.hasSameMediaType(normalizedParticipant)) {
                                         mediaParticipantUpdate = true;
                                     }
 
                                     var updatedParticipant = updateParticipantInCallObj(localCall, normalizedParticipant, pState);
-                                    if (updatedParticipant && (mediaParticipantUpdate || updatedParticipant.pcState !== oldPcState || updatedParticipant.videoUrl !== oldVideoUrl)) {
+                                    if (updatedParticipant && (mediaParticipantUpdate || updatedParticipant.pcState !== oldPcState || updatedParticipant.videoStream !== oldVideoStream)) {
                                         updatedParticipants.push(updatedParticipant);
                                     }
                                 } else {
@@ -32803,8 +34114,7 @@ var Circuit = (function (circuit) {
                         evt.session.participants.some(function (p) {
                             if (p.userId === $rootScope.localUser.userId && p.clientId !== _clientApiHandler.clientId) {
                                 // This an outgoing call on remote device
-                                addRemoteCall(conversation, p, evt.rtcSession, function (call) {
-                                    call.setCallIdForTelephony(evt.sessionId);
+                                addRemoteCall(conversation, p, evt.rtcSession, evt.sessionId, function (call) {
                                     call.pullNotAllowed = true;
                                 });
                                 return true;
@@ -32816,9 +34126,7 @@ var Circuit = (function (circuit) {
                         var activeClient = evt.session.participants.find(function (p) {
                             return p.userId === $rootScope.localUser.userId && p.clientId !== _clientApiHandler.clientId;
                         });
-                        addRemoteCall(conversation, activeClient, evt.rtcSession, function (call) {
-                            call.setCallIdForTelephony(evt.sessionId);
-
+                        addRemoteCall(conversation, activeClient, evt.rtcSession, evt.sessionId, function (call) {
                             if (!activeClient) {
                                 LogSvc.debug('[CircuitCallControlSvc]: Publish /conference/started event');
                                 PubSubSvc.publish('/conference/started', [call]);
@@ -32885,16 +34193,7 @@ var Circuit = (function (circuit) {
                             localCall.setState(Enums.CallState.Active);
                         }
                         localCall.activeClient = null;
-                        if (localCall.replaces) {
-                            var replaceCall = findCall(localCall.replaces.callId);
-                            if (replaceCall) {
-                                leaveCall(replaceCall, null, Enums.CallClientTerminatedReason.CALL_MOVED_TO_ANOTHER_CONV);
-                            }
-                            // Inform the UI that call has been moved
-                            LogSvc.debug('[CircuitCallControlSvc]: Publish /call/moved event');
-                            PubSubSvc.publish('/call/moved', [localCall.replaces.callId, localCall.callId]);
-                            localCall.replaces = null;
-                        }
+                        terminateReplacedCall(localCall);
                     }
 
                     var normalizedParticipant = normalizeApiParticipant(evt.participant);
@@ -32994,28 +34293,6 @@ var Circuit = (function (circuit) {
             }
         });
 
-        _clientApiHandler.on('RTCSession.WHITEBOARD_ENABLED', function (evt) {
-            var call = findCall(evt.sessionId);
-            if (call) {
-                $rootScope.$apply(function () {
-                    call.whiteboardEnabled = true;
-                    PubSubSvc.publish('/call/whiteboard/enabled', [call, evt.whiteboard]);
-                    LogSvc.debug('[CircuitCallControlSvc]: Publish /call/whiteboard/enabled event');
-                });
-            }
-        });
-
-        _clientApiHandler.on('RTCSession.WHITEBOARD_DISABLED', function (evt) {
-            var call = findCall(evt.sessionId);
-            if (call) {
-                $rootScope.$apply(function () {
-                    call.whiteboardEnabled = false;
-                    PubSubSvc.publish('/call/whiteboard/disabled', [call]);
-                    LogSvc.debug('[CircuitCallControlSvc]: Publish /call/whiteboard/disabled event');
-                });
-            }
-        });
-
         _clientApiHandler.on('RTCCall.INVITE', function (evt) {
             if (!_conversationLoaded) {
                 LogSvc.info('[CircuitCallControlSvc]: Conversations are not loaded. Do not process the INVITE event.');
@@ -33084,7 +34361,8 @@ var Circuit = (function (circuit) {
                         });
                     }
                     return;
-                } else if (isGuestInvite) {
+                } else if (isGuestInvite && !conversation.isTemporary) {
+                    // This is a conversation that the user used to be a participant and the conversation is cached
                     conversation = ConversationSvc.createConversationAsGuest(conversation);
                 }
 
@@ -33334,8 +34612,7 @@ var Circuit = (function (circuit) {
                     if (!alertingCall.isDirect || evt.cause === Constants.InviteCancelCause.ACCEPT) {
                         var conversation = getConversation(alertingCall.convId);
                         var activeClient = evt.cause === Constants.InviteCancelCause.ACCEPT ? {clientId: evt.clientID} : null;
-                        addRemoteCall(conversation, activeClient, null, function (call) {
-                            call.setCallIdForTelephony(evt.sessionId);
+                        addRemoteCall(conversation, activeClient, null, evt.sessionId, function (call) {
                             if (activeClient && call.isTelephonyCall) {
                                 setCallPeerUser(call, alertingCall.peerUser.phoneNumber, null, alertingCall.peerUser.displayName);
                             }
@@ -33541,6 +34818,7 @@ var Circuit = (function (circuit) {
                                     }
                                 });
                             } else {
+                                localCall.lastMediaType = localCall.mediaType;
                                 sessionCtrl.onSessionDescription = onSdp;
                                 sessionCtrl.setRemoteDescription(evt.sdp, function (err) {
                                     if (err) {
@@ -33606,9 +34884,27 @@ var Circuit = (function (circuit) {
 
         _clientApiHandler.on('RTCCall.RTC_QUALITY_RATING_EVENT', function (evt) {
             LogSvc.debug('[CircuitCallControlSvc]: Received RTCCall.RTC_QUALITY_RATING_EVENT');
+            if (_primaryLocalCall || _secondaryLocalCall) {
+                LogSvc.info('[CircuitCallControlSvc]: Ignore call quality rating during call.');
+                return;
+            }
             $rootScope.$apply(function () {
                 LogSvc.debug('[CircuitCallControlSvc]: Publish /call/showRatingDialog event');
                 PubSubSvc.publish('/call/showRatingDialog', [evt]);
+            });
+        });
+
+        _clientApiHandler.on('RTCCall.IFRAME_STATISTICS', function (evt) {
+            LogSvc.debug('[CircuitCallControlSvc]: Received RTCCall.IFRAME_STATISTICS');
+            $rootScope.$apply(function () {
+                NotificationSvc && NotificationSvc.show({
+                    type: Enums.NotificationType.HIGH_PRIORITY,
+                    user: $rootScope.localUser,
+                    extras: {
+                        title: $rootScope.i18n.map.res_ScreenShareNotificationTitle,
+                        text: $rootScope.i18n.localize('res_ScreenShareIFrameDelay', [Math.round(evt.receiveDuration / 1000)])
+                    }
+                });
             });
         });
 
@@ -33762,7 +35058,8 @@ var Circuit = (function (circuit) {
                 return;
             }
 
-            if (evt.to && localCall.isTelephonyCall) {
+            if (evt.to && localCall.isTelephonyCall && !$rootScope.localUser.isATC) {
+                // For ATC users the display will be updated by the CSTA Delivered event
                 setCallPeerUser(localCall, evt.to.phoneNumber, evt.to.fullyQualifiedNumber, evt.to.displayName, evt.to.userId);
             }
 
@@ -33922,7 +35219,7 @@ var Circuit = (function (circuit) {
         /**
          * Get the active local WebRTC call.
          *
-         * @param {String} callId The ID of existing group call or conference
+         * @param {String} callId The ID of existing call or conference
          * @returns {LocalCall} The LocalCall object.
          */
         this.getActiveCall = function (callId) {
@@ -33933,6 +35230,18 @@ var Circuit = (function (circuit) {
                 return _primaryLocalCall.replaces;
             }
             return _primaryLocalCall || null;
+        };
+
+        /**
+         * Checks if there is an active local WebRTC call being established or
+         * in the middle of a media renegotiation.
+         *
+         * @param {String} callId The ID of existing call or conference
+         * @returns {Booleam} True if there is a connection in progress.
+         */
+        this.isConnectionInProgress = function (callId) {
+            var activeCall = _that.getActiveCall(callId);
+            return !!activeCall && !activeCall.sessionCtrl.isConnStable();
         };
 
         /**
@@ -33980,12 +35289,14 @@ var Circuit = (function (circuit) {
                 cb('Invalid conversation');
                 return;
             }
-            var options = {
+            var options = createCallOptions({
                 callOut: false,
                 handover: false,
                 joiningGroupCall: true
-            };
-            checkMediaSourcesAndJoin(conversation, mediaType, options, cb);
+            });
+            if (createLocalCall(conversation, mediaType, options, cb)) {
+                checkMediaSourcesAndJoin(conversation, mediaType, options, cb);
+            }
         };
 
         /**
@@ -34008,7 +35319,10 @@ var Circuit = (function (circuit) {
                 cb('Conversation not found');
                 return;
             }
-            checkMediaSourcesAndJoin(conversation, mediaType, {callOut: true, handover: false}, cb);
+            var callOptions = createCallOptions({callOut: true, handover: false});
+            if (createLocalCall(conversation, mediaType, callOptions, cb)) {
+                checkMediaSourcesAndJoin(conversation, mediaType, callOptions, cb);
+            }
         };
 
         /**
@@ -34037,7 +35351,10 @@ var Circuit = (function (circuit) {
 
             // Wait a little before initiating the test call
             $timeout(function () {
-                joinSession(conversation, mediaType, {callOut: false, handover: false}, onCallStarted);
+                var options = createCallOptions({callOut: false, handover: false});
+                if (createLocalCall(conversation, mediaType, options, onCallStarted)) {
+                    joinSession(conversation, mediaType, options, onCallStarted);
+                }
             }, 200);
         };
 
@@ -34055,7 +35372,10 @@ var Circuit = (function (circuit) {
                 if (err || !conversation) {
                     cb(err);
                 } else {
-                    checkMediaSourcesAndJoin(conversation, mediaType, {callOut: true, handover: false, dialedDn: dialedDn, toName: toName}, cb);
+                    var callOptions = createCallOptions({callOut: true, handover: false, dialedDn: dialedDn, toName: toName});
+                    if (createLocalCall(conversation, mediaType, callOptions, cb)) {
+                        checkMediaSourcesAndJoin(conversation, mediaType, callOptions, cb);
+                    }
                 }
             });
         };
@@ -34077,7 +35397,15 @@ var Circuit = (function (circuit) {
                 if (err || !conversation) {
                     cb(err);
                 } else {
-                    if (!canInitiateCall(conversation, false, cb)) {
+                    var options = createCallOptions({
+                        callOut: true,
+                        handover: false,
+                        dialedDn: destination.dialedDn,
+                        toName: destination.toName,
+                        userId: destination.userId,
+                        dtmfDigits: destination.dtmfDigits
+                    });
+                    if (!canInitiateCall(conversation, options, cb)) {
                         return;
                     }
                     if (_primaryLocalCall && _primaryLocalCall.isTelephonyCall && !_primaryLocalCall.isHolding()) {
@@ -34085,24 +35413,16 @@ var Circuit = (function (circuit) {
                             if (err) {
                                 cb && cb(err);
                             } else {
-                                checkMediaSourcesAndJoin(conversation, destination.mediaType, {
-                                    callOut: true,
-                                    handover: false,
-                                    dialedDn: destination.dialedDn,
-                                    toName: destination.toName,
-                                    userId: destination.userId
-                                }, cb);
+                                if (createLocalCall(conversation, destination.mediaType, options, cb)) {
+                                    checkMediaSourcesAndJoin(conversation, destination.mediaType, options, cb);
+                                }
                             }
                         });
                         return;
                     }
-                    checkMediaSourcesAndJoin(conversation, destination.mediaType, {
-                        callOut: true,
-                        handover: false,
-                        dialedDn: destination.dialedDn,
-                        toName: destination.toName,
-                        userId: destination.userId
-                    }, cb);
+                    if (createLocalCall(conversation, destination.mediaType, options, cb)) {
+                        checkMediaSourcesAndJoin(conversation, destination.mediaType, options, cb);
+                    }
                 }
             });
         };
@@ -34133,7 +35453,10 @@ var Circuit = (function (circuit) {
                 cb('Invalid conversation type');
                 return;
             }
-            checkMediaSourcesAndJoin(conversation, mediaType, {callOut: false, handover: false}, cb);
+            var callOptions = createCallOptions({callOut: false, handover: false});
+            if (createLocalCall(conversation, mediaType, callOptions, cb)) {
+                checkMediaSourcesAndJoin(conversation, mediaType, callOptions, cb);
+            }
         };
 
         /**
@@ -34331,19 +35654,20 @@ var Circuit = (function (circuit) {
             // We will re-evaluate this later, once we start supporting adding/removing
             // different media types during the call.
             var mediaType = {audio: true, video: false, desktop: true};
-            var options = {
+            var options = createCallOptions({
                 callOut: true,
                 handover: false,
                 screenConstraint: screenConstraint
-            };
-
-            joinSession(conversation, mediaType, options, function (err) {
-                if (!err) {
-                    LogSvc.debug('[CircuitCallControlSvc]: Publish /screenshare/started event');
-                    PubSubSvc.publish('/screenshare/started');
-                }
-                cb(err);
             });
+            if (createLocalCall(conversation, mediaType, options, cb)) {
+                joinSession(conversation, mediaType, options, function (err) {
+                    if (!err) {
+                        LogSvc.debug('[CircuitCallControlSvc]: Publish /screenshare/started event');
+                        PubSubSvc.publish('/screenshare/started');
+                    }
+                    cb(err);
+                });
+            }
         };
 
         /**
@@ -35000,7 +36324,10 @@ var Circuit = (function (circuit) {
                     mediaType.video = false;
                 }
 
-                checkMediaSourcesAndJoin(conversation, mediaType, {callOut: false, handover: true, callId: callId}, cb);
+                var options = createCallOptions({callOut: false, handover: true, callId: callId});
+                if (createLocalCall(conversation, mediaType, options, cb)) {
+                    checkMediaSourcesAndJoin(conversation, mediaType, options, cb);
+                }
             }
 
             if (_primaryLocalCall && _primaryLocalCall.isTelephonyCall) {
@@ -35473,6 +36800,11 @@ var Circuit = (function (circuit) {
             _clientApiHandler.submitCallQualityRating([ratingData], function (err) {
                 $rootScope.$apply(function () {
                     cb && cb(err);
+
+                    if (!err) {
+                        LogSvc.debug('[CircuitCallControlSvc]: Publish /call/rated event');
+                        PubSubSvc.publish('/call/rated');
+                    }
                 });
             });
         };
@@ -35549,6 +36881,13 @@ var Circuit = (function (circuit) {
                 questionNumber: questionNumber,
                 isAccepted: !!accepted
             };
+            if (accepted && _turnCredentials) {
+                // If a guest of a cascaded event enters the stage for the first time
+                // he will be transferred from the slave mediaserver to the master mediaserver.
+                // Therefore we must renew the turn credentials in order to use the optimal turn server.
+                LogSvc.debug('[CircuitCallControlSvc]: inviteToStageAnswer - force renewal of turn credentials');
+                _turnCredentials.expirationTimestamp = 0;
+            }
             _clientApiHandler.inviteToStageAnswer(data, function (err) {
                 $rootScope.$apply(function () {
                     if (!err && accepted) {
@@ -35838,6 +37177,8 @@ var Circuit = (function (circuit) {
          */
         this.findCall = findCall;
 
+        this.findLocalCallByCallId = findLocalCallByCallId;
+
         this.findActivePhoneCall = findActivePhoneCall;
 
         this.findHeldPhoneCall = findHeldPhoneCall;
@@ -35917,6 +37258,11 @@ var Circuit = (function (circuit) {
                         // Add Session Guest
                         participant.participantType = Constants.RTCParticipantType.SESSION_GUEST;
                         participant.userDisplayName = [Math.floor(idx / 10), (idx % 10)].join(' ');
+
+                        if (!(idx % 9)) {
+                            // Add video
+                            participant.mediaTypes.push(Constants.RealtimeMediaType.VIDEO);
+                        }
                     }
                     return participant;
                 }
@@ -35971,6 +37317,103 @@ var Circuit = (function (circuit) {
             }
             var conversation = ConversationSvc.getConversationFromCache(localCall.convId);
             return !!conversation && conversation.userIsModerator($rootScope.localUser);
+        };
+
+        this.addConferenceAsGuest = function (convId) {
+            var conversation = getConversation(convId);
+            if (!conversation || !conversation.isTemporary || !conversation.guestToken) {
+                LogSvc.warn('[CircuitCallControlSvc]: addConferenceAsGuest - No temporary conversation or guest token is missing');
+                return;
+            }
+            LogSvc.debug('[CircuitCallControlSvc]: Create placeholder remote call for temporary guest conversation with convId = ', conversation.convId);
+
+            var remoteCall = new RemoteCall(conversation);
+            remoteCall.setState(Enums.CallState.NotStarted);
+            remoteCall.guestToken = conversation.guestToken;
+            addCallToList(remoteCall);
+
+            conversation.call = remoteCall;
+            publishConversationUpdate(conversation);
+            publishCallState(remoteCall);
+        };
+
+        this.removeConferenceAsGuest = function (callId) {
+            var call = findCall(callId);
+            if (!call) {
+                LogSvc.warn('[CircuitCallControlSvc]: removeConferenceAsGuest - Could not find call');
+                return false;
+            }
+
+            if (!call.isRemote) {
+                LogSvc.warn('[CircuitCallControlSvc]: removeConferenceAsGuest - Cannot remove temporary conversation with active call');
+                return false;
+            }
+
+            var conversation = getConversation(call.convId);
+            if (!conversation || !conversation.isTemporary) {
+                LogSvc.warn('[CircuitCallControlSvc]: removeConferenceAsGuest - No temporary conversation');
+                return false;
+            }
+
+            terminateCall(call);
+
+            LogSvc.debug('[CircuitCallControlSvc]: Publish /conversation/temporary/ended event');
+            PubSubSvc.publish('/conversation/temporary/ended', [conversation]);
+        };
+
+        /**
+         * Test ICE candidates collection
+         * @returns {Promise} Returns an object containing the assigned TURN servers and the gathered ICE candidates.
+         */
+        this.testCandidatesCollection = function (useTurn) {
+            if (!useTurn) {
+                LogSvc.debug('[CircuitCallControlSvc]: Test ICE candidates collection without TURN...');
+                return testCandidatesCollection();
+            }
+
+            LogSvc.debug('[CircuitCallControlSvc]: Test ICE candidates collection with TURN...');
+            return new $q(function (resolve, reject) {
+                var rtcSessionId = 'echo_' + $rootScope.localUser.clientId;
+
+                // If the guest is registered for test call, use conversationId, otherwise use clientId
+                var prepareSessionData = {
+                    convId: ($rootScope.isSessionGuest && $rootScope.localUser.conversationId) || rtcSessionId,
+                    rtcSessionId: rtcSessionId,
+                    ownerId: $rootScope.localUser.userId,
+                    isTelephonyConversation: false,
+                    mediaNode: RtcSessionController.mediaNode
+                };
+
+                LogSvc.debug('[CircuitCallControlSvc]: testIceCandidates - Get TURN servers');
+                _clientApiHandler.prepareSession(prepareSessionData, function (err, servers) {
+                    if (err) {
+                        LogSvc.error('[CircuitCallControlSvc]: Failed to prepare session data. ', err);
+                        reject(err);
+                        return;
+                    }
+                    if (!servers || !servers.length) {
+                        _clientApiHandler.terminateRtcCall(rtcSessionId, Constants.DisconnectCause.HANGUP);
+                        LogSvc.error('[CircuitCallControlSvc]: Failed to prepare session data. No TURN servers.');
+                        reject('No TURN servers');
+                        return;
+                    }
+
+                    var turnCredentials = servers[0];
+                    LogSvc.debug('[CircuitCallControlSvc]: testIceCandidates - TURN servers: ', turnCredentials.turnServer);
+
+                    testCandidatesCollection(turnCredentials)
+                    .then(function (data) {
+                        _clientApiHandler.terminateRtcCall(rtcSessionId, Constants.DisconnectCause.HANGUP, function () {
+                            resolve(data);
+                        });
+                    })
+                    .catch(function (err) {
+                        _clientApiHandler.terminateRtcCall(rtcSessionId, Constants.DisconnectCause.HANGUP, function () {
+                            reject(err);
+                        });
+                    });
+                });
+            });
         };
 
         ///////////////////////////////////////////////////////////////////////////////////////
@@ -36040,7 +37483,6 @@ var Circuit = (function (circuit) {
         var CALLBACK_NONRELATED_TIMEOUT = 5000; // 5s - Timer to keep displaying call after busy when CCNR
         var REVERSE_LOOKUP_MAX_TIME = 2000; // 2s - Max time to wait for user search by phone number
         var MAX_ENDED_CALL_WAIT_TIME = 2000; // 2s - Max time to wait for a local ended call
-
         var VALID_LOCAL_STATES = ['connected', 'hold', 'queued'];
         var VALID_PARTNER_STATES = ['connected', 'hold'];
 
@@ -36051,6 +37493,9 @@ var Circuit = (function (circuit) {
 
         var FORWARD_EXPR = /Forward/;
 
+        var MAX_NUMBER_OF_LOOPS = 3;
+        var LOOP_DETECTION_WAIT_TIME = 60000; // Wait for 1 min before trying to set the timers again after loop detection
+        var LOOP_DETECTION_INTERVAL = 2000; // 2s interval in which two subsequent Forwarding events indicate that there may be a loop
 
         ///////////////////////////////////////////////////////////////////////////
         // Local variables
@@ -36118,6 +37563,11 @@ var Circuit = (function (circuit) {
         var _savedCellRingDuration = null;
 
         var _receivedActiveSessions = false;
+
+        var _lastSetForwardingTimestamp = 0;
+        var _loopCounter = 0;
+        var _loopDetectionTimer = null;
+        var _pendingFwdRequest = null;
 
         ///////////////////////////////////////////////////////////////////////////
         // Internal functions
@@ -36501,9 +37951,13 @@ var Circuit = (function (circuit) {
                     }
                     var position = getCallPosition(ep.deviceOnCall, snapshotCallResp.epid);
 
-                    if (position === Targets.WebRTC && _webrtcRemoteCall) {
-                        newCall = _webrtcRemoteCall;
-                        position = Targets.Other;
+                    if (position === Targets.WebRTC && (_activeCall || _webrtcRemoteCall)) {
+                        if (_activeCall) {
+                            newCall = _activeCall;
+                        } else {
+                            newCall = _webrtcRemoteCall;
+                            position = Targets.Other;
+                        }
                     } else {
                         newCall = createAtcRemoteCall(callId);
                     }
@@ -36549,7 +38003,8 @@ var Circuit = (function (circuit) {
                 newCall.setCstaState(callState);
                 _atcRemoteCalls[callId] = newCall;
 
-                if (newCall.atcCallInfo.getPosition() === Targets.WebRTC) {
+                if (newCall.atcCallInfo.getPosition() === Targets.WebRTC && _that.isPrimaryClient()) {
+                    // Only the primary client should attempt to handle a hanging call
                     handleHangingCall(newCall);
                     return;
                 }
@@ -36680,7 +38135,11 @@ var Circuit = (function (circuit) {
             var unassociatedCalls = [];
             for (var idx = 0; idx < calls.length; idx++) {
                 if (!calls[idx].atcCallInfo || !calls[idx].atcCallInfo.getCstaCallId()) {
+                    var redirectingUser = calls[idx].getRedirectingUser();
                     calls[idx].atcCallInfo = new AtcCallInfo();
+                    if (redirectingUser) {
+                        calls[idx].atcCallInfo.redirectingUser = redirectingUser;
+                    }
                     unassociatedCalls.push(calls[idx]);
                 } else if (calls[idx].atcCallInfo.getCstaCallId() === callId) {
                     _activeCall = calls[idx];
@@ -37408,7 +38867,7 @@ var Circuit = (function (circuit) {
                         if (call.pickupNotification) {
                             return;
                         }
-                        if ((event.cause === 'redirected' || event.cause === 'distributed') && event.lastRedirectionDevice && !isMyDeviceId(event.lastRedirectionDevice)) {
+                        if ((event.cause === 'redirected') && event.lastRedirectionDevice && !isMyDeviceId(event.lastRedirectionDevice)) {
                             var lastRedirectionDeviceDisplay = getDisplayInfo(event.lastRedirectionDevice);
                             setRedirectingUser(call, lastRedirectionDeviceDisplay.dn, lastRedirectionDeviceDisplay.fqn, lastRedirectionDeviceDisplay.name, RedirectionTypes.CallForward);
                             _atcRemoteCalls[event.connection.cID] = call;
@@ -37457,6 +38916,8 @@ var Circuit = (function (circuit) {
             if (_movingCall && _movingCall.newCallId === callId) {
                 call.direction = _movingCall.direction;
                 setRedirectingUser(call, _movingCall.redirectingUser.phoneNumber, _movingCall.redirectingUser.fqNumber, _movingCall.redirectingUser.displayName, _movingCall.redirectingUser.redirectionType);
+                call.atcCallInfo.transferCb = _movingCall.transferCb;
+                delete _movingCall.transferCb;
                 _movingCall = {};
             }
         }
@@ -37580,6 +39041,10 @@ var Circuit = (function (circuit) {
             call.atcCallInfo.setServicesPermitted(event.servicesPermitted);
             call.atcCallInfo.setCstaConnection(localConnection);
             call.direction = direction;
+            if (call.atcCallInfo.transferCb) {
+                call.atcCallInfo.transferCb && call.atcCallInfo.transferCb(null, null, call);
+                delete call.atcCallInfo.transferCb;
+            }
             call.clearAtcHandoverInProgress();
             call.receivedAlerting = true;
 
@@ -38185,6 +39650,38 @@ var Circuit = (function (circuit) {
             PubSubSvc.publish('/csta/deviceChange');
         }
 
+        function checkSetForwardingLoop(cb) {
+            if (_loopDetectionTimer) {
+                LogSvc.warn('[CstaSvc]: Queue new forwarding request until loop detected timer expires');
+                _pendingFwdRequest = cb;
+                return;
+            }
+
+            if ((Date.now() - _lastSetForwardingTimestamp) < LOOP_DETECTION_INTERVAL) {
+                // Increase the loop counter if the last SetForwarding was sent less than 2s from the previous
+                _loopCounter++;
+            } else {
+                _loopCounter = 0;
+            }
+            _lastSetForwardingTimestamp = Date.now();
+
+            LogSvc.debug('[CstaSvc]: Forward loop counter: ' + _loopCounter + ' timestamp: ' + _lastSetForwardingTimestamp);
+            if (_loopCounter > MAX_NUMBER_OF_LOOPS) {
+                // If the loop counter exceeds the maximum number of loops then a loop is detected
+                LogSvc.error('[CstaSvc]: Loop detected while trying to update forwarding data.');
+                _pendingFwdRequest = cb;
+                _loopDetectionTimer = $timeout(function () {
+                    LogSvc.debug('[CstaSvc]: Loop detection timeout has expired. Process queued request.');
+                    _loopCounter = 0;
+                    _loopDetectionTimer = null;
+                    _pendingFwdRequest && _pendingFwdRequest();
+                    _pendingFwdRequest = null;
+                }, LOOP_DETECTION_WAIT_TIME, false);
+            } else {
+                cb && cb();
+            }
+        }
+
         function handleForwardingEvent(data) {
             if (!data) {
                 return;
@@ -38335,7 +39832,7 @@ var Circuit = (function (circuit) {
                         if (target === Targets.WebRTC) {
                             call.atcCallInfo.setIgnoreCall(true);
                         }
-                        cb && cb(null);
+                        call.atcCallInfo.transferCb = cb;
                     }
                 });
             } else {
@@ -38367,14 +39864,15 @@ var Circuit = (function (circuit) {
                             primaryCallId: data.activeCall.cID,
                             newCallId: rs.transferredCall.cID,
                             direction: call.direction,
-                            redirectingUser: call.redirectingUser
+                            redirectingUser: call.redirectingUser,
+                            transferCb: cb
                         };
 
                         if ($rootScope.localUser.isOSV) {
                             LogSvc.debug('[CstaSvc]: Publish /csta/handover event');
                             PubSubSvc.publish('/csta/handover', call.atcCallInfo.getCstaCallId());
                         }
-                        cb && cb(null);
+                        call.atcCallInfo.transferCb = cb;
                     }
                 });
             }
@@ -38419,6 +39917,9 @@ var Circuit = (function (circuit) {
                 call.setCallIdForTelephony(connection.cID);
                 call.setCstaState(CstaCallState.Delivered);
                 call.atcCallInfo.setIgnoreCall(false);
+                if (destination.dtmfDigits) {
+                    call.dtmfDigits = destination.dtmfDigits;
+                }
                 delete _atcRemoteCalls[destination.dialedDn];
             }
             _atcRemoteCalls[connection.cID] = call;
@@ -38575,7 +40076,7 @@ var Circuit = (function (circuit) {
 
             _osmoData.forwardList = data.forwardList || [];
 
-            if (data.voicemailActive) {
+            if (data.hasOwnProperty('voicemailActive')) {
                 $rootScope.localUser.voicemailPBXEnabled = true;
                 $rootScope.localUser.voicemailActive = data.voicemailActive;
                 $rootScope.localUser.voicemailRingDuration = data.voicemailRingDuration;
@@ -38630,6 +40131,9 @@ var Circuit = (function (circuit) {
                     snapshotRemoteCallsAndGetFeatureData();
                 } else {
                     _snapshotPerformed = false;
+                }
+                if (newState !== AtcRegistrationState.Registered) {
+                    clearAtcRemoteCalls();
                 }
             }
         });
@@ -38999,8 +40503,8 @@ var Circuit = (function (circuit) {
                             } else {
                                 call.atcCallInfo.setMissedReason(MissedReasonTypes.CANCELLED);
                             }
+                            removeAtcRemoteCall(call.atcCallInfo.getCstaCallId());
                         }
-                        removeAtcRemoteCall(call.atcCallInfo.getCstaCallId());
                         cb && cb();
                     }
                 });
@@ -39185,6 +40689,7 @@ var Circuit = (function (circuit) {
             data.autoOriginate = (target === Targets.Desk || target === Targets.WebRTC) ? 'doNotPrompt' : 'prompt';
             createEarlyAtcRemoteCall(destination, target);
             var call = _atcRemoteCalls[destination.dialedDn];
+
             sendCstaRequest(data, function (err, rs) {
                 if (err || !rs) {
                     cb && cb('res_MakeCallFailed');
@@ -39558,14 +41063,15 @@ var Circuit = (function (circuit) {
                             voicemailActive: status !== $rootScope.localUser.voicemailActive ? status : undefined,
                             voicemailRingDuration: status ? duration : undefined
                         };
-
-                        sendCstaRequest(msg, function (err) {
-                            if (err) {
-                                cb && cb(err);
-                            } else {
-                                _savedVMRingDuration = duration;
-                                cb && cb(null);
-                            }
+                        checkSetForwardingLoop(function () {
+                            sendCstaRequest(msg, function (err) {
+                                if (err) {
+                                    cb && cb(err);
+                                } else {
+                                    _savedVMRingDuration = duration;
+                                    cb && cb(null);
+                                }
+                            });
                         });
                     } else {
                         cb && cb(null);
@@ -39590,16 +41096,17 @@ var Circuit = (function (circuit) {
                             cellRingDuration: timers.cellRingDuration || undefined,
                             routeToCell: true
                         };
-
-                        sendCstaRequest(msg, function (err) {
-                            if (err) {
-                                cb && cb(err);
-                            } else {
-                                _savedMainRingDuration = timers.mainRingDuration || _savedMainRingDuration;
-                                _savedClientRingDuration = timers.clientRingDuration || _savedClientRingDuration;
-                                _savedCellRingDuration = timers.cellRingDuration || _savedCellRingDuration;
-                                cb && cb(null);
-                            }
+                        checkSetForwardingLoop(function () {
+                            sendCstaRequest(msg, function (err) {
+                                if (err) {
+                                    cb && cb(err);
+                                } else {
+                                    _savedMainRingDuration = timers.mainRingDuration || _savedMainRingDuration;
+                                    _savedClientRingDuration = timers.clientRingDuration || _savedClientRingDuration;
+                                    _savedCellRingDuration = timers.cellRingDuration || _savedCellRingDuration;
+                                    cb && cb(null);
+                                }
+                            });
                         });
                     }
                 } else {
@@ -39638,9 +41145,14 @@ var Circuit = (function (circuit) {
      *
      * @class
      */
-    function CallControlSvcImpl($rootScope, $q, LogSvc, PubSubSvc, CircuitCallControlSvc, ConversationSvc, CstaSvc, MeetingPointSvc, NotificationSvc, UserSvc, UserProfileSvc) {
+    function CallControlSvcImpl($rootScope, $q, $timeout, LogSvc, PubSubSvc, CircuitCallControlSvc, ConversationSvc, CstaSvc, MeetingPointSvc, NotificationSvc, UserSvc, UserProfileSvc) {
 
         LogSvc.debug('New Service: CallControlSvc');
+
+        ///////////////////////////////////////////////////////////////////////////////////////
+        // Constants
+        ///////////////////////////////////////////////////////////////////////////////////////
+        var DTMF_PAUSE = 2000; // 2 seconds
 
         ///////////////////////////////////////////////////////////////////////////////////////
         // Internal Variables
@@ -39649,6 +41161,7 @@ var Circuit = (function (circuit) {
         var _that = this;
         var _userToUserHandler = UserToUserHandler.getInstance();
         var _defaultCallDevice;
+
         ///////////////////////////////////////////////////////////////////////////////////////
         // Internal Functions
         ///////////////////////////////////////////////////////////////////////////////////////
@@ -39661,6 +41174,29 @@ var Circuit = (function (circuit) {
                 }
             }
             _atcRemoteCalls.push(call);
+        }
+
+        function sendDtmf(call) {
+            var digits = call.dtmfDigits;
+            if (digits) {
+                delete call.dtmfDigits;
+
+                // Count number of commas before the string
+                var numCommas = digits.match(/^\,*/)[0].length;
+                var timerVal = numCommas * DTMF_PAUSE + 1000;
+                if (numCommas) {
+                    digits = digits.substr(numCommas);
+                }
+
+                call.sendDtmfTimer = $timeout(function () {
+                    call.sendDtmfTimer = null;
+                    // If call is still present, send the digits
+                    if (call.isPresent()) {
+                        LogSvc.debug('[CallControlSvc]: Send delayed DTMF digits ' + digits + ' for call ' + call.callId);
+                        _that.sendDigits(call.callId, digits);
+                    }
+                }, timerVal);
+            }
         }
 
         function removeAtcRemoteCallFromList(call) {
@@ -39836,8 +41372,8 @@ var Circuit = (function (circuit) {
             if (call.state !== CallState.Idle && call.state !== CallState.Terminated && call.state !== CallState.Started) {
                 publishConversationUpdate(conversation);
                 publishCallState(call);
-                // Set presence to busy if there is an active ATC remote call
-                if (call.state !== CallState.Ringing) {
+                // Set presence to busy if there is an active ATC remote call and the client is the primary
+                if (CstaSvc.isPrimaryClient() && call.state !== CallState.Ringing) {
                     UserProfileSvc.setPresenceWithLocation(Constants.PresenceState.BUSY);
                 }
             } else if (call.state === CallState.Idle || call.state === CallState.Terminated) {
@@ -39865,6 +41401,10 @@ var Circuit = (function (circuit) {
         function handleAtcCallReplace(call) {
             var oldCall = getAtcHandoverInProgressCall();
             if (oldCall) {
+                if (oldCall.atcCallInfo.transferCb) {
+                    oldCall.atcCallInfo.transferCb(null, null, call);
+                    delete oldCall.atcCallInfo.transferCb;
+                }
                 var conversation = ConversationSvc.getConversationFromCache(call.convId);
                 call.establishedTime = oldCall.establishedTime;
                 terminateCall(oldCall);
@@ -39951,6 +41491,12 @@ var Circuit = (function (circuit) {
 
         PubSubSvc.subscribe('/call/ended', function (call) {
             LogSvc.debug('[CallControlSvc]: Received /call/ended event');
+            // Cancel the DTMF timer if its running
+            if (call.sendDtmfTimer) {
+                $timeout.cancel(call.sendDtmfTimer);
+                call.sendDtmfTimer = null;
+            }
+            delete call.dtmfDigits;
 
             if (call.isAtcRemote) {
                 call.clearAtcHandoverInProgress();
@@ -39964,9 +41510,9 @@ var Circuit = (function (circuit) {
                     }
                 }
                 if (!call.isRemote && !CircuitCallControlSvc.getActiveCall()) {
-                    // Set the user state back to available if there are no remote ATC calls and
-                    // the user is not away.
-                    if (!findActiveAtcRemoteCall()) {
+                    // Set the user state back to available if there are no remote ATC calls or the client is not primary
+                    // and the user is not away.
+                    if (!CstaSvc.isPrimaryClient() || !findActiveAtcRemoteCall()) {
                         UserProfileSvc.setPresenceWithLocation(Constants.PresenceState.AVAILABLE);
                     }
                     // Cancel the auto snooze if applicable
@@ -39985,6 +41531,9 @@ var Circuit = (function (circuit) {
             if (call && call.state.established) {
                 if (!call.isRemote) {
                     UserProfileSvc.setPresenceWithLocation(Constants.PresenceState.BUSY);
+                }
+                if (call.dtmfDigits) {
+                    sendDtmf(call);
                 }
             }
         });
@@ -40086,6 +41635,15 @@ var Circuit = (function (circuit) {
         this.getActiveCall = CircuitCallControlSvc.getActiveCall;
 
         /**
+         * Checks if there is an active local WebRTC call being established or
+         * in the middle of a media renegotiation.
+         *
+         * @param {String} callId The ID of existing call or conference (optional)
+         * @returns {Booleam} True if there is a connection in progress.
+         */
+        this.isConnectionInProgress = CircuitCallControlSvc.isConnectionInProgress;
+
+        /**
          * Get the ringing incoming WebRTC call,
          * null will be returned if there is no incoming call.
          *
@@ -40133,6 +41691,10 @@ var Circuit = (function (circuit) {
                 destination = {
                     dialedDn: dialedDn
                 };
+            }
+
+            if (destination.dtmfDigits) {
+                destination.dtmfDigits = Utils.cleanPhoneNumberDigitsWithPin(destination.dtmfDigits);
             }
             var existingCallOnTarget = findAtcRemoteCallOnTarget(target);
             if (existingCallOnTarget) {
@@ -40195,7 +41757,6 @@ var Circuit = (function (circuit) {
                 cb('Missing or wrong number');
                 return;
             }
-
             LogSvc.debug('[CallControlSvc]: Calling ' + number + ' with name: ' + destination.toName);
             ConversationSvc.getTelephonyConversation(function (err, conversation) {
                 if (err || !conversation) {
@@ -41180,6 +42741,13 @@ var Circuit = (function (circuit) {
          * @param {Function} cb A callback function replying with a status
          */
         this.sendDigits = function (callId, digits, cb) {
+            cb = cb || function () {};
+
+            if (!digits) {
+                LogSvc.warn('[CallControlSvc]: sendDigits invoked without any digit');
+                cb('No digits');
+                return;
+            }
             var call = CircuitCallControlSvc.findCall(callId);
             if (call) {
                 if (call.sessionCtrl.canSendDTMFDigits()) {
@@ -41305,6 +42873,16 @@ var Circuit = (function (circuit) {
         this.addSimulatedParticipants = CircuitCallControlSvc.addSimulatedParticipants;
 
         this.canStartScreenShare = CircuitCallControlSvc.canStartScreenShare;
+
+        this.addConferenceAsGuest = CircuitCallControlSvc.addConferenceAsGuest;
+
+        this.removeConferenceAsGuest = CircuitCallControlSvc.removeConferenceAsGuest;
+
+        /**
+         * Test ICE candidates collection
+         * @returns {Promise} Returns an object containing the assigned TURN servers and the gathered ICE candidates.
+         */
+        this.testCandidatesCollection = CircuitCallControlSvc.testCandidatesCollection;
 
         ///////////////////////////////////////////////////////////////////////////////////////
         // Public Factory Interface for Angular
@@ -41569,6 +43147,7 @@ var Circuit = (function (circuit) {
         this.CallControlSvc = new circuit.CallControlSvcImpl(
             this.rootScope,
             Promise,                // $q
+            $timeout,
             logger,
             this.PubSubSvc,
             this.CircuitCallControlSvc,
@@ -42033,6 +43612,9 @@ var Circuit = (function (circuit) {
                 url: 'https://' + _self.domain + '/validateSession',
                 xhrFields: { withCredentials: true },
                 crossDomain: true
+            })
+            .then(function () {
+                // Necessary to avoid returning any parameters in the resolved Promise
             });
         }
 
@@ -42337,6 +43919,13 @@ var Circuit = (function (circuit) {
                 type: 'GET',
                 url: 'https://' + _self.domain + '/oauth/token/' + accessToken,
                 crossDomain: true
+            })
+            .then(function (res) {
+                try {
+                    return JSON.parse(res);
+                } catch (err) {
+                    return Promise.reject(new Circuit.Error(Constants.ReturnCode.SDK_ERROR, 'Invalid token returned'));
+                }
             });
         }
 
@@ -42564,8 +44153,9 @@ var Circuit = (function (circuit) {
                 storeToken();
 
                 _clientApiHandler.revokeAccessToken(token, function (err) {
-                    if (apiError(err, reject)) { return; }
-                    resolve();
+                    if (err === Constants.ReturnCode.DISCONNECTED || !apiError(err, reject)) {
+                        resolve();
+                    }
                 });
             });
         }
@@ -43642,6 +45232,33 @@ var Circuit = (function (circuit) {
             });
         }
 
+
+        function subscribeTenantPresence() {
+            return new Promise(function (resolve, reject) {
+                if (_config.client_secret) {
+                    reject(new Circuit.Error(Constants.ReturnCode.SDK_ERROR, 'API only allowed for bots'));
+                    return;
+                }
+                _clientApiHandler.subscribeTenantPresence(_self.loggedOnUser.tenantId, function (err) {
+                    if (apiError(err, reject)) { return; }
+                    resolve();
+                });
+            });
+        }
+
+        function unsubscribeTenantPresence() {
+            return new Promise(function (resolve, reject) {
+                if (_config.client_secret) {
+                    reject(new Circuit.Error(Constants.ReturnCode.SDK_ERROR, 'API only allowed for bots'));
+                    return;
+                }
+                _clientApiHandler.unsubscribeTenantPresence(_self.loggedOnUser.tenantId, function (err) {
+                    if (apiError(err, reject)) { return; }
+                    resolve();
+                });
+            });
+        }
+
         function renewSessionToken() {
             return new Promise(function (resolve, reject) {
                 _clientApiHandler.renewToken(_self.loggedOnUser.userId, function (err) {
@@ -43684,6 +45301,15 @@ var Circuit = (function (circuit) {
             });
         }
 
+        function cancelSearch(searchId) {
+            return new Promise(function (resolve, reject) {
+                _clientApiHandler.cancelSearch(searchId, function (err) {
+                    if (apiError(err, reject)) { return; }
+                    resolve();
+                });
+            });
+        }
+
         // Gets the user's device by the clientId. If none provided, first webclient is returned.
         function findWebClientByClientId(clientId) {
             return getDevices().then(function (devices) {
@@ -43708,12 +45334,28 @@ var Circuit = (function (circuit) {
 
         function sendClickToCallRequest(emailAddress, mediaType, destClientId, noLaunch) {
             return new Promise(function (resolve, reject) {
+                if (!emailAddress) {
+                    reject(new Circuit.Error(Constants.ReturnCode.MISSING_REQUIRED_PARAMETER, 'emailAddress is required'));
+                    return;
+                }
+
                 mediaType = mediaType || 'audio';
+
+                var match = emailAddress.match(Utils.PHONE_DIAL_PATTERN);
+                var number = match && match.length && match[0];
+                if (number) {
+                    emailAddress = null;
+                }
 
                 function launchWeb() {
                     // Start call by opening a new tab
                     var domain = _self.domain.startsWith('sdk.') ? _self.domain.substr(4) : _self.domain;
-                    var url = 'https://' + domain + '/#/call?user=' + emailAddress + '&media=' + mediaType;
+                    var url;
+                    if (number) {
+                        url = 'https://' + domain + '/#/phone?number=' + number;
+                    } else {
+                        url = 'https://' + domain + '/#/call?user=' + emailAddress + '&media=' + mediaType;
+                    }
                     var win = window.open(url, '_blank');
                     if (!win) {
                         reject(new Circuit.Error(Constants.ErrorCode.SDK_ERROR, 'Popup blocker prevented opening Circuit in new window'));
@@ -43728,9 +45370,10 @@ var Circuit = (function (circuit) {
                     var data = {
                         content: {
                             type: 'CLICK_TO_CALL_REQUEST',
-                            mediaType: mediaType,
+                            mediaType: number ? 'telephony' : mediaType,
                             contact: {
-                                email: emailAddress
+                                email: emailAddress,
+                                phoneNumber: number
                             },
                             promptBeforeDial: !clientId,
                             sdk: true
@@ -44923,13 +46566,16 @@ var Circuit = (function (circuit) {
             'isTestCall',
             'locallyMuted',
             'localMediaType',
+            'localVideoStream',
             'localVideoUrl',
             'mediaType',
             'participants',
             'remoteAudioDisabled',
+            'remoteAudioStream',
             'remoteAudioUrl',
             'remotelyMuted',
             'remoteVideoDisabled',
+            'remoteVideoStreams',
             'recording',
             'ringAllAllowed',
             'ringAllMaxNumber',
@@ -44980,6 +46626,10 @@ var Circuit = (function (circuit) {
             delete user.associatedGTCUserId;
             delete user.reroutingPhoneNumber;
             delete user.assignedPhoneNumbers;
+
+            if (user.accounts && user.accounts.length) {
+                user.tenantId = user.accounts[0].tenantId;
+            }
 
             // hasPermission is required in CircuitCallControlSvc
             // JSDoc in protoDoc.js
@@ -45694,6 +47344,32 @@ var Circuit = (function (circuit) {
         _self.unsubscribePresence = unsubscribePresence;
 
         /**
+         * Subscribe to presence notifications of all users in the tenant. `userPresenceChanged` event
+         * will only contain the new state and user ID. Other attributes such as location are not included
+         * when subscribing for the whle tenant.
+         * API only allowed for Client Credentials apps (bots).
+         * @method subscribeTenantPresence
+         * @returns {Promise} A promise without data
+         * @scope `READ_USER` or `FULL`
+         * @example
+         *     client.subscribeTenantPresence()
+         *       .then(() => console.log('Sucessfully subscribed'));
+         */
+        _self.subscribeTenantPresence = subscribeTenantPresence;
+
+        /**
+         * Unsubscribe to presence notifications of all users in the tenant.
+         * API only allowed for Client Credentials apps (bots).
+         * @method unsubscribeTenantPresence
+         * @returns {Promise} A promise without data
+         * @scope `READ_USER` or `FULL`
+         * @example
+         *     client.unsubscribePresence()
+         *       .then(() => console.log('Sucessfully unsubscribed'));
+         */
+        _self.unsubscribeTenantPresence = unsubscribeTenantPresence;
+
+        /**
          * Renew the session token of the current user. This is the authentication session, not the OAuth token.
          * @method renewSessionToken
          * @returns {Promise} A promise without data
@@ -46066,7 +47742,7 @@ var Circuit = (function (circuit) {
          * @method getConversationParticipants
          * @param {String} convId Conversation ID
          * @param {Object} [options] Object literal containing options
-         * @param {ParticipantSearchCriteria} [options.searchCriterias] A list of search criterias that are used to filter the participants. Criterias are using and AND operation.
+         * @param {ParticipantSearchCriteria[]} [options.searchCriterias] A list of search criterias that are used to filter the participants. Criterias are using and AND operation.
          * @param {String} [options.searchPointer] Used for paging of results. Each results page returns a searchPointer that is to be used to fetch the next page.
          * @param {Number} [options.pageSize] Number of participants per page. Maximum is 100.
          * @param {Boolean} [options.includePresence] If set to true this will add the presence state of the user to the returned participant object. Default is false.
@@ -46961,8 +48637,8 @@ var Circuit = (function (circuit) {
          *     // remoteAudio is the audio element
          *     client.addEventListener('callStatus', evt =>
          *        if (callId === evt.call.callId) {
-         *          if (remoteAudio.src !== evt.call.remoteAudioUrl) {
-         *            remoteAudio.src = evt.call.remoteAudioUrl;
+         *          if (remoteAudio.srcObject !== evt.call.remoteAudioStream) {
+         *            remoteAudio.srcObject = evt.call.remoteAudioStream;
          *          }
          *          if (evt.reason === 'remoteStreamUpdated') {
          *            evt.call.remoteAudioDisabled ? remoteAudio.pause() : remoteAudio.play();
@@ -47272,12 +48948,13 @@ var Circuit = (function (circuit) {
         _self.undoWhiteboard = undoWhiteboard;
 
         /**
-         * Start an asynchronous user search returning a search ID. Search results are received with searchResult events.
+         * Start an asynchronous user search returning a search ID. Search results are received with search result events.
          * Searches are done with beginning characters of first and lastname.
+         * Raises `basicSearchResults` and `searchStatus` events.
          * @method startUserSearch
          * @param {String|Object} searchTerm string, or object literal containing a `query` attribute as search string
          * @param {String} searchTerm.query The query string that is searched for.
-         * @param {Boolean} [searchTerm.reversePhoneNumberLookup] If true match term starting from the last digit of user's phone numbers. If false match search term anywhere in users phone numbers.
+         * @param {Boolean} [searchTerm.reversePhoneNumberLookup] If true match term from the last digits of user's phone numbers. If false match search term anywhere in users phone numbers.
          * @returns {Promise|String} A promise returning the search ID. Search ID is used to correlate the
          * asynchronous events.
          * @scope `READ_USER` or `FULL`
@@ -47288,7 +48965,7 @@ var Circuit = (function (circuit) {
         _self.startUserSearch = startUserSearch;
 
         /**
-         * Start an asynchronous basic search returning a search ID. Search results are received with searchResult events.
+         * Start an asynchronous basic search returning a search ID. Search results are received with search result events.
          * Raises `basicSearchResults` and `searchStatus` events.
          * @method startBasicSearch
          * @param {String|Array} searchTerm Array of searchTerm objects, or a string for a simple ALL scope search search.
@@ -47320,6 +48997,18 @@ var Circuit = (function (circuit) {
          *       .then(searchId => console.log('Search started with ID: ' + searchId));
          */
         _self.startBasicSearch = startBasicSearch;
+
+        /**
+         * Cancel a pending search. E.g. startBasicSearch, startUserSearch
+         * @method cancelSearch
+         * @param {String} searchId Search ID of the pending search
+         * @returns {Promise} A promise without data
+         * @scope `READ_USER` or `FULL`
+         * @example
+         *     client.cancelSearch('c4cbbf23-cdcd-4824-881d-fea0c77c8f50')
+         *       .then(() => console.log('Search cancelled');
+         */
+        _self.cancelSearch = cancelSearch;
 
         /**
          * Send an application specific message to another user. Use `addUserMessageListener` to
@@ -47555,6 +49244,11 @@ var Circuit = (function (circuit) {
         _clientApiHandler.on('User.USER_PRESENCE_CHANGE', function (evt) {
             addToEventQueue({type: 'userPresenceChanged', presenceState: evt.newState});
         });
+        _clientApiHandler.on('User.TENANT_PRESENCE_CHANGE', function (evt) {
+            evt.newState.forEach(function (state) {
+                addToEventQueue({type: 'userPresenceChanged', presenceState: state});
+            });
+        });
 
         /**
          * Fired when the local user is updated. E.g. I change the jobTitle
@@ -47726,24 +49420,32 @@ var Circuit = (function (circuit) {
          * @param {Whiteboard} [event.whiteboard] The whiteboard object (only when whiteboard becomes enabled)
          */
         _clientApiHandler.on('RTCSession.WHITEBOARD_ENABLED', function (evt) {
-            addToEventQueue({
-                type: 'whiteboardEnabled',
-                enabled: true,
-                whiteboard: evt.whiteboard,
-                data: { // deprecated
+            var call = findCall(evt.sessionId);
+            if (call) {
+                call.whiteboardEnabled = true;
+                addToEventQueue({
+                    type: 'whiteboardEnabled',
                     enabled: true,
-                    whiteboard: evt.whiteboard
-                }
-            });
+                    whiteboard: evt.whiteboard,
+                    data: { // deprecated
+                        enabled: true,
+                        whiteboard: evt.whiteboard
+                    }
+                });
+            }
         });
-        _clientApiHandler.on('RTCSession.WHITEBOARD_DISABLED', function () {
-            addToEventQueue({
-                type: 'whiteboardEnabled',
-                enabled: false,
-                data: { // deprecated
-                    enabled: false
-                }
-            });
+        _clientApiHandler.on('RTCSession.WHITEBOARD_DISABLED', function (evt) {
+            var call = findCall(evt.sessionId);
+            if (call) {
+                call.whiteboardEnabled = false;
+                addToEventQueue({
+                    type: 'whiteboardEnabled',
+                    enabled: false,
+                    data: { // deprecated
+                        enabled: false
+                    }
+                });
+            }
         });
 
         /**
