@@ -7,7 +7,7 @@ import config from './config.js'
 const assert = chai.assert;
 
 describe('Outgoing direct call', async function() {
-    this.timeout(5000);
+    this.timeout(15000);
 
     let client;
     let peerUser;
@@ -29,14 +29,17 @@ describe('Outgoing direct call', async function() {
     });
 
     it('should initiate direct call and get callStatus Initiated and Delivered', async () => {
-        call = await client.makeCall(peerUser.userId, {audio: true, video: true}, true);
-        await expectEvents(client, [{
-            type: 'callStatus',
-            predicate: evt => evt.call.state === Circuit.Enums.CallStateName.Initiated
-        }, {
-            type: 'callStatus',
-            predicate: evt => evt.call.state === Circuit.Enums.CallStateName.Delivered
-        }]);
+        const res = await Promise.all([
+            client.makeCall(peerUser.userId, {audio: true, video: true}, true),
+            expectEvents(client, [{
+                type: 'callStatus',
+                predicate: evt => evt.call.state === Circuit.Enums.CallStateName.Initiated
+            }, {
+                type: 'callStatus',
+                predicate: evt => evt.call.state === Circuit.Enums.CallStateName.Delivered
+            }])
+        ]);
+        call = res[0];
         assert(call.callId);
         document.querySelector('#localVideo').src = call.localVideoUrl;
     }).timeout(60000);

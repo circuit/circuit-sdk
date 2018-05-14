@@ -50,7 +50,6 @@ describe('Authentication', () => {
         await client2.logout(true);
     });
 
-    /*
     it('should fail to login with invalid credentials', async () => {
         client = new Circuit.Client({
             client_id: config.bot1.client_id,
@@ -63,7 +62,6 @@ describe('Authentication', () => {
             assert(true);
         }
     });
-    */
 
     it('should login using delayed OAuth settings', async () => {
         const client = new Circuit.Client();
@@ -88,7 +86,6 @@ describe('Authentication', () => {
         assert(!client.accessToken);
     });
 
-    /*
     it('should fail to login after revoke of token', async () => {
         let client = new Circuit.Client(config.bot1);
         await client.logon();
@@ -144,6 +141,5 @@ describe('Authentication', () => {
         await client.renewSessionToken();
         await helper.expectEvents(client, ['sessionTokenRenewed']);
     });
-    */
 
 });
