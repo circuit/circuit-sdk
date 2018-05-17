@@ -161,10 +161,10 @@
         $media.textContent = '';
         $callId.textContent = '';
         $convId.textContent = '';
-        $localVideo.src = '';
-        $remoteVideo1.src = '';
-        $remoteVideo2.src = '';
-        $remoteAudio.src = '';
+        $localVideo.srcObject = null;
+        $remoteVideo1.srcObject = null;
+        $remoteVideo2.srcObject = null;
+        $remoteAudio.srcObject = null;
         $enableVideo.checked = false;
         $enableVideo.disabled = true;
         $enableScreenShare.checked = false;
@@ -193,22 +193,22 @@
         $enableRecording.disabled = !(!call.isRemote && call.isEstablished);
 
         // Set local video stream
-        $localVideo.src = call.localVideoUrl || '';
+        $localVideo.srcObject = call.localVideoStream;
 
         // Enable video checkbox
         if (call.isEstablished) {
-          $remoteAudio.src = call.remoteAudioUrl;
+          $remoteAudio.srcObject = call.remoteAudioStream;
           // Set remote video streams (up to two in this example)
           if (call.participants && call.participants.length > 0) {
-            $remoteVideo1.src = call.participants[0].videoUrl;
+            $remoteVideo1.srcObject = call.participants[0].videoStream;
           }
           if (call.participants && call.participants.length > 1) {
-            $remoteVideo2.src = call.participants[1].videoUrl;
+            $remoteVideo2.srcObject = call.participants[1].videoStream;
           }
         } else {
-          $remoteAudio.src = '';
-          $remoteVideo1.src = '';
-          $remoteVideo2.src = '';
+          $remoteAudio.srcObject = null;
+          $remoteVideo1.srcObject = null;
+          $remoteVideo2.srcObject = null;
         }
 
         // Set active speaker
