@@ -89,6 +89,7 @@
         <div>Media: <span id="media"></span></div>
         <div>Conversation ID: <span id="convId"></span></div>
         <div>Call ID: <span id="callId"></span></div>
+        <div>Active Speaker: <span id="activeSpeaker"></span></div>
         <div>
           <video id="localVideo" width="200px" autoplay="true"></video>
           <video id="remoteVideo1" width="200px" autoplay="true"></video>
@@ -99,7 +100,7 @@
     <span id="errorMessage" style="display: none"></span>
     <audio id="remoteAudio" autoplay="autoplay"></audio>
 
-    <script src="https://unpkg.com/circuit-sdk@beta"></script>
+    <script src="https://circuitdev.unify.com:8094/circuit.js"></script>
 
     <script>
       var _client;
@@ -129,6 +130,7 @@
       var $callId = document.getElementById('callId');
       var $errorMessage = document.getElementById('errorMessage');
       var $download = document.getElementById('download');
+      var $activeSpeaker = document.getElementById('activeSpeaker');
 
       if (typeof Circuit === 'undefined') {
         $errorMessage.textContent = "Could not load SDK (circuit.js).";
@@ -208,6 +210,9 @@
           $remoteVideo1.src = '';
           $remoteVideo2.src = '';
         }
+
+        // Set active speaker
+        $activeSpeaker.textContent = call.participants.filter(p => !!p.activeSpeaker).map(a => a.firstName).join(', ') || 'None';
       }
 
       // Show correct button based on selected conversation's call state
@@ -237,6 +242,9 @@
       // Register event listeners
       function addClientEventListeners() {
         if (_client) {
+          Circuit.supportedEvents.forEach(e => {
+            _client.addEventListener(e, evt => console.log(`${e} - ${evt.reason}`))
+          })
           _client.addEventListener('connectionStateChanged', function onConnectionStateChanged(evt) {
             console.log('Received connectionStateChanged event - state = ', evt.state)
             $logonState.textContent = evt.state;
