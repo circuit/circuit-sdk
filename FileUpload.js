@@ -18,7 +18,7 @@ module.exports = function FileUpload(config) {
     var stat = 0;
 
     var logger = NodeSDK.logger;
-    var _config = config;
+    var _config = config || {};
 
     function isFileOK(file) {
         //TODO optimize for async flow
@@ -47,7 +47,7 @@ module.exports = function FileUpload(config) {
         return error;
     }
 
-    function urlToOptions(url, file, stat) {
+    function urlToOptions(url, file, stat, opts) {
         logger.debug('[FileUpload] urlToOptions', url, file, stat);
         var parts = nodeUrl.parse(url);
         var options = {
@@ -65,20 +65,24 @@ module.exports = function FileUpload(config) {
                 'Content-Type': file.type
             }
         };
+
+        if (opts) {
+            opts.convId && (options.headers['x-conversation'] = opts.convId);
+            opts.rtcSessionId && (options.headers['x-rtcsession'] = opts.rtcSessionId);
+        }
+
         logger.debug('[FileUpload] options', options);
         return options;
     }
 
-    function upLoadFile(file, itemId, domain) {
-        logger.debug('[FileUpload] upLoadFile', file, itemId, domain);
+    function uploadFile(file, url, opts) {
         return new Promise(function (resolve, reject) {
             var error = isFileOK(file);
             if (error) {
                 reject(error);
                 return;
             }
-            var url = 'https://' + domain + '/fileapi?itemid=' + (itemId || 'NULL');
-            var options = urlToOptions(url, file, stat);
+            var options = urlToOptions(url, file, stat, opts);
             var req = https.request(options, function (res) {
                 if (!res) {
                     logger.error('[FileUpload]: no res in https callback');
@@ -127,8 +131,9 @@ module.exports = function FileUpload(config) {
         });
     }
 
-    this.uploadFiles = function uploadFiles(files, domain) {
-        logger.debug('[FileUpload] node SDK uploadFiles', files, domain);
+    this.uploadFiles = function (files, domain) {
+        domain = domain || _config.domain;
+        logger.debug('[FileUpload] node SDK uploadFiles: ', files, domain);
 
         if (files.length > MAX_FILE_COUNT) {
             return Promise.reject('[FileUpload]: Exceeded maximum of %d% files per message', MAX_FILE_COUNT);
@@ -158,7 +163,8 @@ module.exports = function FileUpload(config) {
             var itemId = null;
             return files.reduce(function (sequence, file) {
                 return sequence.then(function () {
-                    return upLoadFile(file, itemId, domain)
+                    var url = 'https://' + domain + '/fileapi?itemid=' + (itemId || 'NULL');
+                    return uploadFile(file, url)
                     .then(function (res) {
                         var resp = JSON.parse(res)[0];
                         itemId = itemId || resp.id;
@@ -174,6 +180,32 @@ module.exports = function FileUpload(config) {
                     });
                 });
             }, Promise.resolve());
+        });
+    };
+
+    this.uploadWhiteboardFile = function (file, rtcSessionId, convId) {
+        logger.debug('[FileUpload] node SDK uploadWhiteboardFile: ', file);
+
+        var url = 'https://' + _config.domain + '/fileapi';
+        var opts = {
+            rtcSessionId: rtcSessionId,
+            convId: convId
+        };
+
+        return uploadFile(file, url, opts)
+        .then(function (res) {
+            var resp = JSON.parse(res)[0];
+            var fileUrl = url + '?fileid=' + resp.id;
+            var fileName = file.name;
+            var attachmentMetaData = {
+                fileId: resp.id,
+                fileName: fileName,
+                mimeType: resp.mimeType || file.type,
+                size: file.size,
+                url: fileUrl,
+                deleteUrl: fileUrl
+            };
+            return attachmentMetaData;
         });
     };
 };
