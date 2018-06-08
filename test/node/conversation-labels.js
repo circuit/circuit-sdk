@@ -8,45 +8,51 @@ Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
 
 let client;
 let addedLabelsHT = {};
-describe('Authentication', () => {
+describe('Labels', () => {
 
-    it('should login using Client Credentials', async () => {
+    before(async () => {
         client = new Circuit.Client(config.bot1);
-        const user = await client.logon();
-        assert(!!user);
+        await client.logon();
     });
-
-    it('should be authenticated', async () => {
-        await client.isAuthenticated();
-    });
-
 
     it('should add two labels', async () => {
-        const labelValue1 = Date.now().toString() + 'a';
-        const labelValue2 = Date.now().toString() + 'b';
-        const addedLabels = await client.addLabels([labelValue1, labelValue2]);
+        const labelValue1 = `${Date.now()}a`;
+        const labelValue2 = `${Date.now()}b`;
+        const res = await Promise.all([
+            client.addLabels([labelValue1, labelValue2]), 
+            helper.expectEvents(client, [{
+                type: 'labelsAdded',
+                predicate: evt => evt.labels.every(label => label.value === labelValue1 || label.value === labelValue2)
+            }])
+        ]);
+        const addedLabels = res[0];
         addedLabels.forEach(label => addedLabelsHT[label.labelId] = label);
         const existingLabels = await client.getAllLabels();
         const existingLabelsHT = {};
         existingLabels.forEach(label => existingLabelsHT[label.labelId] = label); 
         Object.keys(addedLabelsHT).forEach(testLabelId => {
             if (!existingLabelsHT[testLabelId] || existingLabelsHT[testLabelId].value !== addedLabelsHT[testLabelId].value) {
-                // if the test label doesn't exist in the labels or if they don't equal each other fails the test
                 assert(false);
             }
         });
     });
 
-    it('should edit the first added labels', async () => {
+    it('should edit one of the added labels', async () => {
         const labelIdToEdit = Object.keys(addedLabelsHT)[0];
-        const newValue = Date.now().toString() + 'c';
-        const editedLabel = await client.editLabel({
-            labelId: labelIdToEdit,
-            value: newValue
-        });
+        const newValue = `${Date.now()}c`;
+        const res = await Promise.all([
+            client.editLabel({
+                labelId: labelIdToEdit,
+                value: newValue
+            }), 
+            helper.expectEvents(client, [{
+                type: 'labelEdited',
+                predicate: evt => evt.label.labelId === labelIdToEdit && evt.label.value === newValue
+            }])
+        ]);    
+        const editedLabel = res[0];
         if (editedLabel.value !== newValue) {
             assert(false);
-            return;
         } else {
             addedLabelsHT[labelIdToEdit] = editedLabel;
         }
@@ -55,11 +61,18 @@ describe('Authentication', () => {
         assert(returnedLabel.value === addedLabelsHT[labelIdToEdit].value && returnedLabel.labelId === addedLabelsHT[labelIdToEdit].labelId);
     });
 
-    it('should assign a label to the first conversatrion', async () => {
+    it('should assign a label to the first conversation', async () => {
         let conversation = await client.getConversations({numberOfConversations: 1});
         conversation = conversation[0];
         const labelIdsToAssign = Object.keys(addedLabelsHT);
-        const res = await client.assignLabels(conversation.convId, labelIdsToAssign);
+        const results = await Promise.all([
+            client.assignLabels(conversation.convId, labelIdsToAssign),
+            helper.expectEvents(client, [{
+                type: 'conversationUserDataChanged',
+                predicate: evt => evt.data.convId === conversation.convId && evt.data.labels.every(label => labelIdsToAssign.includes(label))
+            }])
+        ]);
+        const res = results[0];
         res.forEach(labelId => {
             if (!labelIdsToAssign.includes(labelId)) {
                 assert(false);
@@ -73,11 +86,18 @@ describe('Authentication', () => {
         });
     });
 
-    it('should unassign the two labels to the first conversation', async () => {
+    it('should unassign the two labels from first conversation', async () => {
         let conversation = await client.getConversations({numberOfConversations: 1});
         conversation = conversation[0];
         const labelIdsToUnassign = Object.keys(addedLabelsHT);
-        const res = await client.unassignLabels(conversation.convId, labelIdsToUnassign);
+        const results = await Promise.all([
+            client.unassignLabels(conversation.convId, labelIdsToUnassign),
+            helper.expectEvents(client, [{
+                type: 'conversationUserDataChanged',
+                predicate: evt => evt.data.convId === conversation.convId && labelIdsToUnassign.every(labelId => !evt.data.labels || !evt.data.labels.includes(labelId))
+            }])
+        ]); 
+        const res = results[0];         
         labelIdsToUnassign.forEach(labelId => {
             if (res.includes(labelId)) {
                 assert(false);
@@ -95,7 +115,14 @@ describe('Authentication', () => {
 
     it('should remove the two added labels', async () => {
         const labelsIdsToRemove = Object.keys(addedLabelsHT);
-        const labelsIdsRemoved = await client.removeLabels(labelsIdsToRemove);
+        const res = await Promise.all([
+            client.removeLabels(labelsIdsToRemove),
+            helper.expectEvents(client, [{
+                type: 'labelsRemoved',
+                predicate: evt => evt.labelIds.every(labelId => labelsIdsToRemove.includes(labelId))
+            }])
+        ]); 
+        const labelsIdsRemoved = res[0];    
         labelsIdsToRemove.forEach(labelId => {
             if (!labelsIdsRemoved.includes(labelId)) {
                 assert(false);
