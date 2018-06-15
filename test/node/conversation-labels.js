@@ -16,6 +16,10 @@ describe('Labels', () => {
     });
 
     it('should add two labels', async () => {
+        if (!client.addLabels) {
+            console.log('    > API not supported by circuit.');
+            assert(true);
+        }
         const labelValue1 = `${Date.now()}a`;
         const labelValue2 = `${Date.now()}b`;
         const res = await Promise.all([
@@ -38,6 +42,10 @@ describe('Labels', () => {
     });
 
     it('should edit one of the added labels', async () => {
+        if (!client.editLabel) {
+            console.log('    > API not supported by circuit.');
+            assert(true);
+        }
         const labelIdToEdit = Object.keys(addedLabelsHT)[0];
         const newValue = `${Date.now()}c`;
         const res = await Promise.all([
@@ -62,6 +70,10 @@ describe('Labels', () => {
     });
 
     it('should assign a label to the first conversation', async () => {
+        if (!client.assignLabels) {
+            console.log('    > API not supported by circuit.');
+            assert(true);
+        }
         let conversation = await client.getConversations({numberOfConversations: 1});
         conversation = conversation[0];
         const labelIdsToAssign = Object.keys(addedLabelsHT);
@@ -87,6 +99,10 @@ describe('Labels', () => {
     });
 
     it('should unassign the two labels from first conversation', async () => {
+        if (!client.unassignLabels) {
+            console.log('    > API not supported by circuit.');
+            assert(true);
+        }
         let conversation = await client.getConversations({numberOfConversations: 1});
         conversation = conversation[0];
         const labelIdsToUnassign = Object.keys(addedLabelsHT);
@@ -114,6 +130,10 @@ describe('Labels', () => {
     });
 
     it('should remove the two added labels', async () => {
+        if (!client.removeLabels) {
+            console.log('    > API not supported by circuit.');
+            assert(true);
+        }
         const labelsIdsToRemove = Object.keys(addedLabelsHT);
         const res = await Promise.all([
             client.removeLabels(labelsIdsToRemove),
