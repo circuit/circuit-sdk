@@ -149,4 +149,4 @@ Circuit.Injectors.itemInjector = function (item) {
 Chrome and Firefox are officially supported.
 
 ### Help us improve the SDK
-Help us improve the SDK or examples by sending us a pull-request or opening a [GitHub Issue](https://github.com/circuit/circuit-sdk/issues/new).
+Help us improve the SDK or examples by sending us a pull-request or opening a [GitHub Issue](https://github.com/circuit/circuit-sdk/issues/new). 
