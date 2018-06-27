@@ -4,7 +4,7 @@
   "description": "Circuit SDK",
   "main": "circuit-node.js",
   "scripts": {
-    "test:browser": "node test/index",
+    "test:browser": "node test/index --recursive --timeout=5000 --exit",
     "test:node": "mocha ./test/node/* --recursive --timeout=5000 --exit",
     "test": "npm run test:node && npm run test:browser"
   },
