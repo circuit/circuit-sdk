@@ -38,6 +38,11 @@ describe('Group Conversation', () => {
         assert(conversation && conversation.participants.includes(user.userId) && conversation.participants.includes(user2.userId));
     });
 
+    it('should get the group conversation by its Id', async () => {
+        const res = await client.getConversationById(conversation.convId);
+        assert(res && res.convId === conversation.convId && res.participants.includes(user.userId) && res.participants.includes(user2.userId));
+    });
+
     it('should remove the second participant from the conversation and raise a conversationUpdated event', async () => {
         const res = await Promise.all([
             client.removeParticipant(conversation.convId, user2.userId),

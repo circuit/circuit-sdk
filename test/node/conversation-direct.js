@@ -31,14 +31,9 @@ describe('Direct Conversation', () => {
         assert(conversation.participants.includes(user.userId) && conversation.participants.includes(user2.userId));
     });
 
-    it('should get the direct conversation by its Id', async () => {
-        const res = await client.getConversationById(conversation.convId);
-        assert(res && res.convId === conversation.convId && res.participants.includes(user.userId) && res.participants.includes(user2.userId));
-    });
-
     it('should get the direct conversation by its email', async () => {
         const res = await client.getDirectConversationWithUser(user2.emailAddress);
-        assert(res.convId === conversation.convId);
+        assert(res && res.convId === conversation.convId && res.participants.includes(user.userId) && res.participants.includes(user2.userId));
     });
 
     it('should get the details of the conversation', async () => {

@@ -8,11 +8,16 @@ Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
 
 let client;
 let addedLabelsHT = {};
+let conversation;
 describe('Labels', () => {
 
     before(async () => {
         client = new Circuit.Client(config.bot1);
         await client.logon();
+    });
+
+    after(async () => {
+        await client.logout();
     });
 
     it('should add two labels', async () => {
@@ -74,7 +79,7 @@ describe('Labels', () => {
             console.log('    > API not supported by circuit.');
             assert(true);
         }
-        let conversation = await client.getConversations({numberOfConversations: 1});
+        conversation = await client.getConversations({numberOfConversations: 1});
         conversation = conversation[0];
         const labelIdsToAssign = Object.keys(addedLabelsHT);
         const results = await Promise.all([
@@ -98,12 +103,29 @@ describe('Labels', () => {
         });
     });
 
+    it('should get conversations by the added label and check API returns the correct conversation', async () => {
+        sleep(3000);
+        const labelIds = Object.keys(addedLabelsHT);
+        const labelId = labelIds[0];
+        const res = await client.getConversationsByFilter({
+            filterConnector: {
+                conditions: [{
+                    filterTarget: Circuit.Constants.FilterTarget.LABEL_ID,
+                    expectedValue: [labelId]
+                }]
+            },
+            retrieveAction: Circuit.Enums.RetrieveAction.CONVERSATIONS
+        });
+        assert(res.find(conv => conv.convId === conversation.convId));
+
+    }).timeout(8000);
+
     it('should unassign the two labels from first conversation', async () => {
         if (!client.unassignLabels) {
             console.log('    > API not supported by circuit.');
             assert(true);
         }
-        let conversation = await client.getConversations({numberOfConversations: 1});
+        conversation = await client.getConversations({numberOfConversations: 1});
         conversation = conversation[0];
         const labelIdsToUnassign = Object.keys(addedLabelsHT);
         const results = await Promise.all([
@@ -156,3 +178,8 @@ describe('Labels', () => {
         });
     });
 });
+
+function sleep(time) {
+    const currentTime = Date.now();
+    while (currentTime + time >=  Date.now());
+ }
