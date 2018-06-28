@@ -28,11 +28,7 @@ describe('Direct Conversation', () => {
     it('should create a direct conversation', async () => {
         const res = await client.createDirectConversation(user2.userId);
         conversation = res.conversation;
-        conversation.participants.forEach(userId => {
-            if (!(userId === user.userId || userId === user2.userId)) {
-                assert(false);
-            }
-        });
+        assert(conversation.participants.includes(user.userId) && conversation.participants.includes(user2.userId));
     });
 
     it('should get the direct conversation by its Id', async () => {
@@ -42,14 +38,7 @@ describe('Direct Conversation', () => {
 
     it('should get the direct conversation by its email', async () => {
         const res = await client.getDirectConversationWithUser(user2.emailAddress);
-        if (!res || res.type !== Circuit.Enums.ConversationType.DIRECT) {
-            assert(false);
-        }
-        res.participants.forEach(userId => {
-            if (!(userId === user.userId || userId === user2.userId)) {
-                assert(false);
-            }
-        });
+        assert(res.convId === conversation.convId);
     });
 
     it('should get the details of the conversation', async () => {
