@@ -11,7 +11,7 @@ let user;
 let client2;
 let user2;
 let conference;
-describe('Conference', () => {
+describe('Conference Bridge', () => {
 
     before(async () => {
         client = new Circuit.Client(config.bot1);
@@ -36,6 +36,7 @@ describe('Conference', () => {
             }])
         ]);
         conference = res[0];
+        assert(conference && conference.topic === topic && conference.creatorId === user.userId);
     });
    
     it('should get the conference invitation HTML', async () => {
