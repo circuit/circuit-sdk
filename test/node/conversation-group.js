@@ -76,11 +76,7 @@ describe('Group Conversation', () => {
 
     it('should get the participants of the conversation', async () => {
         const res = await client.getConversationParticipants(conversation.convId);
-        res.participants.forEach(participant => {
-            if (!(participant.userId === user.userId || participant.userId === user2.userId)) {
-                assert(false);
-            }
-        });
+        assert(res && res.participants.some(u => u.userId === user.userId) && res.participants.some(u => u.userId === user2.userId));
     });
 
     it('should update the conversation and raise a conversationUpdated event', async () => {
@@ -95,17 +91,16 @@ describe('Group Conversation', () => {
                 predicate: evt => evt.conversation.convId === conversation.convId && evt.conversation.topic === topic
             }])
         ]);
+        const convId = conversation.convId;
         conversation = res[0];
-        assert(res[0] && res[0].convId === conversation.convId && res[0].topic === topic);
+        assert(conversation.convId === convId && conversation.topic === topic);
     });
     // // Requires permissions
     // it('should moderate conversation', async () => {
     //     const res = await client.moderateConversation(conversation.convId);
-    //     assert(res === undefined || res);
     // });
 
     // it('should unmoderate conversation', async () => {
     //     const res = await client.unmoderateConversation(conversation.convId);
-    //     assert(res === undefined || res);
     // });
 });

@@ -47,10 +47,11 @@ describe('Conversation Items', () => {
                 predicate: evt => evt.item.convId === conversation.convId && evt.item.itemId
             }])           
         ]);
-        item.itemId = res[0] && res[0].itemId;
-        item.content = res[0] && res[0].text.content;
-        assert(res[0] && conversation && res[0].convId === conversation.convId && res[0].text.content === textValue);
-    }); 
+        item.itemId = res[0].itemId;
+        item.content = res[0].text.content;
+        assert(res[0].convId === conversation.convId && res[0].text.content === textValue);
+    });
+    
     it('should add a text item to the conversation and raise an itemAdded event', async () => {
         const textValue = `${Date.now()}b`;
         const subject = `${Date.now()}c`;
@@ -66,8 +67,8 @@ describe('Conversation Items', () => {
                 predicate: evt => evt.item.convId === conversation.convId && evt.item.itemId === item.itemId
             }])           
         ]);
-        item.content = res[0] && res[0].text.content;
-        assert(res[0] && res[0].itemId === item.itemId && res[0].text.content === textValue && res[0].text.subject === subject);
+        item.content = res[0].text.content;
+        assert(res[0].itemId === item.itemId && res[0].text.content === textValue && res[0].text.subject === subject);
     }); 
 
     it('should get conversation feed', async () => {
@@ -93,12 +94,14 @@ describe('Conversation Items', () => {
     });
 
     it('should like item', async () => {
-        const res = await client.likeItem(item.itemId);
-        assert(res === undefined || res);
+        await client.likeItem(item.itemId);
+        const res = await client.getItemById(item.itemId);
+        assert(res.text.likedByUsers.includes(user.userId));
     });
 
     it('should unlike item', async () => {
-        const res = await client.unlikeItem(item.itemId);
-        assert(res === undefined || res);
+        await client.unlikeItem(item.itemId);
+        const res = await client.getItemById(item.itemId);
+        assert(!res.text.likedByUsers || !res.text.likedByUsers.includes(user.userId));
     });
 });

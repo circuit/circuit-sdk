@@ -66,7 +66,7 @@ describe('Conference Bridge', () => {
 
     it('should get the conference by its Id', async () => {
         const res = await client.getConversationsByIds([conference.convId]);
-        const conf = res && res[0];
+        const conf = res[0];
         assert(conf && conf.convId === conference.convId && conf.topic === conference.topic);
     });
 });
