@@ -48,6 +48,6 @@ describe('Conversation Archived', () => {
         await client.unarchiveConversation(conversation.convId);
         await helper.sleep(3000);
         const res = await client.getArchivedConversations();
-        assert(res && !res.some(conv => conv.convId === conversation.convId).length);
+        assert(res && !res.some(conv => conv.convId === conversation.convId));
     });
 });
