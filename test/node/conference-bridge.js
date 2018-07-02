@@ -25,7 +25,6 @@ describe('Conference Bridge', () => {
         await client2.logout();
     });
 
-
     it('should create a conference bridge', async () => {
         const topic = `${Date.now()}a`;
         const res = await Promise.all([
