@@ -83,4 +83,20 @@ describe('Group Conversation', () => {
             }
         });
     });
+
+    it('should update the conversation and raise a conversationUpdated event', async () => {
+        const topic = `${Date.now()}z`;
+        const data = {
+            topic: topic
+        }
+        const res = await Promise.all([
+            client.updateConversation(conversation.convId, data),
+            helper.expectEvents(client, [{
+                type: 'conversationUpdated',
+                predicate: evt => evt.conversation.convId === conversation.convId && evt.conversation.topic === topic
+            }])
+        ]);
+        conversation = res[0];
+        assert(res[0] && res[0].convId === conversation.convId && res[0].topic === topic);
+    });
 });
