@@ -10,7 +10,6 @@ let client;
 let addedLabelsHT = {};
 let conversation;
 describe('Labels', () => {
-
     before(async () => {
         client = new Circuit.Client(config.bot1);
         await client.logon();

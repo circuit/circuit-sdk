@@ -12,7 +12,6 @@ let client2;
 let user2;
 let conversation;
 describe('Conversation Favorites', () => {
-
     before(async () => {
         client = new Circuit.Client(config.bot1);
         user = await client.logon();

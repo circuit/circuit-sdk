@@ -12,7 +12,6 @@ let client2;
 let user2;
 let presence;
 describe('User Presence', () => {
-
     before(async () => {
         client = new Circuit.Client(config.bot1);
         user = await client.logon();

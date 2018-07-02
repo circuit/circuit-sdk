@@ -13,7 +13,6 @@ let user2;
 let conversation;
 let item = {};
 describe('Conversation Items', () => {
-
     before(async () => {
         client = new Circuit.Client(config.bot1);
         user = await client.logon();
@@ -91,5 +90,15 @@ describe('Conversation Items', () => {
         await client.unflagItem(conversation.convId, item.itemId);
         const res = await client.getFlaggedItems();
         assert(res && !res.some(conv => conv.conversationId === conversation.convId && conv.conversationItemData.some(i => i.itemId === item.itemId)));
+    });
+
+    it('should like item', async () => {
+        const res = await client.likeItem(item.itemId);
+        assert(res === undefined || res);
+    });
+
+    it('should unlike item', async () => {
+        const res = await client.unlikeItem(item.itemId);
+        assert(res === undefined || res);
     });
 });

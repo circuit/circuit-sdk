@@ -12,7 +12,6 @@ let client2;
 let user2;
 let conversation;
 describe('Group Conversation', () => {
-
     before(async () => {
         client = new Circuit.Client(config.bot1);
         user = await client.logon();
@@ -99,4 +98,14 @@ describe('Group Conversation', () => {
         conversation = res[0];
         assert(res[0] && res[0].convId === conversation.convId && res[0].topic === topic);
     });
+    // // Requires permissions
+    // it('should moderate conversation', async () => {
+    //     const res = await client.moderateConversation(conversation.convId);
+    //     assert(res === undefined || res);
+    // });
+
+    // it('should unmoderate conversation', async () => {
+    //     const res = await client.unmoderateConversation(conversation.convId);
+    //     assert(res === undefined || res);
+    // });
 });

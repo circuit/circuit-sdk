@@ -10,7 +10,6 @@ let client;
 let user;
 let settings;
 describe('Settings', () => {
-
     before(async () => {
         client = new Circuit.Client(config.bot1);
         user = await client.logon();
