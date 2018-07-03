@@ -49,6 +49,7 @@ describe('Conversation Items', () => {
         ]);
         item.itemId = res[0].itemId;
         item.content = res[0].text.content;
+        item.creationTime = res[0].creationTime;
         assert(res[0].convId === conversation.convId && res[0].text.content === textValue);
     });
     
@@ -77,10 +78,14 @@ describe('Conversation Items', () => {
     });
 
     it('should get conversation items', async () => {
-        const res  = await client.getConversationItems(conversation.convId);
+        const options = {   
+            creationDate: item.creationTime - 1,
+            direction: 'AFTER'
+        }
+        const res  = await client.getConversationItems(conversation.convId, options);
         assert(res.some(conversationItem => conversationItem.itemId === item.itemId));
     }); 
- 
+
     it('should flag item and get flagged item', async () => {
         await client.flagItem(conversation.convId, item.itemId);
         const res = await client.getFlaggedItems();

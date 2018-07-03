@@ -95,12 +95,16 @@ describe('Group Conversation', () => {
         conversation = res[0];
         assert(conversation.convId === convId && conversation.topic === topic);
     });
-    // // Requires permissions
-    // it('should moderate conversation', async () => {
-    //     const res = await client.moderateConversation(conversation.convId);
-    // });
+    // Requires permissions
+    it('should moderate conversation', async () => {
+        await client.moderateConversation(conversation.convId);
+        const res = await client.getConversationById(conversation.convId);
+        assert(res.convId === conversation.convId && res.moderators.includes(user.userId));
+    });
 
-    // it('should unmoderate conversation', async () => {
-    //     const res = await client.unmoderateConversation(conversation.convId);
-    // });
+    it('should unmoderate conversation', async () => {
+        await client.unmoderateConversation(conversation.convId);
+        const res = await client.getConversationById(conversation.convId);
+        assert(res.convId === conversation.convId && (!res.moderators || !res.moderators.includes(user.userId)));
+    });
 });
