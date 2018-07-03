@@ -38,13 +38,13 @@ describe('Conversation Items', () => {
         assert(conversation && conversation.participants.includes(user.userId) && conversation.participants.includes(user2.userId));
     });
 
-    it('should add a text item to the conversation and raise an itemAdded event', async () => {
+    it('should add a simple text item and raise an itemAdded event', async () => {
         const textValue = `${Date.now()}a`;
         const res  = await Promise.all([
             client.addTextItem(conversation.convId, textValue),
             helper.expectEvents(client, [{
                 type: 'itemAdded',
-                predicate: evt => evt.item.convId === conversation.convId && evt.item.itemId
+                predicate: evt => evt.item.convId === conversation.convId
             }])           
         ]);
         item.itemId = res[0].itemId;
@@ -52,7 +52,7 @@ describe('Conversation Items', () => {
         assert(res[0].convId === conversation.convId && res[0].text.content === textValue);
     });
     
-    it('should add a text item to the conversation and raise an itemAdded event', async () => {
+    it('should update a simple text item and raise an itemAdded event', async () => {
         const textValue = `${Date.now()}b`;
         const subject = `${Date.now()}c`;
         const content = {
