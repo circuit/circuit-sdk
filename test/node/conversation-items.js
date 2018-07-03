@@ -80,25 +80,49 @@ describe('Conversation Items', () => {
     }); 
 
     it('should flag item and get flagged item', async () => {
-        await client.flagItem(conversation.convId, item.itemId);
+        await Promise.all([
+            client.flagItem(conversation.convId, item.itemId),
+            helper.expectEvents(client, [{
+                type: 'itemFlagged',
+                predicate: evt => evt.convId === conversation.convId && evt.itemId === item.itemId
+            }])         
+        ]);
         const res = await client.getFlaggedItems();
         assert(res && res.some(conv => conv.conversationId === conversation.convId && conv.conversationItemData.some(i => i.itemId === item.itemId)));
     });
     
     it('should unflag item', async () => {
-        await client.unflagItem(conversation.convId, item.itemId);
-        const res = await client.getFlaggedItems();
+        await Promise.all([
+            client.unflagItem(conversation.convId, item.itemId),
+            helper.expectEvents(client, [{
+                type: 'itemUnflagged',
+                predicate: evt => evt.convId === conversation.convId && evt.itemId === item.itemId
+            }])         
+        ]);
+        const res = await client.getFlaggedItems();      
         assert(res && !res.some(conv => conv.conversationId === conversation.convId && conv.conversationItemData.some(i => i.itemId === item.itemId)));
     });
 
-    it('should like item', async () => {
-        await client.likeItem(item.itemId);
+    it('should like item and raise an itemUpdated event', async () => {
+        await Promise.all([
+            client.likeItem(item.itemId),
+            helper.expectEvents(client, [{
+                type: 'itemUpdated',
+                predicate: evt => evt.item.itemId === item.itemId && evt.item.convId === conversation.convId
+            }]) 
+        ]);
         const res = await client.getItemById(item.itemId);
         assert(res.text.likedByUsers.includes(user.userId));
     });
 
-    it('should unlike item', async () => {
-        await client.unlikeItem(item.itemId);
+    it('should unlike item and raise an itemUpdated event', async () => {
+        await Promise.all([
+            client.unlikeItem(item.itemId),
+            helper.expectEvents(client, [{
+                type: 'itemUpdated',
+                predicate: evt => evt.item.itemId === item.itemId && evt.item.convId === conversation.convId
+            }]) 
+        ]);
         const res = await client.getItemById(item.itemId);
         assert(!res.text.likedByUsers || !res.text.likedByUsers.includes(user.userId));
     });
