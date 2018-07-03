@@ -25,16 +25,9 @@ describe('Conversation Items', () => {
         await client2.logout();
     });
 
-    it('should create a group conversation and raise a conversationCreated event', async () => {
+    it('should create a group conversation', async () => {
         const topic = `${Date.now()}a`;
-        const res = await Promise.all([
-            client.createGroupConversation([user2.userId], topic),
-            helper.expectEvents(client, [{
-                type: 'conversationCreated',
-                predicate: evt => evt.conversation.topic === topic && evt.conversation.participants.includes(user.userId) && evt.conversation.participants.includes(user2.userId)
-            }])
-        ]);
-        conversation = res[0];
+        conversation = await client.createGroupConversation([user2.userId], topic);
         assert(conversation && conversation.participants.includes(user.userId) && conversation.participants.includes(user2.userId));
     });
 
@@ -53,7 +46,7 @@ describe('Conversation Items', () => {
         assert(res[0].convId === conversation.convId && res[0].text.content === textValue);
     });
     
-    it('should update a simple text item and raise an itemAdded event', async () => {
+    it('should update a complex text item and raise an itemUpdated event', async () => {
         const textValue = `${Date.now()}b`;
         const subject = `${Date.now()}c`;
         const content = {

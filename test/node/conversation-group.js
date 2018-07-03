@@ -95,15 +95,28 @@ describe('Group Conversation', () => {
         conversation = res[0];
         assert(conversation.convId === convId && conversation.topic === topic);
     });
-    // Requires permissions
-    it('should moderate conversation', async () => {
-        await client.moderateConversation(conversation.convId);
+
+    // Requires MODERATION permission
+    it('should moderate conversation and raise a conversationUpdated event', async () => {
+        await Promise.all([
+            client.moderateConversation(conversation.convId),
+            helper.expectEvents(client, [{
+                type: 'conversationUpdated',
+                predicate: evt => evt.conversation.convId === conversation.convId && evt.conversation.moderators.includes(user.userId)
+            }])            
+        ]);
         const res = await client.getConversationById(conversation.convId);
         assert(res.convId === conversation.convId && res.moderators.includes(user.userId));
     });
 
-    it('should unmoderate conversation', async () => {
-        await client.unmoderateConversation(conversation.convId);
+    it('should unmoderate conversation and raise a conversationUpdated event', async () => {
+        await Promise.all([
+            client.unmoderateConversation(conversation.convId),
+            helper.expectEvents(client, [{
+                type: 'conversationUpdated',
+                predicate: evt => evt.conversation.convId === conversation.convId && (!evt.conversation.moderators || !evt.conversation.moderators.includes(user.userId))
+            }])            
+        ]);
         const res = await client.getConversationById(conversation.convId);
         assert(res.convId === conversation.convId && (!res.moderators || !res.moderators.includes(user.userId)));
     });

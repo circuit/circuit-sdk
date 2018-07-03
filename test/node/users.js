@@ -26,13 +26,12 @@ describe('Users', () => {
 
     it('should get the logged on users', async () => {
        const userData1 = await client.getLoggedOnUser(); 
-       const userData2 = await client2.getLoggedOnUser();
-       assert(userData1 && userData2 && userData1.userId === user.userId && userData2.userId === user2.userId); 
+       assert(userData1 && userData1.userId === user.userId); 
     });
 
     it('should get user by their Id', async () => {
-        const res = await client.getUserById(user.userId);
-        assert(res && res.userId === user.userId);
+        const res = await client.getUserById(user2.userId);
+        assert(res && res.userId === user2.userId);
     });
 
     it('should get users by their Ids', async () => {

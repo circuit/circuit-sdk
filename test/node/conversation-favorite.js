@@ -27,13 +27,25 @@ describe('Conversation Favorites', () => {
     }); 
 
     it('should favorite the conversation and check it is favorited', async () => {
-        await client.favoriteConversation(conversation.convId);
+        await Promise.all([
+            client.favoriteConversation(conversation.convId),
+            helper.expectEvents(client, [{
+                type: 'conversationFavorited',
+                predicate: evt => evt.convId === conversation.convId 
+            }])            
+        ]);
         const res = await client.getFavoriteConversationIds();
         assert(res && res.includes(conversation.convId));
     });
 
     it('should unfavorite the conversation and check it is not favorited', async () => {
-        await client.unfavoriteConversation(conversation.convId);
+        await Promise.all([
+            client.unfavoriteConversation(conversation.convId),
+            helper.expectEvents(client, [{
+                type: 'conversationUnfavorited',
+                predicate: evt => evt.convId === conversation.convId 
+            }])            
+        ]);
         const res = await client.getFavoriteConversationIds();
         assert(res && !res.includes(conversation.convId));
     });  
