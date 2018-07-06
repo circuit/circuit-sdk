@@ -4,6 +4,7 @@ const assert = require('assert');
 const Circuit = require('../../circuit-node');
 const config = require('./config.json');
 const helper = require('./helper');
+var fs = require('fs');
 Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
 
 let client;
@@ -80,6 +81,10 @@ describe('Conversation Items', () => {
     }); 
 
     it('should flag item and get flagged item', async () => {
+        if (!Circuit.supportedEvents.includes('itemFlagged')) {
+            console.log('Event not supported.');
+            assert(true);
+        }
         await Promise.all([
             client.flagItem(conversation.convId, item.itemId),
             helper.expectEvents(client, [{
@@ -92,6 +97,10 @@ describe('Conversation Items', () => {
     });
     
     it('should unflag item', async () => {
+        if (!Circuit.supportedEvents.includes('itemUnflagged')) {
+            console.log('Event not supported.');
+            assert(true);
+        }
         await Promise.all([
             client.unflagItem(conversation.convId, item.itemId),
             helper.expectEvents(client, [{
