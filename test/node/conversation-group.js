@@ -12,7 +12,6 @@ let client2;
 let user2;
 let conversation;
 describe('Group Conversation', () => {
-
     before(async () => {
         client = new Circuit.Client(config.bot1);
         user = await client.logon();
@@ -77,10 +76,48 @@ describe('Group Conversation', () => {
 
     it('should get the participants of the conversation', async () => {
         const res = await client.getConversationParticipants(conversation.convId);
-        res.participants.forEach(participant => {
-            if (!(participant.userId === user.userId || participant.userId === user2.userId)) {
-                assert(false);
-            }
-        });
+        assert(res && res.participants.some(u => u.userId === user.userId) && res.participants.some(u => u.userId === user2.userId));
+    });
+
+    it('should update the conversation and raise a conversationUpdated event', async () => {
+        const topic = `${Date.now()}z`;
+        const data = {
+            topic: topic
+        }
+        const res = await Promise.all([
+            client.updateConversation(conversation.convId, data),
+            helper.expectEvents(client, [{
+                type: 'conversationUpdated',
+                predicate: evt => evt.conversation.convId === conversation.convId && evt.conversation.topic === topic
+            }])
+        ]);
+        const convId = conversation.convId;
+        conversation = res[0];
+        assert(conversation.convId === convId && conversation.topic === topic);
+    });
+
+    // Requires MODERATION permission
+    it('should moderate conversation and raise a conversationUpdated event', async () => {
+        await Promise.all([
+            client.moderateConversation(conversation.convId),
+            helper.expectEvents(client, [{
+                type: 'conversationUpdated',
+                predicate: evt => evt.conversation.convId === conversation.convId && evt.conversation.moderators.includes(user.userId)
+            }])            
+        ]);
+        const res = await client.getConversationById(conversation.convId);
+        assert(res.convId === conversation.convId && res.moderators.includes(user.userId));
+    });
+
+    it('should unmoderate conversation and raise a conversationUpdated event', async () => {
+        await Promise.all([
+            client.unmoderateConversation(conversation.convId),
+            helper.expectEvents(client, [{
+                type: 'conversationUpdated',
+                predicate: evt => evt.conversation.convId === conversation.convId && (!evt.conversation.moderators || !evt.conversation.moderators.includes(user.userId))
+            }])            
+        ]);
+        const res = await client.getConversationById(conversation.convId);
+        assert(res.convId === conversation.convId && (!res.moderators || !res.moderators.includes(user.userId)));
     });
 });

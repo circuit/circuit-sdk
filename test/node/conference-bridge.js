@@ -12,7 +12,6 @@ let client2;
 let user2;
 let conference;
 describe('Conference Bridge', () => {
-
     before(async () => {
         client = new Circuit.Client(config.bot1);
         user = await client.logon();
@@ -67,7 +66,7 @@ describe('Conference Bridge', () => {
 
     it('should get the conference by its Id', async () => {
         const res = await client.getConversationsByIds([conference.convId]);
-        const conf = res && res[0];
+        const conf = res[0];
         assert(conf && conf.convId === conference.convId && conf.topic === conference.topic);
     });
 });

@@ -10,7 +10,6 @@ let client;
 let addedLabelsHT = {};
 let conversation;
 describe('Labels', () => {
-
     before(async () => {
         client = new Circuit.Client(config.bot1);
         await client.logon();
@@ -104,6 +103,7 @@ describe('Labels', () => {
     });
 
     it('should get the conversations having the specified label', async () => {
+        // Has to wait because backend has to perform search for getConversationsByFilter
         await helper.sleep(3000);
         const labelIds = Object.keys(addedLabelsHT);
         const labelId = labelIds[0];
@@ -118,7 +118,7 @@ describe('Labels', () => {
         });
         assert(res.find(conv => conv.convId === conversation.convId));
 
-    }).timeout(8000);
+    });
 
     it('should get conversations by the added label using getConversationsByLabel', async () => {
         const labelIds = Object.keys(addedLabelsHT);
