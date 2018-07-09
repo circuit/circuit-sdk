@@ -39,8 +39,9 @@ describe('Conference Bridge', () => {
    
     it('should get the conference invitation HTML', async () => {
         if (!client.getConferenceInvitationText) {
-            console.log('    > API not supported by circuit.');
+            console.log('API not yet supported');
             assert(true);
+            return;
         }
         const res = await client.getConferenceInvitationText(user.locale, conference.convId);
         if (!res || !res.includes(conference.topic)) {

@@ -44,6 +44,7 @@ describe('Subscribe to Typing Indicator', () => {
         if (!client.subscribeTypingIndicator) {
             console.log('API not yet supported');
             assert(true);
+            return;
         }
         await client.subscribeTypingIndicator(conversation.convId);
     });
@@ -52,6 +53,7 @@ describe('Subscribe to Typing Indicator', () => {
         if (!client.typing) {
             console.log('API not yet supported');
             assert(true);
+            return;
         }
         await Promise.all([
             client2.typing(conversation.convId, true, item.itemId),
@@ -66,6 +68,7 @@ describe('Subscribe to Typing Indicator', () => {
         if (!client.unsubscribeTypingIndicator) {
             console.log('API not yet supported');
             assert(true);
+            return;
         }
         await client.unsubscribeTypingIndicator(conversation.convId);
     });

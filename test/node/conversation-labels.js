@@ -9,10 +9,12 @@ Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
 let client;
 let addedLabelsHT = {};
 let conversation;
+let LABEL_SUPPORTED;
 describe('Labels', () => {
     before(async () => {
         client = new Circuit.Client(config.bot1);
         await client.logon();
+        LABEL_SUPPORTED = client.addLabels && Circuit.supportedEvents.includes('labelsAdded') && client.editLabel && Circuit.supportedEvents.includes('labelEdited') && client.assignLabels && client.unassignLabels && client.removeLabels && Circuit.supportedEvents.includes('labelsRemoved');
     });
 
     after(async () => {
@@ -20,9 +22,11 @@ describe('Labels', () => {
     });
 
     it('should add two labels', async () => {
-        if (!client.addLabels) {
+        console.log(LABEL_SUPPORTED);
+        if (!LABEL_SUPPORTED) {
             console.log('API not yet supported');
             assert(true);
+            return;
         }
         const labelValue1 = `${Date.now()}a`;
         const labelValue2 = `${Date.now()}b`;
@@ -46,9 +50,10 @@ describe('Labels', () => {
     });
 
     it('should edit one of the added labels', async () => {
-        if (!client.editLabel) {
+        if (!LABEL_SUPPORTED) {
             console.log('API not yet supported');
             assert(true);
+            return;
         }
         const labelIdToEdit = Object.keys(addedLabelsHT)[0];
         const newValue = `${Date.now()}c`;
@@ -74,9 +79,10 @@ describe('Labels', () => {
     });
 
     it('should assign labels', async () => {
-        if (!client.assignLabels) {
+        if (!LABEL_SUPPORTED) {
             console.log('API not yet supported');
             assert(true);
+            return;
         }
         conversation = await client.getConversations({numberOfConversations: 1});
         conversation = conversation[0];
@@ -103,6 +109,11 @@ describe('Labels', () => {
     });
 
     it('should get the conversations having the specified label', async () => {
+        if (!LABEL_SUPPORTED) {
+            console.log('API not yet supported');
+            assert(true);
+            return;
+        }
         // Has to wait because backend has to perform search for getConversationsByFilter
         await helper.sleep(3000);
         const labelIds = Object.keys(addedLabelsHT);
@@ -121,6 +132,11 @@ describe('Labels', () => {
     });
 
     it('should get conversations by the added label using getConversationsByLabel', async () => {
+        if (!LABEL_SUPPORTED) {
+            console.log('API not yet supported');
+            assert(true);
+            return;
+        }
         const labelIds = Object.keys(addedLabelsHT);
         const labelId = labelIds[0];
         const res = await client.getConversationsByLabel(labelId);
@@ -128,9 +144,10 @@ describe('Labels', () => {
     });
 
     it('should unassign labels', async () => {
-        if (!client.unassignLabels) {
+        if (!LABEL_SUPPORTED) {
             console.log('API not yet supported');
             assert(true);
+            return;
         }
         conversation = await client.getConversations({numberOfConversations: 1});
         conversation = conversation[0];
@@ -159,9 +176,10 @@ describe('Labels', () => {
     });
 
     it('should remove the two added labels', async () => {
-        if (!client.removeLabels) {
+        if (!LABEL_SUPPORTED) {
             console.log('API not yet supported');
             assert(true);
+            return;
         }
         const labelsIdsToRemove = Object.keys(addedLabelsHT);
         const res = await Promise.all([
