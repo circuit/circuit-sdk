@@ -23,7 +23,7 @@ Add the the line below to the HTML file of your app. This will include the lates
 <script type="text/javascript" src="https://unpkg.com/circuit-sdk"></script>
 ```
 
-> Starting with version 1.2.2800 the JS SDK can also be imported as CommonJS or AMD module. See [umd](https://github.com/circuit/umd) or [circuit-ionic-starter](https://github.com/circuit/circuit-ionic-starter) repos for examples.
+> The JS SDK can now also be imported as CommonJS or AMD module. See [umd](https://github.com/circuit/umd) or [circuit-ionic-starter](https://github.com/circuit/circuit-ionic-starter) repos for examples.
 
 #### Node.js
 ```bash
