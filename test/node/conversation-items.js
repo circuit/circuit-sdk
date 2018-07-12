@@ -4,7 +4,9 @@ const assert = require('assert');
 const Circuit = require('../../circuit-node');
 const config = require('./config.json');
 const helper = require('./helper');
-var fs = require('fs');
+// const FileAPI = require('file-api');
+// const File = FileAPI.File;
+// const fs = require('fs');
 Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
 
 let client;
@@ -41,10 +43,8 @@ describe('Conversation Items', () => {
                 predicate: evt => evt.item.convId === conversation.convId
             }])           
         ]);
-        item.itemId = res[0].itemId;
-        item.content = res[0].text.content;
-        item.creationTime = res[0].creationTime;
-        assert(res[0].convId === conversation.convId && res[0].text.content === textValue);
+        item = res[0];
+        assert(item.convId === conversation.convId && item.text.content === textValue);
     });
     
     it('should update a complex text item and raise an itemUpdated event', async () => {
@@ -62,8 +62,8 @@ describe('Conversation Items', () => {
                 predicate: evt => evt.item.convId === conversation.convId && evt.item.itemId === item.itemId
             }])           
         ]);
-        item.content = res[0].text.content;
-        assert(res[0].itemId === item.itemId && res[0].text.content === textValue && res[0].text.subject === subject);
+        item = res[0];
+        assert(item.itemId === content.itemId && item.text.content === textValue && item.text.subject === subject);
     }); 
 
     it('should get conversation feed', async () => {
@@ -136,5 +136,32 @@ describe('Conversation Items', () => {
         ]);
         const res = await client.getItemById(item.itemId);
         assert(!res.text.likedByUsers || !res.text.likedByUsers.includes(user.userId));
+    });
+
+    // it('should update a complex text item and raise an itemUpdated event', async () => {
+    //     const textValue = `${Date.now()}x`;
+    //     const subject = `${Date.now()}y`;
+    //     const file = new File('test/node/test.txt');
+    //     console.log(file);
+    //     const content = {
+    //         subject: subject,
+    //         content: textValue,
+    //         attachments: file
+    //     }
+    //     const res  = await client.updateTextItem(conversation.convId, content);
+    //     console.log(res);
+    // }); 
+
+    //  // API not in sdk yet
+    // it('should add another simple text item and get both items by their ids', async () => {
+    //     const textValue = `${Date.now()}x`;
+    //     const item2 = await client.addTextItem(conversation.convId, textValue);
+    //     const res = await client.getItemsById([item.itemId, item2.itemId]);
+    //     console.log(res);
+    //     // assert(res[0].convId === conversation.convId && res[0].text.content === textValue);
+    // });
+
+    it('should unlike item and raise an itemUpdated event', async () => {
+        await client.markItemsAsRead(conversation.convId);
     });
 });

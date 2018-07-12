@@ -24,6 +24,11 @@ describe('Users', () => {
         await client2.logout();
     });
 
+    it('should get the user', async () => {
+        const res = await client.getLoggedOnUser();
+        assert(res && res.userId === user.userId);
+    });
+    
     it('should get the logged on users', async () => {
        const userData1 = await client.getLoggedOnUser(); 
        assert(userData1 && userData1.userId === user.userId); 
@@ -42,5 +47,23 @@ describe('Users', () => {
     it('should get users by their emails', async () => {
         const res = await client.getUsersByEmail([user.emailAddress, user2.emailAddress]);
         assert(res && res.every(u => u.userId === user.userId || u.userId === user2.userId));
+    });
+
+    it('should update user', async () => {
+        const updatedUser = {
+            userId: user.userId,
+            firstName: `${Date.now()}a`
+        }
+        const oldUser = {
+            userId: user.userId,
+            firstName: user.firstName
+        }
+        await client.updateUser(updatedUser);
+        const res1 = await client.getUserById(user.userId);
+        const result1 = res1 && res1.userId === user.userId && res1.firstName === updatedUser.firstName;
+        await client.updateUser(oldUser);
+        const res2 = await client.getUserById(user.userId);
+        const result2 = res2 && res2.userId === user.userId && res2.firstName === oldUser.firstName;
+        assert(result1 && result2);
     });
 });
