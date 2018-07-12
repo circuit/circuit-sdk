@@ -4,7 +4,6 @@ const assert = require('assert');
 const Circuit = require('../../circuit-node');
 const config = require('./config.json');
 const helper = require('./helper');
-var fs = require('fs');
 Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
 
 let client;
@@ -41,10 +40,8 @@ describe('Conversation Items', () => {
                 predicate: evt => evt.item.convId === conversation.convId
             }])           
         ]);
-        item.itemId = res[0].itemId;
-        item.content = res[0].text.content;
-        item.creationTime = res[0].creationTime;
-        assert(res[0].convId === conversation.convId && res[0].text.content === textValue);
+        item = res[0];
+        assert(item.convId === conversation.convId && item.text.content === textValue);
     });
     
     it('should update a complex text item and raise an itemUpdated event', async () => {
@@ -62,8 +59,8 @@ describe('Conversation Items', () => {
                 predicate: evt => evt.item.convId === conversation.convId && evt.item.itemId === item.itemId
             }])           
         ]);
-        item.content = res[0].text.content;
-        assert(res[0].itemId === item.itemId && res[0].text.content === textValue && res[0].text.subject === subject);
+        item = res[0];
+        assert(item.itemId === content.itemId && item.text.content === textValue && item.text.subject === subject);
     }); 
 
     it('should get conversation feed', async () => {
@@ -136,5 +133,9 @@ describe('Conversation Items', () => {
         ]);
         const res = await client.getItemById(item.itemId);
         assert(!res.text.likedByUsers || !res.text.likedByUsers.includes(user.userId));
+    });
+
+    it('should unlike item and raise an itemUpdated event', async () => {
+        await client.markItemsAsRead(conversation.convId);
     });
 });

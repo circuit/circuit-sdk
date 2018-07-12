@@ -38,6 +38,11 @@ describe('Conversation Favorites', () => {
         assert(res && res.includes(conversation.convId));
     });
 
+    it('should get marked conversations', async () => {
+        const res = await client.getMarkedConversations();
+        assert(res && res.favoriteConvIds.some(convId => convId === conversation.convId));
+    });
+
     it('should unfavorite the conversation and check it is not favorited', async () => {
         await Promise.all([
             client.unfavoriteConversation(conversation.convId),
