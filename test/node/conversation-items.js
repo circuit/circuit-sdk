@@ -84,6 +84,7 @@ describe('Conversation Items', () => {
         if (!Circuit.supportedEvents.includes('itemFlagged')) {
             console.log('Event not supported.');
             assert(true);
+            return;
         }
         await Promise.all([
             client.flagItem(conversation.convId, item.itemId),
@@ -100,6 +101,7 @@ describe('Conversation Items', () => {
         if (!Circuit.supportedEvents.includes('itemUnflagged')) {
             console.log('Event not supported.');
             assert(true);
+            return;
         }
         await Promise.all([
             client.unflagItem(conversation.convId, item.itemId),
