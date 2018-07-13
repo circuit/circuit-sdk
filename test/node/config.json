@@ -8,5 +8,15 @@
         "domain": "circuitsandbox.net",
         "client_id": "738383cd7eb24dbe896a8bdddabb046d",
         "client_secret": "1b2f76e525114066ac73d89ed0a20637"
-    }
+    },
+    "sdktester1": {
+        "config": {
+            "domain": "circuitsandbox.net",
+            "client_id": "3dff321a3506404091938b8e2d384922"
+        },
+        "credentials": {
+            "username": "sdktester1@mailinator.com",
+            "password": "GoCircuit!1"
+      }
+    }   
 }
