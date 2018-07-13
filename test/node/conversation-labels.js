@@ -14,6 +14,8 @@ describe('Labels', () => {
     before(async () => {
         client = new Circuit.Client(config.bot1);
         await client.logon();
+        const topic = `${Date.now()}a`;
+        conversation = await client.createConferenceBridge(topic);
         LABEL_SUPPORTED = client.addLabels && Circuit.supportedEvents.includes('labelsAdded') && client.editLabel && Circuit.supportedEvents.includes('labelEdited') && client.assignLabels && client.unassignLabels && client.removeLabels && Circuit.supportedEvents.includes('labelsRemoved');
     });
 
@@ -22,7 +24,6 @@ describe('Labels', () => {
     });
 
     it('should add two labels', async () => {
-        console.log(LABEL_SUPPORTED);
         if (!LABEL_SUPPORTED) {
             console.log('API not yet supported');
             assert(true);
@@ -84,8 +85,6 @@ describe('Labels', () => {
             assert(true);
             return;
         }
-        conversation = await client.getConversations({numberOfConversations: 1});
-        conversation = conversation[0];
         const labelIdsToAssign = Object.keys(addedLabelsHT);
         const results = await Promise.all([
             client.assignLabels(conversation.convId, labelIdsToAssign),
@@ -149,8 +148,6 @@ describe('Labels', () => {
             assert(true);
             return;
         }
-        conversation = await client.getConversations({numberOfConversations: 1});
-        conversation = conversation[0];
         const labelIdsToUnassign = Object.keys(addedLabelsHT);
         const results = await Promise.all([
             client.unassignLabels(conversation.convId, labelIdsToUnassign),

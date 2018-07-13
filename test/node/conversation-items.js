@@ -18,6 +18,8 @@ describe('Conversation Items', () => {
         user = await client.logon();
         client2 = new Circuit.Client(config.bot2);
         user2 = await client2.logon();
+        const topic = `${Date.now()}a`;
+        conversation = await client.createGroupConversation([user2.userId], topic);
     });
 
     after(async () => {
@@ -25,11 +27,6 @@ describe('Conversation Items', () => {
         await client2.logout();
     });
 
-    it('should create a group conversation', async () => {
-        const topic = `${Date.now()}a`;
-        conversation = await client.createGroupConversation([user2.userId], topic);
-        assert(conversation && conversation.participants.includes(user.userId) && conversation.participants.includes(user2.userId));
-    });
 
     it('should add a simple text item and raise an itemAdded event', async () => {
         const textValue = `${Date.now()}a`;

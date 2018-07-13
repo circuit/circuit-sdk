@@ -10,7 +10,6 @@ let client;
 let user;
 let client2;
 let user2;
-let conversation;
 describe('Users', () => {
     before(async () => {
         client = new Circuit.Client(config.bot1);
@@ -32,6 +31,11 @@ describe('Users', () => {
     it('should get user by their Id', async () => {
         const res = await client.getUserById(user2.userId);
         assert(res && res.userId === user2.userId);
+    });
+
+    it('should get user by their Id', async () => {
+        const res = await client.getUserById(user.userId);
+        assert(res && res.userId === user.userId);
     });
 
     it('should get users by their Ids', async () => {
