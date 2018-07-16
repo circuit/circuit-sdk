@@ -58,7 +58,7 @@ describe('Conversation Items', () => {
         ]);
         item = res[0];
         assert(item.itemId === content.itemId && item.text.content === textValue && item.text.subject === subject);
-    }); 
+    });
 
     it('should get conversation feed', async () => {
         const res  = await client.getConversationFeed(conversation.convId);
@@ -132,7 +132,7 @@ describe('Conversation Items', () => {
         assert(!res.text.likedByUsers || !res.text.likedByUsers.includes(user.userId));
     });
 
-    it('should unlike item and raise an itemUpdated event', async () => {
+    it('should mark items as read', async () => {
         await client.markItemsAsRead(conversation.convId);
     });
 });
