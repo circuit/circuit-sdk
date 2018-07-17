@@ -53,11 +53,16 @@ describe('Users', () => {
         assert(res && res.every(u => u.userId === user.userId || u.userId === user2.userId));
     });
 
-    it('should update local user and raise userPresenceChanged event', async () => {
+    it('should update local user and raise userUpdated event', async () => {
         const updatedUser = {
             userId: user.userId,
             firstName: `${Date.now()}a`,
             lastName: `${Date.now()}b`,
+            phoneNumbers: [{
+                phoneNumber: "+15615551234",
+                type: "WORK",
+                isExternallyManaged: false
+            }],
             emailAddresses: [{
                 type: 'WORK',
                 address: 'testemail@bot.com'
@@ -72,6 +77,7 @@ describe('Users', () => {
             userId: user.userId,
             firstName: user.firstName,
             lastName: user.lastName,
+            phoneNumbers: user.phoneNumbers,
             emailAddresses: user.emailAddresses,
             jobTitle: user.jobTitle || ' ',
             company: user.company || ' '
@@ -80,20 +86,20 @@ describe('Users', () => {
             client.updateUser(updatedUser),
             helper.expectEvents(client, [{
                 type: 'userUpdated',
-                predicate: evt => evt.user.userId === user.userId && evt.user.firstName === updatedUser.firstName && evt.user.lastName === updatedUser.lastName && evt.user.jobTitle === updatedUser.jobTitle && evt.user.company === updatedUser.company
+                predicate: evt => evt.user.userId === user.userId && evt.user.firstName === updatedUser.firstName && evt.user.lastName === updatedUser.lastName && evt.user.jobTitle === updatedUser.jobTitle && evt.user.company === updatedUser.company && updatedUser.emailAddresses.every(emailAddress => evt.user.emailAddresses.some(e => e.address === emailAddress.address)) && updatedUser.phoneNumbers.every(number => evt.user.phoneNumbers.some(p => p.phoneNumber === number.phoneNumber))
             }])
         ]);
         const res1 = await client.getUserById(user.userId);
-        const result1 = res1 && res1.userId === user.userId && res1.firstName === updatedUser.firstName && res1.lastName === updatedUser.lastName && res1.jobTitle === updatedUser.jobTitle && res1.company === updatedUser.company;
+        const result1 = res1 && res1.userId === user.userId && res1.firstName === updatedUser.firstName && res1.lastName === updatedUser.lastName && res1.jobTitle === updatedUser.jobTitle && res1.company === updatedUser.company && updatedUser.emailAddresses.every(emailAddress => res1.emailAddresses.some(e => e.address === emailAddress.address)) && updatedUser.phoneNumbers.every(number => res1.phoneNumbers.some(p => p.phoneNumber === number.phoneNumber));
         await Promise.all([
             client.updateUser(oldUser),
             helper.expectEvents(client, [{
                 type: 'userUpdated',
-                predicate: evt => evt.user.userId === user.userId && evt.user.firstName === oldUser.firstName && evt.user.lastName === oldUser.lastName && evt.user.jobTitle === oldUser.jobTitle && evt.user.company === oldUser.company
+                predicate: evt => evt.user.userId === user.userId && evt.user.firstName === oldUser.firstName && evt.user.lastName === oldUser.lastName && evt.user.jobTitle === oldUser.jobTitle && evt.user.company === oldUser.company && oldUser.emailAddresses.every(emailAddress => evt.user.emailAddresses.some(e => e.address === emailAddress.address)) && oldUser.phoneNumbers.every(number => evt.user.phoneNumbers.some(p => p.phoneNumber === number.phoneNumber))
             }])
         ]);
         const res2 = await client.getUserById(user.userId);
-        const result2 = res2 && res2.userId === user.userId && res2.firstName === oldUser.firstName && res2.lastName === oldUser.lastName && res2.jobTitle === oldUser.jobTitle && res2.company === oldUser.company;
+        const result2 = res2 && res2.userId === user.userId && res2.firstName === oldUser.firstName && res2.lastName === oldUser.lastName && res2.jobTitle === oldUser.jobTitle && res2.company === oldUser.company && updatedUser.emailAddresses.every(emailAddress => res2.emailAddresses.some(e => e.address === emailAddress.address)) && oldUser.phoneNumbers.every(number => res2.phoneNumbers.some(p => p.phoneNumber === number.phoneNumber));
         assert(result1 && result2);
     });
 });

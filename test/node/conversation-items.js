@@ -135,4 +135,28 @@ describe('Conversation Items', () => {
     it('should mark items as read', async () => {
         await client.markItemsAsRead(conversation.convId);
     });
+
+    it('should mention the user and raise a mention event', async () => {
+        await client2.updateUser({
+            userId: user2.userId,
+            firstName: 'John',
+            lastName: 'Smith'
+        });
+        user2 = await client2.getUserById(user2.userId);
+        const content = `<span class="mention" abbr="${user2.userId}">@${user2.displayName}</span>`;
+        Circuit.Enums.TextItemContentType.RICH;
+        const res  = await Promise.all([
+            client.addTextItem(conversation.convId, {
+                content: content,
+                contentType: Circuit.Enums.TextItemContentType.RICH
+            }),
+            helper.expectEvents(client2, [{
+                type: 'mention',
+                predicate: evt => evt.mention.userReference.userId === user2.userId && evt.mention.itemReference.convId === conversation.convId
+            }]) 
+        ]);
+        const mentionedItem = res[0];
+        const mention = res[1].mention;
+        assert(mentionedItem.convId === conversation.convId && mentionedItem.creatorId === user.userId && mentionedItem.itemId === mention.itemReference.itemId && mention.userReference.userId === user2.userId);
+    });
 });
