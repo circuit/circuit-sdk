@@ -10,7 +10,6 @@ let client;
 let user;
 let client2;
 let user2;
-let conversation;
 let item = {};
 describe('Conversation Items', () => {
     before(async () => {
@@ -18,8 +17,7 @@ describe('Conversation Items', () => {
         user = await client.logon();
         client2 = new Circuit.Client(config.bot2);
         user2 = await client2.logon();
-        const topic = `${Date.now()}a`;
-        conversation = await client.createGroupConversation([user2.userId], topic);
+        global.conversation = await client.addParticipant(global.conversation.convId, [user2.userId]);
     });
 
     after(async () => {
@@ -31,14 +29,14 @@ describe('Conversation Items', () => {
     it('should add a simple text item and raise an itemAdded event', async () => {
         const textValue = `${Date.now()}a`;
         const res  = await Promise.all([
-            client.addTextItem(conversation.convId, textValue),
+            client.addTextItem(global.conversation.convId, textValue),
             helper.expectEvents(client, [{
                 type: 'itemAdded',
-                predicate: evt => evt.item.convId === conversation.convId
+                predicate: evt => evt.item.convId === global.conversation.convId
             }])           
         ]);
         item = res[0];
-        assert(item.convId === conversation.convId && item.text.content === textValue);
+        assert(item.convId === global.conversation.convId && item.text.content === textValue);
     });
     
     it('should update a complex text item and raise an itemUpdated event', async () => {
@@ -61,8 +59,8 @@ describe('Conversation Items', () => {
     });
 
     it('should get conversation feed', async () => {
-        const res  = await client.getConversationFeed(conversation.convId);
-        assert(res && res.threads.some(thread => thread.parentItem.convId === conversation.convId && thread.parentItem.itemid === item.itemid));
+        const res  = await client.getConversationFeed(global.conversation.convId);
+        assert(res && res.threads.some(thread => thread.parentItem.convId === global.conversation.convId && thread.parentItem.itemid === item.itemid));
     });
 
     it('should get conversation items', async () => {
@@ -70,7 +68,7 @@ describe('Conversation Items', () => {
             creationDate: item.creationTime - 1,
             direction: 'AFTER'
         }
-        const res  = await client.getConversationItems(conversation.convId, options);
+        const res  = await client.getConversationItems(global.conversation.convId, options);
         assert(res.some(conversationItem => conversationItem.itemId === item.itemId));
     }); 
 
@@ -81,14 +79,14 @@ describe('Conversation Items', () => {
             return;
         }
         await Promise.all([
-            client.flagItem(conversation.convId, item.itemId),
+            client.flagItem(global.conversation.convId, item.itemId),
             helper.expectEvents(client, [{
                 type: 'itemFlagged',
-                predicate: evt => evt.convId === conversation.convId && evt.itemId === item.itemId
+                predicate: evt => evt.convId === global.conversation.convId && evt.itemId === item.itemId
             }])         
         ]);
         const res = await client.getFlaggedItems();
-        assert(res && res.some(conv => conv.conversationId === conversation.convId && conv.conversationItemData.some(i => i.itemId === item.itemId)));
+        assert(res && res.some(conv => conv.conversationId === global.conversation.convId && conv.conversationItemData.some(i => i.itemId === item.itemId)));
     });
     
     it('should unflag item', async () => {
@@ -101,11 +99,11 @@ describe('Conversation Items', () => {
             client.unflagItem(conversation.convId, item.itemId),
             helper.expectEvents(client, [{
                 type: 'itemUnflagged',
-                predicate: evt => evt.convId === conversation.convId && evt.itemId === item.itemId
+                predicate: evt => evt.convId === global.conversation.convId && evt.itemId === item.itemId
             }])         
         ]);
         const res = await client.getFlaggedItems();      
-        assert(res && !res.some(conv => conv.conversationId === conversation.convId && conv.conversationItemData.some(i => i.itemId === item.itemId)));
+        assert(res && !res.some(conv => conv.conversationId === global.conversation.convId && conv.conversationItemData.some(i => i.itemId === item.itemId)));
     });
 
     it('should like item and raise an itemUpdated event', async () => {
@@ -113,7 +111,7 @@ describe('Conversation Items', () => {
             client.likeItem(item.itemId),
             helper.expectEvents(client, [{
                 type: 'itemUpdated',
-                predicate: evt => evt.item.itemId === item.itemId && evt.item.convId === conversation.convId
+                predicate: evt => evt.item.itemId === item.itemId && evt.item.convId === global.conversation.convId
             }]) 
         ]);
         const res = await client.getItemById(item.itemId);
@@ -125,15 +123,22 @@ describe('Conversation Items', () => {
             client.unlikeItem(item.itemId),
             helper.expectEvents(client, [{
                 type: 'itemUpdated',
-                predicate: evt => evt.item.itemId === item.itemId && evt.item.convId === conversation.convId
+                predicate: evt => evt.item.itemId === item.itemId && evt.item.convId === global.conversation.convId
             }]) 
         ]);
         const res = await client.getItemById(item.itemId);
         assert(!res.text.likedByUsers || !res.text.likedByUsers.includes(user.userId));
     });
 
-    it('should mark items as read', async () => {
-        await client.markItemsAsRead(conversation.convId);
+    it('should mark items as read and raise a conversationReadItems event', async () => {
+        const res = await Promise.all([
+            client.markItemsAsRead(global.conversation.convId),
+            helper.expectEvents(client, [{
+                type: 'conversationReadItems',
+                predicate: evt => evt.data.convId === global.conversation.convId
+            }]) 
+        ]);
+        assert(res[1].data.convId === global.conversation.convId);
     });
 
     it('should mention the user and raise a mention event', async () => {

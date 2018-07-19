@@ -77,7 +77,7 @@ describe('Search Tests', () => {
     });
 
     it('should confirm search results for the user by name', async () => {
-        //wait to allow time for searches to return
+        // wait to allow time for searches to return
         await helper.sleep(3000);
         assert(searchResults[searchId2] && searchResults[searchId2].type === 'basicSearchResults' && searchResults[searchId2].data.users.includes(user2.userId));
     });

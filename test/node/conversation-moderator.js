@@ -10,16 +10,15 @@ let client;
 let user;
 let client2;
 let user2;
-let conversation;
 describe('Moderator Tests', () => {
     before(async () => {
         client = new Circuit.Client(config.bot1);
         user = await client.logon();
         client2 = new Circuit.Client(config.bot2);
         user2 = await client2.logon();
-        const topic = `${Date.now()}a`;
-        conversation = await client.createConferenceBridge(topic);
-        conversation = await client.addParticipant(conversation.convId, [user2.userId]);
+        if (!global.conversation.participants.includes(user2.userId)) {
+            global.conversation = await client.addParticipant(global.conversation.convId, [user2.userId]);
+        }
     });
 
     after(async () => {
@@ -27,26 +26,26 @@ describe('Moderator Tests', () => {
     });
 
     it('should enable moderation on a conversation', async () => {
-        await client.moderateConversation(conversation.convId);
-        conversation = await client.getConversationById(conversation.convId);
-        assert(conversation.isModerated && conversation.moderators.includes(user.userId));
+        await client.moderateConversation(global.conversation.convId);
+        global.conversation = await client.getConversationById(global.conversation.convId);
+        assert(global.conversation.isModerated && global.conversation.moderators.includes(user.userId));
     });
 
     it('should grant moderator rights to a user', async () => {
-        await client.grantModeratorRights(conversation.convId, user2.userId);
-        conversation = await client.getConversationById(conversation.convId);
-        assert(conversation.moderators.includes(user2.userId));
+        await client.grantModeratorRights(global.conversation.convId, user2.userId);
+        global.conversation = await client.getConversationById(global.conversation.convId);
+        assert(global.conversation.moderators.includes(user2.userId));
     });
 
     it('should remove moderator rights for a user', async () => {
-        await client.dropModeratorRights(conversation.convId, user2.userId);
-        conversation = await client.getConversationById(conversation.convId);
-        assert(!conversation.moderators || !conversation.moderators.includes(user2.userId));
+        await client.dropModeratorRights(global.conversation.convId, user2.userId);
+        global.conversation = await client.getConversationById(global.conversation.convId);
+        assert(!global.conversation.moderators || !global.conversation.moderators.includes(user2.userId));
     });
 
     it('should disable moderation on a conversation', async () => {
-        await client.unmoderateConversation(conversation.convId);
-        conversation = await client.getConversationById(conversation.convId);
-        assert(!conversation.isModerated);
+        await client.unmoderateConversation(global.conversation.convId);
+        global.conversation = await client.getConversationById(global.conversation.convId);
+        assert(!global.conversation.isModerated);
     });
 });
