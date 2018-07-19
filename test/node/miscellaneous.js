@@ -34,9 +34,4 @@ describe('Miscellaneous Tests', () => {
         const res = await client.getTelephonyData();
         assert(res);
     });
-
-    it('should get past conversations', async () => {
-        const res = await client.getConversations();
-        assert(res.some(conv => conv.convId === conversation.convId));
-    });
 });
