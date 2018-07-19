@@ -20,7 +20,7 @@ let phoneNumber = {
     type: "WORK",
     isExternallyManaged: false
 }
-// __preperation.js must have been run before this test
+// __preperation.js must be run before this test
 describe('Search Tests', () => {
     before(async () => {
         client = new Circuit.Client(config.bot1);
