@@ -17,7 +17,9 @@ describe('Conversation Items', () => {
         user = await client.logon();
         client2 = new Circuit.Client(config.bot2);
         user2 = await client2.logon();
-        global.conversation = await client.addParticipant(global.conversation.convId, [user2.userId]);
+        if (!global.conversation.participants.includes(user2.userId)) {
+            global.conversation = await client.addParticipant(global.conversation.convId, [user2.userId]);
+        }
     });
 
     after(async () => {
