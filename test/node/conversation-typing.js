@@ -4,6 +4,7 @@ const assert = require('assert');
 const Circuit = require('../../circuit-node');
 const config = require('./config.json');
 const helper = require('./helper');
+const prep = require('../__preperation');
 Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
 
 let client;
@@ -18,17 +19,12 @@ describe('Subscribe to Typing Indicator', () => {
         user = await client.logon();
         client2 = new Circuit.Client(config.bot2);
         user2 = await client2.logon();
+        conversation = prep.conversation;
     });
 
     after(async () => {
         await client.logout();
         await client2.logout();
-    });
-
-    it('should create a direct conversation', async () => {
-        const res = await client.createDirectConversation(user2.userId);
-        conversation = res.conversation;
-        assert(conversation.participants.includes(user.userId) && conversation.participants.includes(user2.userId));
     });
     
     it('should add a simple text item', async () => {

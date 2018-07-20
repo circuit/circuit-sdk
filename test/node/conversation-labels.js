@@ -4,18 +4,18 @@ const assert = require('assert');
 const Circuit = require('../../circuit-node');
 const config = require('./config.json');
 const helper = require('./helper');
+const prep = require('../__preperation');
 Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
 
 let client;
 let addedLabelsHT = {};
-// let conversation;
+let conversation;
 let LABEL_SUPPORTED;
 describe('Labels', () => {
     before(async () => {
         client = new Circuit.Client(config.bot1);
         await client.logon();
-        // const topic = `${Date.now()}a`;
-        // conversation = await client.createConferenceBridge(topic);
+        conversation = prep.conversation;
         LABEL_SUPPORTED = client.addLabels && Circuit.supportedEvents.includes('labelsAdded') && client.editLabel && Circuit.supportedEvents.includes('labelEdited') && client.assignLabels && client.unassignLabels && client.removeLabels && Circuit.supportedEvents.includes('labelsRemoved');
     });
 
@@ -87,10 +87,10 @@ describe('Labels', () => {
         }
         const labelIdsToAssign = Object.keys(addedLabelsHT);
         const results = await Promise.all([
-            client.assignLabels(global.conversation.convId, labelIdsToAssign),
+            client.assignLabels(conversation.convId, labelIdsToAssign),
             helper.expectEvents(client, [{
                 type: 'conversationUserDataChanged',
-                predicate: evt => evt.data.convId === global.conversation.convId && evt.data.labels.every(label => labelIdsToAssign.includes(label))
+                predicate: evt => evt.data.convId === conversation.convId && evt.data.labels.every(label => labelIdsToAssign.includes(label))
             }])
         ]);
         const res = results[0];
@@ -99,9 +99,9 @@ describe('Labels', () => {
                 assert(false);
             }
         });
-        global.conversation = await client.getConversationById(global.conversation.convId);
+        conversation = await client.getConversationById(conversation.convId);
         labelIdsToAssign.forEach(labelId => {
-            if (!global.conversation.userData.labelIds.includes(labelId)) {
+            if (!conversation.userData.labelIds.includes(labelId)) {
                 assert(false);
             }
         });
@@ -126,7 +126,7 @@ describe('Labels', () => {
             },
             retrieveAction: Circuit.Enums.RetrieveAction.CONVERSATIONS
         });
-        assert(res.find(conv => conv.convId === global.conversation.convId));
+        assert(res.find(conv => conv.convId === conversation.convId));
 
     });
 
@@ -139,7 +139,7 @@ describe('Labels', () => {
         const labelIds = Object.keys(addedLabelsHT);
         const labelId = labelIds[0];
         const res = await client.getConversationsByLabel(labelId);
-        assert(res.some(conv => conv.convId === global.conversation.convId));
+        assert(res.some(conv => conv.convId === conversation.convId));
     });
 
     it('should unassign labels', async () => {
@@ -150,10 +150,10 @@ describe('Labels', () => {
         }
         const labelIdsToUnassign = Object.keys(addedLabelsHT);
         const results = await Promise.all([
-            client.unassignLabels(global.conversation.convId, labelIdsToUnassign),
+            client.unassignLabels(conversation.convId, labelIdsToUnassign),
             helper.expectEvents(client, [{
                 type: 'conversationUserDataChanged',
-                predicate: evt => evt.data.convId === global.conversation.convId && labelIdsToUnassign.every(labelId => !evt.data.labels || !evt.data.labels.includes(labelId))
+                predicate: evt => evt.data.convId === conversation.convId && labelIdsToUnassign.every(labelId => !evt.data.labels || !evt.data.labels.includes(labelId))
             }])
         ]); 
         const res = results[0];         
@@ -162,10 +162,10 @@ describe('Labels', () => {
                 assert(false);
             }
         });
-        global.conversation = await client.getConversationById(global.conversation.convId);
-        if (global.conversation.userData.labelIds) {
+        conversation = await client.getConversationById(conversation.convId);
+        if (conversation.userData.labelIds) {
             labelIdsToUnassign.forEach(labelId => {
-                if (global.conversation.userData.labelIds.includes(labelId)) {
+                if (conversation.userData.labelIds.includes(labelId)) {
                     assert(false);
                 }
             });

@@ -4,6 +4,7 @@ const assert = require('assert');
 const Circuit = require('../../circuit-node');
 const config = require('./config.json');
 const helper = require('./helper');
+const prep = require('../__preperation');
 Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
 
 let client;
@@ -32,6 +33,7 @@ describe('Search Tests', () => {
             userId: user2.userId,
             phoneNumbers: [phoneNumber]
         });
+        conversation = prep.conversation;
     });
 
     after(async () => {
@@ -45,7 +47,7 @@ describe('Search Tests', () => {
 
     it('should search a conversation by its topic and raise searchStatus event', async () => {
         const res = await Promise.all([
-            client.startBasicSearch(global.conversation.topic),
+            client.startBasicSearch(conversation.topic),
             helper.expectEvents(client, [{
                 type: 'searchStatus'
             }])
@@ -87,6 +89,6 @@ describe('Search Tests', () => {
     });
 
     it('should confirm search results for the conversation', async () => {
-        assert(searchResults[searchId] && searchResults[searchId].type === 'basicSearchResults' && searchResults[searchId].data.searchResults.some(conv => conv.convId === global.conversation.convId));
+        assert(searchResults[searchId] && searchResults[searchId].type === 'basicSearchResults' && searchResults[searchId].data.searchResults.some(conv => conv.convId === conversation.convId));
     });
 });

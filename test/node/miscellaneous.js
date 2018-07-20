@@ -7,14 +7,10 @@ const helper = require('./helper');
 Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
 
 let client;
-let user;
-let conversation;
 describe('Miscellaneous Tests', () => {
     before(async () => {
         client = new Circuit.Client(config.bot1);
-        user = await client.logon();
-        const topic = `${Date.now()}a`;
-        conversation = await client.createConferenceBridge(topic);
+        await client.logon();
     });
 
     after(async () => {
