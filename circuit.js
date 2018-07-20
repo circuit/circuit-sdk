@@ -30,10 +30,10 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- *  @version: 1.2.3700
+ *  @version: 1.2.3900
  */
 
-var Circuit = {}; Object.defineProperty(Circuit, 'version', { value: '1.2.3700'});
+var Circuit = {}; Object.defineProperty(Circuit, 'version', { value: '1.2.3900'});
 
 // Define external globals for JSHint
 /*global Buffer, clearInterval, clearTimeout, process, require, setInterval, setTimeout*/
@@ -1023,7 +1023,7 @@ var Circuit = (function (circuit) {
     Utils.URL_SEPARATORS_PATTERN = /(?=[.,;!?]?\s+|[.,;!?]$)/;
 
     // http, https, ftp, circuit url pattern
-    Utils.URL_PATTERN = /(http|ftp|https|circuit):\/\/[\w-]+?((\.|:)[\w-]+?)+?([\w.,@?'^=$%&amp;:\/~+#!\(\)\{\}\[\]-]*[\w@?'^=$%&amp;\/~+#!\(\)\{\}-])?/gim;
+    Utils.URL_PATTERN = /(http|ftp|https|circuit):\/\/[\w-]+?((\.|:)[\w-]+?)*?([\w.,@?'^=$%&amp;:\/~+#!\(\)\{\}\[\]-]*[\w@?'^=$%&amp;\/~+#!\(\)\{\}-])?/gim;
 
     // Matches URL_PATTERN (exact match)
     Utils.EXACT_URL_PATTERN = new RegExp('^' + Utils.URL_PATTERN.source + '$', 'i');
@@ -1343,9 +1343,12 @@ var Circuit = (function (circuit) {
         };
     };
 
-    Utils.checkUserDomain = function (domain) {
-        return circuit.isElectron ?
-            circuit.__server.split(':')[0].endsWith(domain) : window.location.hostname.endsWith(domain);
+    Utils.checkUserDomain = function (domain, startsWith) {
+        var hostname = circuit.isElectron ? circuit.__server.split(':')[0] : window.location.hostname;
+        if (startsWith) {
+            return hostname.startsWith(domain);
+        }
+        return hostname.endsWith(domain);
     };
 
     /**
@@ -2615,7 +2618,14 @@ var Circuit = (function (circuit) {
         var str = [];
         for (var p in obj) {
             if (obj.hasOwnProperty(p) && obj[p] !== undefined) {
-                str.push(encodeURIComponent(p) + '=' + encodeURIComponent(obj[p]));
+                var pValue = obj[p];
+                if (!Array.isArray(pValue)) {
+                    str.push(encodeURIComponent(p) + '=' + encodeURIComponent(pValue));
+                } else {
+                    pValue.forEach(function (elem) {
+                        str.push(encodeURIComponent(p) + '=' + encodeURIComponent(elem));
+                    });
+                }
             }
         }
         return str.join('&');
@@ -3177,6 +3187,7 @@ var Circuit = (function (circuit) {
             CONVERSATION_USER_DATA: 'CONVERSATION_USER_DATA',
             MS_CONNECTOR: 'MS_CONNECTOR',           // Not used by client
             SPACE: 'SPACE',                         // Not used by client
+            CPAAS: 'CPAAS',
 
             // Content type used exclusively between client and access server
             USER_DATA: 'USER_DATA'
@@ -3273,12 +3284,16 @@ var Circuit = (function (circuit) {
             EXISTING_USERS_IN_RANGE: 'EXISTING_USERS_IN_RANGE',
             EXISTING_USERS_IN_PUBLIC_RANGE: 'EXISTING_USERS_IN_PUBLIC_RANGE',
             EXISTING_USERS_IN_PRIVATE_RANGE: 'EXISTING_USERS_IN_PRIVATE_RANGE',
-            AREA_CODES_INCONSISTENT: 'AREA_CODES_INCONSISTENT'
+            AREA_CODES_INCONSISTENT: 'AREA_CODES_INCONSISTENT',
+            DELETE_ITSP_ALREADY_ASSIGNED: 'DELETE_ITSP_ALREADY_ASSIGNED'
         },
 
         CloudTelephonyCmpNextError: {
             COUNTRY_DETAILS_NOT_FOUND: 'COUNTRY_DETAILS_NOT_FOUND',
-            OSV_OPERATION_FAILED: 'OSV_OPERATION_FAILED'
+            OSV_OPERATION_FAILED: 'OSV_OPERATION_FAILED',
+            CALL_PICKUP_GROUP_DUPLICATE_NAME: 'CALL_PICKUP_GROUP_DUPLICATE_NAME',
+            OPENSCAPE_SITE_DID_AREA_CODES_INCONSISTENT: 'OPENSCAPE_SITE_DID_AREA_CODES_INCONSISTENT',
+            OPENSCAPE_SITE_DID_AREA_CODE_NOT_EMPTY: 'OPENSCAPE_SITE_DID_AREA_CODE_NOT_EMPTY'
         },
 
         ClientCapability: {  // This is a bitwise enum for client capabilities. Used between client and access.
@@ -3345,6 +3360,7 @@ var Circuit = (function (circuit) {
             UPDATE_GUEST_ACCESS: 'UPDATE_GUEST_ACCESS',
             GET_CONVERSATION_PARTICIPANTS: 'GET_CONVERSATION_PARTICIPANTS',
             GET_CONVERSATION_FEED: 'GET_CONVERSATION_FEED',
+            GET_CONVERSATION_TOPICS: 'GET_CONVERSATION_TOPICS',
             SET_FAVORITE_POSITION: 'SET_FAVORITE_POSITION',
             GET_ITEMS_BY_IDS: 'GET_ITEMS_BY_IDS',
             ADD_LABELS: 'ADD_LABELS',
@@ -4130,7 +4146,8 @@ var Circuit = (function (circuit) {
             NOTIFICATION_SUBSCRIPTION_CHANGE: 'NOTIFICATION_SUBSCRIPTION_CHANGE',
             TENANT_CONFIGURATION_UPDATED: 'TENANT_CONFIGURATION_UPDATED',
             UCAAS_DEVICE_UPDATED: 'UCAAS_DEVICE_UPDATED',
-            TENANT_PRESENCE_CHANGE: 'TENANT_PRESENCE_CHANGE'
+            TENANT_PRESENCE_CHANGE: 'TENANT_PRESENCE_CHANGE',
+            CMR_SETTINGS_UPDATED: 'CMR_SETTINGS_UPDATED'
         },
 
         ///////////////////////////////////////////////////////////////////////////
@@ -4533,6 +4550,8 @@ var Circuit = (function (circuit) {
             CREATE_PICKUP_GROUP: 'CREATE_PICKUP_GROUP',
             GET_TENANT_PICKUP_GROUPS: 'GET_TENANT_PICKUP_GROUPS',
             DELETE_PICKUP_GROUPS: 'DELETE_PICKUP_GROUPS',
+            GET_PICKUP_GROUP: 'GET_PICKUP_GROUP',
+            UPDATE_PICKUP_GROUP: 'UPDATE_PICKUP_GROUP',
 
             // Deprecated methods for users (but still used for TC)
             SUSPEND_USER: 'SUSPEND_USER',
@@ -4670,7 +4689,10 @@ var Circuit = (function (circuit) {
             EXTENSION_SENNHEISER_ENABLED: 'EXTENSION_SENNHEISER_ENABLED',
             MUTE_ON_ENTRY: 'MUTE_ON_ENTRY',
             MUTE_ON_ENTRY_CMR: 'MUTE_ON_ENTRY_CMR',
-            MUTE_ON_ENTRY_OUTCALL: 'MUTE_ON_ENTRY_OUTCALL'
+            MUTE_ON_ENTRY_OUTCALL: 'MUTE_ON_ENTRY_OUTCALL',
+            REMOTE_CONTROL_ENABLED: 'REMOTE_CONTROL_ENABLED',
+            REMOTE_CONTROL_EXTERNAL_ENABLED: 'REMOTE_CONTROL_EXTERNAL_ENABLED',
+            EXTENSION_EMBRAVA_ENABLED: 'EXTENSION_EMBRAVA_ENABLED'
         },
 
         TenantConfigurableTextType: {
@@ -4747,7 +4769,9 @@ var Circuit = (function (circuit) {
             AUDIO_DEVICE: 'AUDIO_DEVICE',
             PRIMARY_DISPLAY: 'PRIMARY_DISPLAY',
             SECONDARY_DISPLAY: 'SECONDARY_DISPLAY',
-            UPDATE_SERVER_STATUS: 'UPDATE_SERVER_STATUS'
+            UPDATE_SERVER_STATUS: 'UPDATE_SERVER_STATUS',
+            PLAYBACK_DEVICE: 'PLAYBACK_DEVICE',
+            RECORDING_DEVICE: 'RECORDING_DEVICE'
         },
 
         AdminManagedCMRSettingKey: {
@@ -5091,9 +5115,10 @@ var Circuit = (function (circuit) {
             AUTHENTICATION_SETTINGS: 'AUTHENTICATION_SETTINGS',
             BROADCAST_MESSAGES: 'BROADCAST_MESSAGES',
             COLOR_CONTRAST: 'COLOR_CONTRAST',
-            DEVELOPER_CONSOLE: 'DEVELOPER_CONSOLE',
             DEVELOPER_CONSOLE_EDIT: 'DEVELOPER_CONSOLE_EDIT',
             DIRECT_TO_CONF_UPGRADE: 'DIRECT_TO_CONF_UPGRADE',
+            DIRECT_ARCHIVE: 'DIRECT_ARCHIVE',
+            EMBRAVA_INTEGRATION: 'EMBRAVA_INTEGRATION',
             EXPORT_LEGAL_DATA: 'EXPORT_LEGAL_DATA',
             FILTER_BY_LABEL: 'FILTER_BY_LABEL',
             GROUP_PICKUP: 'GROUP_PICKUP',
@@ -5101,16 +5126,15 @@ var Circuit = (function (circuit) {
             INCOMING_CALL_ROUTING: 'INCOMING_CALL_ROUTING',
             IP_HANDLING_POLICY: 'IP_HANDLING_POLICY',
             JABRA_NODE_MODULE_SDK: 'JABRA_NODE_MODULE_SDK',
-            KEYBOARD_NAVIGATION: 'KEYBOARD_NAVIGATION',
             LANDSCAPE_MODE: 'LANDSCAPE_MODE',
             LEAK_CANARY: 'LEAK_CANARY',
             LOCK_SCREEN_CALL_CONTROL: 'LOCK_SCREEN_CALL_CONTROL',
-            MEETING_CANVAS: 'MEETING_CANVAS',
+            MORE_CONVERSATION_FILTERS: 'MORE_CONVERSATION_FILTERS',
+            NEW_ADD_TO_CONFERENCE_FLOW: 'NEW_ADD_TO_CONFERENCE_FLOW',
+            OLD_VOTING: 'OLD_VOTING',
             OPEN_XCHANGE: 'OPEN_XCHANGE',
             ORGANISE_CONTENT: 'ORGANISE_CONTENT',
             PARTICIPANT_DRAWING: 'PARTICIPANT_DRAWING',
-            PARTNER_SUPPORT_CONFIGURATION: 'PARTNER_SUPPORT_CONFIGURATION',
-            RICH_TOPIC_EDITOR_EXPANSION: 'RICH_TOPIC_EDITOR_EXPANSION',
             SCOPE_SEARCHES: 'SCOPE_SEARCHES',
             SCREEN_CONTROL: 'SCREEN_CONTROL',
             SCREEN_CONTROL_CONF: 'SCREEN_CONTROL_CONF',
@@ -5119,13 +5143,14 @@ var Circuit = (function (circuit) {
             SHORT_LINKS: 'SHORT_LINKS',
             SIRI_SEARCH: 'SIRI_SEARCH',
             THREADABLE_RTC_ITEM: 'THREADABLE_RTC_ITEM',
+            TODAY_WIDGET: 'TODAY_WIDGET',
             TOPIC_LISTING: 'TOPIC_LISTING',
             UCAAS_ITSP: 'UCAAS_ITSP',
             UCAAS_PICKUP_GROUPS: 'UCAAS_PICKUP_GROUPS',
             VIDEO_PLAYER: 'VIDEO_PLAYER',
             VIDEO_FOR_EVENTS: 'VIDEO_FOR_EVENTS',
-            VOTING: 'VOTING',
             WHITEBOARD: 'WHITEBOARD',
+            WIDER_FEED: 'WIDER_FEED',
             ZAPIER_INTEGRATION: 'ZAPIER_INTEGRATION'
         },
 
@@ -5157,6 +5182,28 @@ var Circuit = (function (circuit) {
             EXTENDED_ALERTING: 'EXTENDED_ALERTING',
             CLEAR_CONNECTION_BUSY: 'CLEAR_CONNECTION_BUSY',
             PBX_CALL_LOG: 'PBX_CALL_LOG'
+        },
+
+        ///////////////////////////////////////////////////////////////////////////
+        // Forms
+        ///////////////////////////////////////////////////////////////////////////
+        CPaaSActionType: {
+            SUBMIT_FORM_DATA: 'SUBMIT_FORM_DATA',
+            GET_OAUTH_APPLICATIONS: 'GET_OAUTH_APPLICATIONS'
+        },
+
+        CPaaSEventType: {
+            SUBMIT_FORM_DATA: 'SUBMIT_FORM_DATA'
+        },
+
+        CPaaSFormMetaDataControlType: {
+            LABEL: 'LABEL',
+            BUTTON: 'BUTTON',
+            RADIO: 'RADIO',
+            CHECKBOX: 'CHECKBOX',
+            DROPDOWN: 'DROPDOWN',
+            INPUT: 'INPUT',
+            SPACER: 'SPACER'
         }
     });
 
@@ -5230,16 +5277,9 @@ var Circuit = (function (circuit) {
 
     var Proto = {
         requestNr: 0,
-        normalizeWhiteboard: function (whiteboard, apiVersion) {
-            if (!whiteboard) {
-                return;
-            }
-            if (typeof apiVersion !== 'number') {
-                apiVersion = Utils.convertVersionToNumber(apiVersion);
-            }
-            var SP96_API_VERSION = 2090079; // 2.9.79-x
-            if (apiVersion <= SP96_API_VERSION || circuit.isSDK) {
-                // Set both "background" and misspelled "backround" fields for SDK or when connected to SP96 or older.
+        normalizeWhiteboard: function (whiteboard) {
+            if (circuit.isSDK && whiteboard) {
+                // Set both "background" and misspelled "backround" fields for SDK
                 if (typeof whiteboard.backround === 'boolean') {
                     whiteboard.background = whiteboard.backround;
                 } else if (typeof whiteboard.background === 'boolean') {
@@ -5307,6 +5347,9 @@ var Circuit = (function (circuit) {
                 break;
             case Constants.ContentType.USER_DATA:
                 msg.request.userData = content;
+                break;
+            case Constants.ContentType.CPAAS:
+                msg.request.cpaas = content;
                 break;
             }
             return msg;
@@ -5411,6 +5454,9 @@ var Circuit = (function (circuit) {
                     break;
                 case Constants.UserEventType.TENANT_PRESENCE_CHANGE:
                     evtData = event.user.tenantPresenceChanged;
+                    break;
+                case Constants.UserEventType.CMR_SETTINGS_UPDATED:
+                    evtData = event.user.cmrSettingsUpdatedEvent;
                     break;
                 }
                 evtData.userId = event.user.userId;
@@ -5711,6 +5757,16 @@ var Circuit = (function (circuit) {
                     break;
                 case Constants.ConversationUserDataEventType.FILTER_EDITED:
                     evtData = event.conversationUserData.filterEdited;
+                    break;
+                }
+                break;
+
+            // CPAAS
+            case Constants.ContentType.CPAAS:
+                evtName = 'CPAAS.' + event.cpaas.type;
+                switch (event.cpaas.type) {
+                case Constants.CPaaSEventType.SUBMIT_FORM_DATA:
+                    evtData = event.cpaas.submitFormData;
                     break;
                 }
                 break;
@@ -7495,7 +7551,7 @@ var Circuit = (function (circuit) {
                 } else if (stream.stop) {
                     stream.stop();
                 }
-                logger.info('[WebRTCAdapter]: Media stream has been stopped');
+                logger.info('[WebRTCAdapter]: Media stream has been stopped. Stream ID:', stream.id);
             } catch (e) {
                 logger.error('[WebRTCAdapter]: Failed to stop media stream. ', e);
             }
@@ -10082,7 +10138,9 @@ var Circuit = (function (circuit) {
         StartVideo: {name: 'StartVideo', type: 'video', icon: 'inactive', localize: 'res_StartVideo'},
         StopVideo: {name: 'StopVideo', type: 'video', icon: 'active', localize: 'res_StopVideo'},
         ToggleVideoInProgress: {name: 'ToggleVideoInProgress', type: 'video', icon: 'progress-icon', localize: ''},
-        RemoveFromStage: {name: 'DropFromStage', type: 'hangup', icon: 'drop-from-stage', localize: ''}
+        RemoveFromStage: {name: 'DropFromStage', type: 'hangup', icon: 'drop-from-stage', localize: ''},
+        ToggleWhiteboard: {name: 'ToggleWhiteboard', type: 'video', icon: '', localize: 'res_Whiteboard'},
+        ToggleScreenShare: {name: 'ToggleScreenShare', type: 'video', icon: '', localize: 'res_Screenshare'}
     };
 
     // Participant object for RTC Sessions
@@ -10105,6 +10163,7 @@ var Circuit = (function (circuit) {
         participant.isExternal = !!user.isExternal;  // External PSTN dial-in participants
         participant.isActive = RtcParticipant.isActive.bind(null, participant);
         participant.actions = [];
+        participant.screenDisplayActions = [];
         participant.screenSharePointerSupported = false;
 
         participant.hasSameMediaType = RtcParticipant.hasSameMediaType.bind(null, participant);
@@ -10185,6 +10244,7 @@ var Circuit = (function (circuit) {
 
     RtcParticipant.setActions = function (participant, conversation, localUser) {
         participant.actions = [];
+        participant.screenDisplayActions = [];
 
         if (conversation && conversation.isTemporary) {
             // Invited guests are not allowed any actions
@@ -10205,10 +10265,10 @@ var Circuit = (function (circuit) {
             } else {
                 participant.actions.push(participant.mediaType.video ? ParticipantAction.StopVideo : ParticipantAction.StartVideo);
             }
-
             participant.actions.push(participant.muted ? ParticipantAction.Unmute : ParticipantAction.Mute);
             participant.actions.push(ParticipantAction.Drop);
-
+            participant.screenDisplayActions.push(ParticipantAction.ToggleWhiteboard);
+            participant.screenDisplayActions.push(ParticipantAction.ToggleScreenShare);
         } else {
             var isConvModerated = !conversation || conversation.isModerated;
             var amIModerator = conversation && conversation.userIsModerator(localUser);
@@ -11786,6 +11846,10 @@ var Circuit = (function (circuit) {
         ///////////////////////////////////////////////////////////////////////////////////////
         conversation = null; // Remove reference to conversation object
 
+        if (this.isTelephonyCall) {
+            // Init displayName to empty to avoid showing Phone calls conversation displayName (VGTC VGTC)
+            this.peerUser.displayName = '';
+        }
         logger.info('[RemoteCall]: Created new remote call with callID = ', this.callId);
     }
 
@@ -12228,6 +12292,7 @@ var Circuit = (function (circuit) {
         this.screenOwnerId = null;
         this.screenOwner = null;
         this.screenController = null;
+        this.preventScreenRequestControlInConf = false;
 
         // Bad quality notification bar on call stage
         this.badQualityNotification = {
@@ -14354,7 +14419,7 @@ var Circuit = (function (circuit) {
             }
         }
 
-        function getAudioConstraints(audioSources) {
+        function getAudioConstraints(audioSources, param) {
             var source = Utils.selectMediaDevice(audioSources, RtcSessionController.recordingDevices);
             var constraints = {
                 enableAudioAGC: RtcSessionController.enableAudioAGC,
@@ -14365,9 +14430,15 @@ var Circuit = (function (circuit) {
                 _mediaConstraints.audio === _oldMediaConstraints.audio &&
                 _lastGUMAudioConstraints.enableAudioAGC === constraints.enableAudioAGC &&
                 _lastGUMAudioConstraints.sourceId === constraints.sourceId) {
-                // We can reuse the local audio stream from the old connection (Chrome and FF only)
-                return null;
+                var av = _oldLocalStreams[LOCAL_AUDIO_VIDEO];
+                var oldAudioTrack = av && av.getAudioTracks()[0];
+                if (oldAudioTrack && oldAudioTrack.readyState !== 'ended') {
+                    // We can reuse the local audio stream from the old connection (Chrome and FF only)
+                    param.oldAudioTrack = oldAudioTrack;
+                    return null;
+                }
             }
+            logger.debug('[RtcSessionController]: Input device selected: ', source);
             return constraints;
         }
 
@@ -14456,16 +14527,13 @@ var Circuit = (function (circuit) {
                     logger.debug('[RtcSessionController]: Retrieved media sources');
                     var audioConstraints;
                     if (_mediaConstraints.audio) {
-                        audioConstraints = getAudioConstraints(audioSources);
-                        if (!audioConstraints) {
-                            // We can't reuse the whole old stream object, but we can reuse the audio track
-                            var av = _oldLocalStreams[LOCAL_AUDIO_VIDEO];
-                            var audioTrack = av.getAudioTracks()[0];
-                            if (audioTrack) {
-                                logger.debug('[RtcSessionController]: Reusing audio track');
-                                // Clone the audio track so stopping the old stream won't affect the new stream
-                                reuseAudioOnlyTrack = audioTrack.clone();
-                            }
+                        var param = {};
+                        audioConstraints = getAudioConstraints(audioSources, param);
+                        if (!audioConstraints && param.oldAudioTrack) {
+                            // Reuse the old audio track
+                            logger.debug('[RtcSessionController]: Reusing audio track');
+                            // Clone the audio track so stopping the old stream won't affect the new stream
+                            reuseAudioOnlyTrack = param.oldAudioTrack.clone();
                         } else {
                             constraints.audio = WebRTCAdapter.getAudioOptions(audioConstraints);
                         }
@@ -14489,9 +14557,8 @@ var Circuit = (function (circuit) {
 
                     // Stop local video if has to change the HDVideo
                     if (_renegotiationInProgress &&
-                        ((_mediaConstraints.video && _oldMediaConstraints.video &&
-                        _mediaConstraints.hdVideo !== _oldMediaConstraints.hdVideo) ||
-                        !_mediaConstraints.video && _oldMediaConstraints.video)) {
+                        _mediaConstraints.video && _oldMediaConstraints.video &&
+                        _mediaConstraints.hdVideo !== _oldMediaConstraints.hdVideo) {
                         WebRTCAdapter.stopLocalVideoTrack(_oldLocalStreams[LOCAL_AUDIO_VIDEO]);
                     }
 
@@ -14686,6 +14753,9 @@ var Circuit = (function (circuit) {
                     config.iceTransportPolicy = 'relay';
                 }
             } else {
+                if (!_ignoreTurnOnNextPC) {
+                    logger.warn('[RtcSessionController]: No TURN server(s) provided.');
+                }
                 config.iceServers = [];
             }
             var connectionBypassed = !!_ignoreTurnOnNextPC;
@@ -14799,6 +14869,9 @@ var Circuit = (function (circuit) {
                     return;
                 }
 
+                if (pc === _pc && candidate.typ === 'relay') {
+                    pc.relayCandidateCount = pc.relayCandidateCount ? ++pc.relayCandidateCount : 1;
+                }
                 logDebug('New ICE candidate: ', event.candidate);
                 // Only access pc.localDescription for Trickle ICE scenarios
                 if (useTrickleIce(pc)) {
@@ -14865,6 +14938,13 @@ var Circuit = (function (circuit) {
 
             var pcType = (pc === _pc ? 'audio/video' : (pc === _desktopPc ? 'desktop' : 'screen control'));
             logDebug('Connection state change (' + pcType + '): ', pc.iceConnectionState);
+
+            if (_turnUris.length && pc === _pc && !pc.connectionBypassed && (pc.iceConnectionState === 'completed' ||
+                pc.iceConnectionState === 'failed') && !pc.relayCandidateCount) {
+                // We finished collecting all candidates and no relay candidates were generated for the main peer connection.
+                // This indicates connectivity problems between the client and the TURN server(s).
+                logWarning('[RtcSessionController]: No relay candidates were collected, please check connectivity to the TURN servers');
+            }
 
             var sdpStatus = getSetting(pc, 'sdpStatus');
             switch (sdpStatus) {
@@ -15570,8 +15650,12 @@ var Circuit = (function (circuit) {
         }
 
         function stopStreams(streams) {
+            var reusedStreams = (streams === _oldLocalStreams) ? _localStreams : _oldLocalStreams;
             streams && streams.forEach(function (stream) {
-                stopStream(stream);
+                // Make sure the stream being stopped is not being reused. If it is, don't stop it!
+                if (!reusedStreams || reusedStreams.indexOf(stream) === -1) {
+                    stopStream(stream);
+                }
             });
         }
 
@@ -15607,12 +15691,6 @@ var Circuit = (function (circuit) {
             if (_localStreams[index] === stream) {
                 // No changes
                 return;
-            }
-
-            if (_oldLocalStreams && _oldLocalStreams[index] === stream) {
-                // This stream is being reused. Set _oldLocalStreams to null so it
-                // won't be stopped after the media renegotiation finishes
-                _oldLocalStreams[index] = null;
             }
 
             if (_localStreams[index]) {
@@ -17106,6 +17184,7 @@ var Circuit = (function (circuit) {
                 return _dontReuseAudioStream;
             },
             set: function (value) {
+                logger.debug('[RtcSessionController]: Setting dontReuseAudioStream to:', value);
                 _dontReuseAudioStream = value;
             },
             enumerable: true,
@@ -18133,6 +18212,7 @@ var Circuit = (function (circuit) {
                 if (opts) {
                     opts.convId && req.setRequestHeader('x-conversation', opts.convId);
                     opts.rtcSessionId && req.setRequestHeader('x-rtcsession', opts.rtcSessionId);
+                    opts.token && req.setRequestHeader('authorization', 'SecToken ' + opts.token);
                 }
 
                 if (typeof onProgress === 'function') {
@@ -18264,7 +18344,7 @@ var Circuit = (function (circuit) {
         };
 
         // Upload a single file (image) for the whiteboard
-        this.uploadWhiteboardFile = function (file, rtcSessionId, convId) {
+        this.uploadWhiteboardFile = function (file, rtcSessionId, convId, token) {
             if (!UploadPromise) {
                 throw new Error('Promise support is required to use FileUpload');
             }
@@ -18279,15 +18359,17 @@ var Circuit = (function (circuit) {
 
             var options = {
                 rtcSessionId: rtcSessionId,
-                convId: convId
+                convId: convId,
+                token: token
             };
             var uploadPromise = uploadFile(reqId, file, url, null, options)
             .then(function (res) {
                 var resp = JSON.parse(res)[0];
-                var fileUrl = url + '?fileid=' + resp.id;
+                var fileId = resp.fileId || resp.id;
+                var fileUrl = url + '?fileid=' + fileId;
                 var fileName = file.modifiedName || file.name;
                 var attachmentMetaData = {
-                    fileId: resp.id,
+                    fileId: fileId,
                     fileName: fileName,
                     mimeType: resp.mimeType || file.type,
                     size: file.size,
@@ -18512,8 +18594,7 @@ var Circuit = (function (circuit) {
             return 'wss://' + _server + _url + (Object.keys(obj).length ? '?' + Utils.toQS(obj) : '');
         }
 
-
-        function addReqCallback(requestId, cb, keysToOmitFromResponse) {
+        function addReqCallback(requestId, cb, keysToOmitFromResponse, timeout) {
             if (!cb) { return; }
 
             var responseTimer = window.setTimeout(function (reqId) {
@@ -18531,7 +18612,7 @@ var Circuit = (function (circuit) {
                     // Check if websocket connection is still up
                     _that.pingServer();
                 }
-            }, RESPONSE_TIMEOUT, requestId);
+            }, timeout, requestId);
 
             if (!Array.isArray(keysToOmitFromResponse)) {
                 keysToOmitFromResponse = null;
@@ -18803,7 +18884,7 @@ var Circuit = (function (circuit) {
             _connCtrl.reconnect(getUrl(), delay);
         };
 
-        this.sendMessage = function (data, cb, keysToOmitFromResponse) {
+        this.sendMessage = function (data, cb, keysToOmitFromResponse, timeout) {
             if (!data || !data.request || !data.request.requestId) {
                 logger.error('[ConnectionHandler]: Cannot send message. Invalid message: ', data);
                 cb && window.setTimeout(function () { cb(Constants.ReturnCode.INVALID_MESSAGE); }, 0);
@@ -18819,7 +18900,7 @@ var Circuit = (function (circuit) {
             }
 
             // Callback must be added in the callback array only if message is actually sent through the connection, not before
-            cb && addReqCallback(data.request.requestId, cb, keysToOmitFromResponse);
+            cb && addReqCallback(data.request.requestId, cb, keysToOmitFromResponse, timeout || RESPONSE_TIMEOUT);
             return true;
         };
 
@@ -18938,12 +19019,14 @@ var Circuit = (function (circuit) {
         ///////////////////////////////////////////////////////////////////////////
         // Constants
         ///////////////////////////////////////////////////////////////////////////
-        var SP96_API_VERSION = 2090079; // 2.9.79-x
-        var SP97_API_VERSION = 2090083; // 2.9.83-x
         var SP98_API_VERSION = 2090084; // 2.9.84-x
         var SP99_API_VERSION = 2090088; // 2.9.88-x
+        var SP100_API_VERSION = 2090090; // 2.9.90-x
+        var SP101_API_VERSION = 2090093; // 2.9.93-x
 
         var NOP = function () {};
+
+        var LONG_RESPONSE_TIMEOUT = 150000;
 
         ///////////////////////////////////////////////////////////////////////////
         // Local variables
@@ -18960,7 +19043,7 @@ var Circuit = (function (circuit) {
         ///////////////////////////////////////////////////////////////////////////
         // Internal functions
         ///////////////////////////////////////////////////////////////////////////
-        function sendRequest(contentType, content, cb, keysToOmitFromRequest, keysToOmitFromResponse, tenantContext) {
+        function sendRequest(contentType, content, cb, keysToOmitFromRequest, keysToOmitFromResponse, tenantContext, useLongTimeout) {
             var msg = Proto.Request(contentType, content, tenantContext);
 
             if (_developmentMode) {
@@ -18969,13 +19052,15 @@ var Circuit = (function (circuit) {
                 msg.keysToOmitFromLogging = keysToOmitFromRequest;
             }
 
+            var timeout = useLongTimeout ? LONG_RESPONSE_TIMEOUT : null;
+
             _connHandler.sendMessage(msg, function (err, msg) {
                 try {
                     cb(err, msg);
                 } catch (ex) {
                     logger.error('[ClientApiHandler]: Exception: ', ex);
                 }
-            }, keysToOmitFromResponse);
+            }, keysToOmitFromResponse, timeout);
 
             return msg.request.requestId;
         }
@@ -19114,11 +19199,9 @@ var Circuit = (function (circuit) {
                 screenSharePointerSupported: data.screenSharePointerSupported,
                 asyncSupported: true,
                 noCallLog: data.noCallLog || undefined,
-                guestToken: data.guestToken || undefined
+                guestToken: data.guestToken || undefined,
+                rtcSupportedFeatures: data.rtcSupportedFeatures || undefined
             };
-            if (_self.isScreenTakeOverSupported()) {
-                joinData.rtcSupportedFeatures = data.rtcSupportedFeatures;
-            }
             return joinData;
         }
 
@@ -19219,24 +19302,6 @@ var Circuit = (function (circuit) {
                     cb(null, stuff);
                 }
             }, null, keysToOmitFromResponse);
-        }
-
-        function checkAPISupportForScreenTakeOver(operation, cb) {
-            if (!_self.isScreenTakeOverSupported()) {
-                logger.warn('[ClientApiHandler]: The ' + operation + ' operation is not supported by the backend');
-                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
-                return false;
-            }
-            return true;
-        }
-
-        function checkZapierSupport(provider, cb) {
-            if (provider === Constants.ThirdPartyConnectorType.ZAPIER && !_self.isZappierIntegrationSupported()) {
-                logger.warn('[ClientApiHandler]: Integration with ZAPIER is not supported by the backend');
-                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
-                return false;
-            }
-            return true;
         }
 
         function checkITSPSupport(cb) {
@@ -19360,30 +19425,6 @@ var Circuit = (function (circuit) {
             _connHandler.on(msgType, cb, keysToOmitFromEvent);
         };
 
-        this.isHideProfileExternalSupported = function () {
-            return _clientApiVersion > SP96_API_VERSION;
-        };
-
-        this.isConfigurePartnerAdministrationSupported = function () {
-            return _clientApiVersion > SP96_API_VERSION;
-        };
-
-        this.isZappierIntegrationSupported = function () {
-            return _clientApiVersion > SP97_API_VERSION;
-        };
-
-        this.isScreenTakeOverSupported = function () {
-            return _clientApiVersion > SP97_API_VERSION;
-        };
-
-        this.isPilotDisplayNumberSupported = function () {
-            return _clientApiVersion > SP97_API_VERSION;
-        };
-
-        this.isPickupSoundSupported = function () {
-            return _clientApiVersion > SP97_API_VERSION;
-        };
-
         this.isITSPSupported = function () {
             return _clientApiVersion > SP98_API_VERSION;
         };
@@ -19393,7 +19434,7 @@ var Circuit = (function (circuit) {
         };
 
         this.isPickupGroupsSupported = function () {
-            return _clientApiVersion > SP99_API_VERSION;
+            return _clientApiVersion > SP100_API_VERSION;
         };
 
         this.isCMRDeviceManagementSupported = function () {
@@ -19410,6 +19451,22 @@ var Circuit = (function (circuit) {
 
         this.isVideoForEventsSupported = function () {
             return _clientApiVersion > SP98_API_VERSION;
+        };
+
+        this.isRemoteControlAdministrationSupported = function () {
+            return _clientApiVersion > SP101_API_VERSION;
+        };
+
+        this.isSeparateAudioDevicesSupported = function () {
+            return _clientApiVersion > SP101_API_VERSION;
+        };
+
+        this.isEmbravaIntegrationSupported = function () {
+            return _clientApiVersion > SP101_API_VERSION;
+        };
+
+        this.isGetConversationTopicsSupported = function () {
+            return _clientApiVersion > SP101_API_VERSION;
         };
 
         ///////////////////////////////////////////////////////////////////////////////
@@ -19859,9 +19916,7 @@ var Circuit = (function (circuit) {
             }
 
             settings = settings.filter(function (setting) {
-                if ((setting.key === Constants.UserSettingKey.HIDE_PROFILE_EXTERNAL_ENABLED && !_self.isHideProfileExternalSupported()) ||
-                    (setting.key === Constants.UserSettingKey.PLAY_PICKUP_SOUND && !_self.isPickupSoundSupported()) ||
-                    (setting.key === Constants.UserSettingKey.KEYBOARD_SHORTCUTS_ENABLED && !_self.isShortcutsSettingFeatureSupported())) {
+                if ((setting.key === Constants.UserSettingKey.KEYBOARD_SHORTCUTS_ENABLED && !_self.isShortcutsSettingFeatureSupported())) {
                     logger.warn('[ClientApiHandler]: Requested setting is not supported by backend: ', setting);
                     return false;
                 }
@@ -20339,6 +20394,7 @@ var Circuit = (function (circuit) {
                     attachmentMetaData: getAttachmentsData(textItem.attachmentMetaData),
                     externalAttachmentMetaData: getExternalAttachmentsData(textItem.externalAttachmentMetaData),
                     preview: textItem.preview,
+                    formMetaData: textItem.form,
                     mentionedUsers: textItem.mentionedUsers
                 }
             };
@@ -20380,6 +20436,7 @@ var Circuit = (function (circuit) {
                 content: content,
                 attachmentMetaData: getAttachmentsData(textItem.attachmentMetaData),
                 preview: textItem.preview || {}, // In order to clear preview, an empty object must be used
+                formMetaData: textItem.form,
                 clustered: textItem.clustered,
                 externalAttachmentMetaData: getExternalAttachmentsData(textItem.externalAttachmentMetaData),
                 mentionedUsers: textItem.mentionedUsers
@@ -20578,6 +20635,46 @@ var Circuit = (function (circuit) {
                 if (isResponseValid(err, rsp, cb, true)) {
                     var res = rsp.conversation.getConversationFeedResult;
                     cb(null, res.conversationThreads, res.hasOlderThreads);
+                }
+            }, null, keysToOmitFromResponse);
+        };
+
+        this.getConversationTopics = function (convId, timestamp, maxNumberOfTopics, cb) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: getConversationTopics...');
+
+            if (!this.isGetConversationTopicsSupported()) {
+                logger.warn('[ClientApiHandler]: The getConversationTopics operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            var request = {
+                type: Constants.ConversationActionType.GET_CONVERSATION_TOPICS,
+                getConversationTopics: {
+                    convId: convId,
+                    timestamp: timestamp || undefined,
+                    maxNumberOfTopics: maxNumberOfTopics || undefined
+                }
+            };
+
+            var keysToOmitFromResponse = [
+                'response.conversation.getConversationTopics.conversationTopics.[].parentItem.attachments',
+                'response.conversation.getConversationTopics.conversationTopics.[].parentItem.externalAttachments',
+                'response.conversation.getConversationTopics.conversationTopics.[].parentItem.rtc',
+                'response.conversation.getConversationTopics.conversationTopics.[].parentItem.text',
+                'response.conversation.getConversationTopics.conversationTopics.[].parentItem.system',
+                'response.conversation.getConversationTopics.conversationTopics.[].lastItem.attachments',
+                'response.conversation.getConversationTopics.conversationTopics.[].lastItem.externalAttachments',
+                'response.conversation.getConversationTopics.conversationTopics.[].lastItem.rtc',
+                'response.conversation.getConversationTopics.conversationTopics.[].lastItem.text',
+                'response.conversation.getConversationTopics.conversationTopics.[].lastItem.system'
+            ];
+
+            sendRequest(Constants.ContentType.CONVERSATION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb, true)) {
+                    var res = rsp.conversation.getConversationTopicsResult;
+                    cb(null, res.conversationTopics, res.hasOlderTopics);
                 }
             }, null, keysToOmitFromResponse);
         };
@@ -20859,6 +20956,7 @@ var Circuit = (function (circuit) {
                 }
             });
         };
+
         /**
          * Unmark a conversation as Muted, Favorite, etc.
          *
@@ -21959,12 +22057,10 @@ var Circuit = (function (circuit) {
                     transactionId: data.transactionId,
                     screenSharePointerSupported: data.screenSharePointerSupported,
                     hosted: data.hosted,
-                    replaces: data.replaces
+                    replaces: data.replaces,
+                    rtcSupportedFeatures: data.rtcSupportedFeatures
                 }
             };
-            if (_self.isScreenTakeOverSupported()) {
-                request.changeMediaType.rtcSupportedFeatures = data.rtcSupportedFeatures;
-            }
 
             sendRequest(Constants.ContentType.RTC_CALL, request, function (err, rsp) {
                 if (isResponseValid(err, rsp, cb)) {
@@ -22092,9 +22188,7 @@ var Circuit = (function (circuit) {
         this.requestScreenControl = function (data, cb) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: requestScreenControl ...');
-            if (!checkAPISupportForScreenTakeOver('requestScreenControl', cb)) {
-                return;
-            }
+
             var request = {
                 type: Constants.RTCSessionActionType.REQUEST_SCREEN_CONTROL,
                 requestScreenControl: {
@@ -22112,9 +22206,7 @@ var Circuit = (function (circuit) {
         this.offerScreenControl = function (data, cb) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: offerScreenControl ...');
-            if (!checkAPISupportForScreenTakeOver('offerScreenControl', cb)) {
-                return;
-            }
+
             var request = {
                 type: Constants.RTCSessionActionType.OFFER_SCREEN_CONTROL,
                 offerScreenControl: {
@@ -22133,9 +22225,7 @@ var Circuit = (function (circuit) {
         this.acceptScreenControl = function (data, cb) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: acceptScreenControl ...');
-            if (!checkAPISupportForScreenTakeOver('acceptScreenControl', cb)) {
-                return;
-            }
+
             var request = {
                 type: Constants.RTCSessionActionType.ACCEPT_SCREEN_CONTROL,
                 acceptScreenControl: {
@@ -22153,9 +22243,7 @@ var Circuit = (function (circuit) {
         this.rejectScreenControl = function (data, cb) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: rejectScreenControl ...');
-            if (!checkAPISupportForScreenTakeOver('rejectScreenControl', cb)) {
-                return;
-            }
+
             var request = {
                 type: Constants.RTCSessionActionType.REJECT_SCREEN_CONTROL,
                 rejectScreenControl: {
@@ -22172,9 +22260,7 @@ var Circuit = (function (circuit) {
         this.rejectScreenControlRequest = function (data, cb) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: rejectScreenControlRequest ...');
-            if (!checkAPISupportForScreenTakeOver('rejectScreenControlRequest', cb)) {
-                return;
-            }
+
             var request = {
                 type: Constants.RTCSessionActionType.REJECT_SCREEN_CONTROL_REQUEST,
                 rejectScreenControlRequest: {
@@ -22192,9 +22278,7 @@ var Circuit = (function (circuit) {
         this.stopScreenControl = function (data, cb) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: stopScreenControl ...');
-            if (!checkAPISupportForScreenTakeOver('stopScreenControl', cb)) {
-                return;
-            }
+
             var request = {
                 type: Constants.RTCSessionActionType.STOP_SCREEN_CONTROL,
                 stopScreenControl: {
@@ -23461,6 +23545,26 @@ var Circuit = (function (circuit) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: setTenantSettings...');
 
+            tenantSettings = tenantSettings.filter(function (setting) {
+                switch (setting.key) {
+                case Constants.TenantSettingsType.EXTENSION_EMBRAVA_ENABLED:
+                    if (_self.isEmbravaIntegrationSupported()) { return true; }
+                    break;
+                case Constants.TenantSettingsType.REMOTE_CONTROL_ENABLED:
+                case Constants.TenantSettingsType.REMOTE_CONTROL_EXTERNAL_ENABLED:
+                    if (_self.isRemoteControlAdministrationSupported()) { return true; }
+                    break;
+                default:
+                    return true;
+                }
+                logger.warn('[ClientApiHandler]: Requested setting is not supported by backend: ', setting.key);
+                return false;
+            });
+            if (!tenantSettings.length) {
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
             var request = {
                 type: Constants.AdministrationActionType.SET_TENANT_SETTINGS,
                 setTenantSettings: {
@@ -23955,6 +24059,20 @@ var Circuit = (function (circuit) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: setCMRSettings...');
 
+            settings = settings.filter(function (setting) {
+                if ((setting.key === Constants.CMRSettingKey.PLAYBACK_DEVICE ||
+                    setting.key === Constants.CMRSettingKey.RECORDING_DEVICE) &&
+                    !_self.isSeparateAudioDevicesSupported()) {
+                    logger.warn('[ClientApiHandler]: Requested setting is not supported by backend: ', setting.key);
+                    return false;
+                }
+                return true;
+            });
+            if (!settings.length) {
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
             var request = {
                 type: Constants.AdministrationActionType.SET_CMR_SETTINGS,
                 setCMRSettings: {
@@ -24267,7 +24385,7 @@ var Circuit = (function (circuit) {
                 if (isResponseValid(err, rsp, cb)) {
                     cb(null, rsp.administration.createOpenscapeITSPResult.provider);
                 }
-            }, null, null, tenantContext);
+            }, null, null, tenantContext, true);
         };
 
         this.getITSP = function (id, cb, tenantContext) {
@@ -24343,7 +24461,7 @@ var Circuit = (function (circuit) {
                 if (isResponseValid(err, rsp, cb)) {
                     cb(null);
                 }
-            }, null, null, tenantContext);
+            }, null, null, tenantContext, true);
         };
 
         this.deleteITSPs = function (itspIds, cb, tenantContext) {
@@ -24371,7 +24489,7 @@ var Circuit = (function (circuit) {
                 if (isResponseValid(err, rsp, cb)) {
                     cb(null, rsp.administration.deleteOpenscapeITSPResult.providers);
                 }
-            }, null, null, tenantContext);
+            }, null, null, tenantContext, true);
         };
 
         this.assignITSPToSite = function (itspId, siteId, cb, tenantContext) {
@@ -24548,6 +24666,66 @@ var Circuit = (function (circuit) {
             }, null, null, tenantContext);
         };
 
+        this.getPickupGroup = function (groupId, cb, tenantContext) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: getPickupGroup...');
+
+            if (!this.isPickupGroupsSupported()) {
+                logger.warn('[ClientApiHandler]: The getPickupGroup operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            if (!groupId) {
+                logger.warn('[ClientApiHandler]: Pickup group id was not provided');
+                sendAsyncResp(cb, Constants.ReturnCode.INVALID_MESSAGE);
+                return;
+            }
+
+            var request = {
+                type: Constants.AdministrationActionType.GET_PICKUP_GROUP,
+                getPickupGroup: {
+                    pickupGroupId: groupId
+                }
+            };
+
+            sendRequest(Constants.ContentType.ADMINISTRATION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null, rsp.administration.getPickupGroupResult.pickupGroup);
+                }
+            }, null, null, tenantContext);
+        };
+
+        this.updatePickupGroup = function (pickupGroup, cb, tenantContext) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: updatePickupGroup...');
+
+            if (!this.isPickupGroupsSupported()) {
+                logger.warn('[ClientApiHandler]: The updatePickupGroup operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            if (!pickupGroup) {
+                logger.warn('[ClientApiHandler]: No pickup group data were provided');
+                sendAsyncResp(cb, Constants.ReturnCode.INVALID_MESSAGE);
+                return;
+            }
+
+            var request = {
+                type: Constants.AdministrationActionType.UPDATE_PICKUP_GROUP,
+                updatePickupGroup: {
+                    pickupGroup: pickupGroup
+                }
+            };
+
+            sendRequest(Constants.ContentType.ADMINISTRATION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null, rsp.administration);
+                }
+            }, null, null, tenantContext);
+        };
+
         this.getSystemNotifications = function (systemNotificationType, cb, tenantContext) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: getSystemNotifications...');
@@ -24638,12 +24816,6 @@ var Circuit = (function (circuit) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: enablePartnerAdministration...');
 
-            if (!this.isConfigurePartnerAdministrationSupported()) {
-                logger.warn('[ClientApiHandler]: The enablePartnerAdministration operation is not supported by the backend');
-                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
-                return;
-            }
-
             var request = {
                 type: Constants.AdministrationActionType.ENABLE_PARTNER_ADMINISTRATION
             };
@@ -24659,12 +24831,6 @@ var Circuit = (function (circuit) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: disablePartnerAdministration...');
 
-            if (!this.isConfigurePartnerAdministrationSupported()) {
-                logger.warn('[ClientApiHandler]: The disablePartnerAdministration operation is not supported by the backend');
-                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
-                return;
-            }
-
             var request = {
                 type: Constants.AdministrationActionType.DISABLE_PARTNER_ADMINISTRATION
             };
@@ -24679,12 +24845,6 @@ var Circuit = (function (circuit) {
         this.getResellerInfo = function (partnerId, cb) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: getResellerInfo...');
-
-            if (!this.isConfigurePartnerAdministrationSupported()) {
-                logger.warn('[ClientApiHandler]: The getResellerInfo operation is not supported by the backend');
-                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
-                return;
-            }
 
             var request = {
                 type: Constants.AdministrationActionType.GET_RESELLER_INFO,
@@ -24978,10 +25138,6 @@ var Circuit = (function (circuit) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: connectToThirdParty ' + provider + '...');
 
-            if (!checkZapierSupport(provider, cb)) {
-                return;
-            }
-
             var request;
             switch (provider) {
             case Constants.ThirdPartyConnectorType.BOX:
@@ -25129,10 +25285,6 @@ var Circuit = (function (circuit) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: disconnectFromThirdParty ' + provider + '...');
 
-            if (!checkZapierSupport(provider, cb)) {
-                return;
-            }
-
             var request;
             switch (provider) {
             case Constants.ThirdPartyConnectorType.BOX:
@@ -25174,10 +25326,6 @@ var Circuit = (function (circuit) {
             var provider = requestData.provider;
             var itemsData = requestData.itemsData;
             logger.debug('[ClientApiHandler]: shareFolderItems ' + provider + '...');
-
-            if (!checkZapierSupport(provider, cb)) {
-                return;
-            }
 
             var request;
             switch (provider) {
@@ -25381,6 +25529,7 @@ var Circuit = (function (circuit) {
         this.getRegions = function (token, cb) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: getRegions ...');
+
             var request = {
                 type: Constants.GuestActionType.GET_REGIONS,
                 getRegions: {
@@ -25732,6 +25881,24 @@ var Circuit = (function (circuit) {
                 }
             };
             sendRequest(Constants.ContentType.ACCOUNT, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null);
+                }
+            });
+        };
+
+        this.submitFormData = function (itemId, form, cb) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: submitFormData...');
+
+            var request = {
+                type: Constants.CPaaSActionType.SUBMIT_FORM_DATA,
+                submitFormData: {
+                    itemId: itemId,
+                    form: form
+                }
+            };
+            sendRequest(Constants.ContentType.CPAAS, request, function (err, rsp) {
                 if (isResponseValid(err, rsp, cb)) {
                     cb(null);
                 }
@@ -29698,6 +29865,56 @@ var Circuit = (function (circuit) {
         NONE: 'NONE'
     };
 
+    /**
+     * Enum Form Controls
+     * @class FormControlType
+     * @static
+     * @final
+     */
+    /**
+     * Plain text label
+     * @property LABEL
+     * @type {String}
+     * @static
+     */
+    /**
+     * Buttons to press
+     * @property BUTTON
+     * @type {String}
+     * @static
+     */
+    /**
+     * List of radio elements
+     * @property RADIO
+     * @type {String}
+     * @static
+     */
+    /**
+     * Single or group of checkboxes
+     * @property CHECKBOX
+     * @type {String}
+     * @static
+     */
+    /**
+     * Dropdown list with multiple values
+     * @property DROPDOWN
+     * @type {String}
+     * @static
+     */
+    /**
+     * Input textfield. One or multiple rows.
+     * @property INPUT
+     * @type {String}
+     * @static
+     */
+    /**
+     * Separating of controls
+     * @property SPACER
+     * @type {String}
+     * @static
+     */
+    circuit.Enums.FormControlType = circuit.Constants.CPaaSFormMetaDataControlType;
+
     return circuit;
 })(Circuit || {});
 
@@ -30436,7 +30653,6 @@ var Circuit = (function (circuit) {
         var SANDBOX_HOSTNAME = 'circuitsandbox.net';
         var BETA_HOSTNAME = 'beta.circuit.com';
         var T_AND_I_HOSTNAME = 'tandi.circuitsandbox.net';
-        var HEIDELBERG_HOSTNAME = 'circuit.uni-heidelberg.de';
         var UNIVERGEBLUE_HOSTNAME = 'ubtc.univergeblue.com';
         var BLUEBETA_HOSTNAME = 'bluebeta.circuit.com';
 
@@ -30505,17 +30721,12 @@ var Circuit = (function (circuit) {
                 _extensionUrl += 'gdgfgnopapmocggkadgfkjekdlcohmdl';
                 LogSvc.info('[ExtensionSvc]: Set URL to T&I-Circuit extension. ', _extensionUrl);
                 break;
-            case HEIDELBERG_HOSTNAME:
-                // Heidelberg Univerity extension
-                _extensionUrl += 'nnlgegdgijgicheaipembfeaggifmalb';
-                LogSvc.info('[ExtensionSvc]: Set URL to Heidelberg Univerity extension. ', _extensionUrl);
-                return;
             case UNIVERGEBLUE_HOSTNAME:
             case BLUEBETA_HOSTNAME:
                 // Univerge Blue TC
                 _extensionUrl += 'jhpcobccapenojpdohnfmhmdmppngdad';
                 LogSvc.info('[ExtensionSvc]: Set URL to Univerge Blue TC extension. ', _extensionUrl);
-                return;
+                break;
             default:
                 _extensionUrl += 'mhkbaognlahkdimlfcfhbeihldmjofgg';
                 LogSvc.info('[ExtensionSvc]: Set URL to Circuit extension. ', _extensionUrl);
@@ -30971,6 +31182,8 @@ var Circuit = (function (circuit) {
         var _deviceType = Utils.isMobile() ? Constants.DeviceType.MOBILE :
             (circuit.isElectron ? Constants.DeviceType.APPLICATION : Constants.DeviceType.WEB);
 
+        var _renewRegistration = false;
+
         ///////////////////////////////////////////////////////////////////////////////////////
         // Internal Functions
         ///////////////////////////////////////////////////////////////////////////////////////
@@ -31036,7 +31249,7 @@ var Circuit = (function (circuit) {
             }, delayTime * 1000);
         }
 
-        function atcRegister(renewRegistration) {
+        function atcRegister() {
             var data = {
                 content: {
                     type: 'REGISTER',
@@ -31052,7 +31265,7 @@ var Circuit = (function (circuit) {
                     conversationId: _telephonyConversation.convId,
                     rtcSessionId: _telephonyConversation.rtcSessionId,
                     lastItemTime: _telephonyConversation.lastItemModificationTime,
-                    renewRegistration: renewRegistration || undefined
+                    renewRegistration: _renewRegistration || undefined
                 },
                 destUserId: $rootScope.localUser.associatedTelephonyUserID,
                 keysToOmitFromLogging: [
@@ -31119,6 +31332,7 @@ var Circuit = (function (circuit) {
                         }
                         handlePresenceState(Constants.TrunkState.UP);
                         LogSvc.debug('[AtcRegistrationSvc]: Registration refresh will be handled by access server');
+                        _renewRegistration = false;
 
                     } else {
                         setAtcState(AtcRegistrationState.Unregistered);
@@ -31145,7 +31359,7 @@ var Circuit = (function (circuit) {
             setAtcState(AtcRegistrationState.Unregistered);
             // If the associated ATC is changed, the client needs to indicate that to the new ATC so that it renews
             // the registration with the PBX
-            var renewRegistration = $rootScope.localUser.associatedTelephonyUserID !== _atcRegistrationData.associatedTelephonyUserID;
+            _renewRegistration = $rootScope.localUser.associatedTelephonyUserID !== _atcRegistrationData.associatedTelephonyUserID;
             _atcRegistrationData.associatedTelephonyUserID = '';
 
             _userToUserHandler.sendAtcRequest(data, function (err) {
@@ -31156,7 +31370,7 @@ var Circuit = (function (circuit) {
                         LogSvc.info('[AtcRegistrationSvc]: Unregistered successfully with ATC');
                     }
                     if (_reRegister) {
-                        atcRegister(renewRegistration);
+                        atcRegister();
                         _reRegister = false;
                     }
                 });
@@ -31267,6 +31481,7 @@ var Circuit = (function (circuit) {
                     _clientApiHandler.unsubscribePresence([_presenceSubscribedTrunkId]);
                 }
                 _presenceSubscribedTrunkId = null;
+                _renewRegistration = true;
             }
             if ($rootScope.localUser.associatedTelephonyUserID && _presenceSubscribedTrunkId !== $rootScope.localUser.associatedTelephonyUserID) {
                 _presenceSubscribedTrunkId = $rootScope.localUser.associatedTelephonyUserID;
@@ -32242,7 +32457,8 @@ var Circuit = (function (circuit) {
                     ownerId: conv.creatorId,
                     mediaNode: localCall.getMediaNode(),
                     isTelephonyConversation: conv.isTelephonyConv,
-                    replaces: options.replaces && options.replaces.callId
+                    replaces: options.replaces && options.replaces.callId,
+                    desiredRegion: options.desiredRegion
                 };
 
                 DeviceDiagnosticSvc.startDiagnostics(localCall);
@@ -33256,6 +33472,15 @@ var Circuit = (function (circuit) {
                 cb('Connection not stable');
                 return;
             }
+            var invokeCb = function (err) {
+                if (data.dontReuseAudioStream) {
+                    // We set the dontReuseAudioStream property in sessionCtrl
+                    // now we have to reset it
+                    sessionCtrl.dontReuseAudioStream = false;
+                }
+                cb(err);
+            };
+            sessionCtrl.dontReuseAudioStream = data.dontReuseAudioStream;
             var onSdp = function (evt) {
                 sessionCtrl.onSessionDescription = null;
 
@@ -33266,10 +33491,10 @@ var Circuit = (function (circuit) {
                 if ($rootScope.circuitLabs.DIRECT_TO_CONF_UPGRADE && call.isDirect) {
                     rtcSupportedFeatures.push(Constants.RtcSupportedFeatures.UPGRADE_TO_CONFERENCE);
                 }
-                if (hasScreenControlFeature(call) && $rootScope.localUser.canStartScreenControl && !Utils.isMobile()) {
-                    if (!data.mediaType.desktop) {
+                if (hasScreenControlFeature(call) && !Utils.isMobile()) {
+                    if (!data.mediaType.desktop && $rootScope.localUser.canStartScreenControl) {
                         rtcSupportedFeatures.push(Constants.RtcSupportedFeatures.SCREEN_CONTROLLER);
-                    } else if (data.screenShareOptions && data.screenShareOptions.screenControlSupported) {
+                    } else if (data.mediaType.desktop && data.screenShareOptions && data.screenShareOptions.screenControlSupported) {
                         rtcSupportedFeatures.push(Constants.RtcSupportedFeatures.SCREEN_CONTROL);
                     }
                 }
@@ -33290,7 +33515,7 @@ var Circuit = (function (circuit) {
                         call.clearTransactionId();
                         if (err) {
                             sessionCtrl.renegotiationFailed(err);
-                            cb(err);
+                            invokeCb(err);
                         } else {
                             LogSvc.debug('[CircuitCallControlSvc]: changeMediaType was successful. Wait for SDP_ANSWER event');
                         }
@@ -33312,9 +33537,9 @@ var Circuit = (function (circuit) {
                             LogSvc.error('[CircuitCallControlSvc]: Error in hold/retrieve media');
                             sessionCtrl.onSessionDescription = null;
                             sessionCtrl.renegotiationFailed(err);
-                            cb('Error in hold/retrieve media');
+                            invokeCb('Error in hold/retrieve media');
                         } else {
-                            cb();
+                            invokeCb();
                         }
                     });
                 } else {
@@ -33335,7 +33560,7 @@ var Circuit = (function (circuit) {
                                 if (screenShareWasActive && !call.localMediaType.desktop) {
                                     sessionCtrl.updateScreenControlData(false, false);
                                 }
-                                cb(err || 'Error changing media');
+                                invokeCb(err || 'Error changing media');
                             } else {
                                 var isScreenOwner = (call.screenOwnerId === $rootScope.localUser.userId);
 
@@ -33354,14 +33579,14 @@ var Circuit = (function (circuit) {
                                     doStopScreenControl(call.callId);
                                 }
                                 _lastScreenIndex = (data.screenShareOptions && data.screenShareOptions.screenIndex) || null;
-                                cb();
+                                invokeCb();
                             }
                         });
                     });
                 }
             })
             .catch(function (err) {
-                cb(getJoinErrorText(err));
+                invokeCb(getJoinErrorText(err));
             });
         }
 
@@ -33392,7 +33617,7 @@ var Circuit = (function (circuit) {
                 return;
             }
 
-            if (!call.hasLocalScreenShare() || !hasScreenControlFeature(call) || !$rootScope.localUser.canStartScreenControl) {
+            if (!call.hasLocalScreenShare() || !hasScreenControlFeature(call)) {
                 onError('Screen control not possible');
                 return;
             }
@@ -35685,14 +35910,15 @@ var Circuit = (function (circuit) {
             return true;
         }
 
-        function createCallOptions(options) {
+        function createCallOptions(options, additionalOptions) {
             options = options || {};
+            additionalOptions && Object.assign(options, additionalOptions);
             options.callOut = !!options.callOut;
             options.handover = !!options.handover;
             return options;
         }
 
-        function addRemoveMedia(callId, mediaToChange, logMethodName, dataCb) {
+        function addRemoveMedia(callId, mediaToChange, logMethodName, options, dataCb) {
             logMethodName = logMethodName || 'addRemoveMedia';
             var logTopic = '[CircuitCallControlSvc]: ' + logMethodName + ': ';
             var localCall = findLocalCallByCallId(callId);
@@ -35705,6 +35931,7 @@ var Circuit = (function (circuit) {
 
             var data = {
                 callId: callId,
+                dontReuseAudioStream: !!(options && options.dontReuseAudioStream),
                 mediaType: {
                     audio: localCall.localMediaType.audio,
                     video: localCall.localMediaType.video,
@@ -35891,6 +36118,11 @@ var Circuit = (function (circuit) {
                     disableAllAudio(callId);
                 }
             }
+        });
+
+        PubSubSvc.subscribe('/call/removeConferenceAsGuest', function (call) {
+            LogSvc.debug('CircuitCallControlSvc]: /call/removeConferenceAsGuest');
+            _that.removeConferenceAsGuest(call);
         });
 
         ///////////////////////////////////////////////////////////////////////////////////////
@@ -36175,6 +36407,13 @@ var Circuit = (function (circuit) {
                     }
 
                     localCall.whiteboardEnabled = !!evt.session.whiteboardEnabled;
+
+                    localCall.screenControllerId = evt.session.screenControllerId || null;
+
+                    localCall.screenOwnerId = evt.session.screenOwnerId || null;
+
+                    localCall.preventScreenRequestControlInConf = (localCall.screenControllerId && localCall.screenControllerId !== $rootScope.localUser.userId
+                        && localCall.screenOwnerId && localCall.screenOwnerId !== $rootScope.localUser.userId);
 
                     var addedParticipants = [];
                     var updatedParticipants = [];
@@ -36749,6 +36988,10 @@ var Circuit = (function (circuit) {
                             return;
                         }
                         terminateCall(localCall, Enums.CallServerTerminatedReason.SERVER_ENDED_PRFX + evt.cause);
+                    }
+
+                    if (localCall.screenControlSupported && !localCall.hasRemoteScreenShare()) {
+                        localCall.screenControlSupported = false;
                     }
                 } catch (e) {
                     LogSvc.error('[CircuitCallControlSvc]: Exception handling RTCSession.PARTICIPANT_LEFT event. ', e);
@@ -37431,7 +37674,7 @@ var Circuit = (function (circuit) {
                 LogSvc.info('[CircuitCallControlSvc]: Event is not for local call. Ignore it.');
                 return;
             }
-            if (!localCall.hasLocalScreenShare() || !circuit.isElectron || !hasScreenControlFeature(localCall) || !$rootScope.localUser.canStartScreenControl) {
+            if (!localCall.hasLocalScreenShare() || !circuit.isElectron || !hasScreenControlFeature(localCall)) {
                 LogSvc.info('[CircuitCallControlSvc]: Screen control is not possible for local call. Reject it.');
                 _that.rejectScreenControlRequest(localCall.callId, evt.controllerId);
                 return;
@@ -37771,6 +38014,18 @@ var Circuit = (function (circuit) {
          * @param {Function} onCallStarted A callback function when the call is started or in case there is an error.
          */
         this.makeEchoTestCall = function (mediaType, onConversationCreated, onCallStarted) {
+            _that.makeEchoTestCallWithOptions(mediaType, null, onConversationCreated, onCallStarted);
+        };
+
+        /**
+         * Make a test call.
+         *
+         * @param {Object} mediaType The media type object, e.g. {audio: true, video: false}.
+         * @param {Object} additionalCallOptions The additional call options object, e.g. {desiredRegion: 'eu'}.
+         * @param {Function} onConversationCreated A callback function that is immediately invoked with the rtcSessionId for the test call.
+         * @param {Function} onCallStarted A callback function when the call is started or in case there is an error.
+         */
+        this.makeEchoTestCallWithOptions = function (mediaType, additionalCallOptions, onConversationCreated, onCallStarted) {
             onConversationCreated = onConversationCreated || function () {};
             onCallStarted = onCallStarted || function () {};
             // If the guest is registered for test call, use conversationId, otherwise use clientId
@@ -37789,7 +38044,7 @@ var Circuit = (function (circuit) {
 
             // Wait a little before initiating the test call
             $timeout(function () {
-                var options = createCallOptions({callOut: false, handover: false});
+                var options = createCallOptions({callOut: false, handover: false}, additionalCallOptions);
                 if (createLocalCall(conversation, mediaType, options, onCallStarted)) {
                     joinSession(conversation, mediaType, options, onCallStarted);
                 }
@@ -37873,6 +38128,18 @@ var Circuit = (function (circuit) {
          * @param {Function} cb A callback function replying with an error
          */
         this.startConference = function (convId, mediaType, cb) {
+            _that.startConferenceWithOptions(convId, mediaType, null, cb);
+        };
+
+        /**
+         * Start a conference in an existing group conversation.
+         *
+         * @param {String} convId The ID of existing group conversation to start the conference.
+         * @param {Object} mediaType The media type object, e.g. {audio: true, video: false}.
+         * @param {Object} additionalCallOptions The additional call options object, e.g. {desiredRegion: 'eu'}.
+         * @param {Function} cb A callback function replying with an error
+         */
+        this.startConferenceWithOptions = function (convId, mediaType, additionalCallOptions, cb) {
             mediaType = mediaType || { audio: true, video: false };
             cb = cb || function () {};
             if (!convId) {
@@ -37891,7 +38158,9 @@ var Circuit = (function (circuit) {
                 cb('Invalid conversation type');
                 return;
             }
-            var callOptions = createCallOptions({callOut: false, handover: false});
+
+            var callOptions = createCallOptions({callOut: false, handover: false}, additionalCallOptions);
+
             if (createLocalCall(conversation, mediaType, callOptions, cb)) {
                 checkMediaSourcesAndJoin(conversation, mediaType, callOptions, cb);
             }
@@ -38610,7 +38879,7 @@ var Circuit = (function (circuit) {
          */
         this.toggleVideo = function (callId, cb) {
             cb = cb || function () {};
-            addRemoveMedia(callId, {}, 'toggleVideo', function (data) {
+            addRemoveMedia(callId, {}, 'toggleVideo', null, function (data) {
                 data.mediaType.video = !data.mediaType.video;
                 if (data.mediaType.video) {
                     data.mediaType.desktop = false; // only support either video or desktop for now
@@ -38627,10 +38896,11 @@ var Circuit = (function (circuit) {
          *
          * @param {String} callId The call ID of the call for which to start the media renegotiation.
          * @param {Function} cb A callback function replying with an error
+         * @param {Object} options Object with options
          */
-        this.renegotiateMedia = function (callId, cb) {
+        this.renegotiateMedia = function (callId, cb, options) {
             cb = cb || function () {};
-            addRemoveMedia(callId, {}, 'renegotiateMedia')
+            addRemoveMedia(callId, {}, 'renegotiateMedia', options)
             .then(cb)
             .catch(function () {
                 cb('Renegotiate media failed');
@@ -39825,26 +40095,6 @@ var Circuit = (function (circuit) {
             return !!conversation && conversation.userIsModerator($rootScope.localUser);
         };
 
-        this.canStartVideo = function (callId) {
-            var localCall = findLocalCallByCallId(callId);
-            if (!localCall) {
-                LogSvc.warn('[CircuitCallControlSvc]: canStartVideo - There is no local call');
-                return false;
-            }
-            // guest in large conference (event) ?
-            if (($rootScope.isSessionGuest || localCall.isGuestInvite) && localCall.isLarge) {
-                if (!localCall.hasRemoteVideo()) {
-                    return true;
-                }
-                var moderatorSending = localCall.participants.some(function (p) {
-                    return p.isModerator && p.mediaType && (p.mediaType.desktop || p.mediaType.video);
-                });
-                return !moderatorSending;
-            } else {
-                return true;
-            }
-        };
-
         this.addConferenceAsGuest = function (convId) {
             var conversation = getConversation(convId);
             if (!conversation || !conversation.isTemporary || !conversation.guestToken) {
@@ -40462,7 +40712,7 @@ var Circuit = (function (circuit) {
             var calledDevice = snapshotCallResp.calledDevice;
             var direction;
 
-            if (callingDevice && callingDevice.replace('+', '') === $rootScope.localUser.phoneNumber.replace('+', '')) {
+            if (isMyDeviceId(callingDevice)) {
                 direction = CallDirection.OUTGOING;
             } else {
                 direction = CallDirection.INCOMING;
@@ -43930,7 +44180,7 @@ var Circuit = (function (circuit) {
             if (!call.checkCstaState([CstaCallState.Idle, CstaCallState.Terminated])) {
                 addAtcRemoteCallToList(call);
                 if (!conversation.call || (conversation.call.isHandoverInProgress && !conversation.call.sameAs(call)) ||
-                    (conversation.call.isAtcRemote && conversation.call.isHolding())) {
+                    (conversation.call.isAtcRemote && (conversation.call.isHolding() || conversation.call.isHoldInProgress()))) {
                     if (conversation.call && conversation.call.isHandoverInProgress) {
                         var oldCall = conversation.call;
                         oldCall.clearAtcHandoverInProgress();
@@ -44186,6 +44436,18 @@ var Circuit = (function (circuit) {
             case Enums.NotificationActionType.REJECT:
                 _that.rejectScreenControlRequest(data.callId, data.userId);
                 return;
+            case Enums.NotificationActionType.SCREEN_SHARE_OFF:
+                _that.removeScreenShare(data.callId);
+                return;
+            case Enums.NotificationActionType.MUTE:
+                _that.mute(data.callId);
+                return;
+            case Enums.NotificationActionType.UN_MUTE:
+                _that.unmute(data.callId);
+                return;
+            case Enums.NotificationActionType.REMOTE_CONTROL_OFF:
+                _that.stopScreenControl(data.callId);
+                return;
             }
             // Navigate to conversation
             var conversation = _that.findConversationByCallId(data.callId);
@@ -44342,6 +44604,16 @@ var Circuit = (function (circuit) {
         this.makeEchoTestCall = CircuitCallControlSvc.makeEchoTestCall;
 
         /**
+         * Make a test call.
+         *
+         * @param {Object} mediaType The media type object, e.g. {audio: true, video: false}.
+         * @param {Object} additionalCallOptions The additional call options object, e.g. {desiredRegion: 'eu'}.
+         * @param {Function} onConversationCreated A callback function that is immediately invoked with the rtcSessionId for the test call.
+         * @param {Function} onCallStarted A callback function when the call is started or in case there is an error.
+         */
+        this.makeEchoTestCallWithOptions = CircuitCallControlSvc.makeEchoTestCallWithOptions;
+
+        /**
          * Make a new outgoing call to a given DN.
          *
          * @param {String} dialedDn  The dialed number.
@@ -44438,6 +44710,16 @@ var Circuit = (function (circuit) {
          * @param {Function} cb A callback function replying with an error
          */
         this.startConference = CircuitCallControlSvc.startConference;
+
+        /**
+         * Start a conference in an existing group conversation.
+         *
+         * @param {Conversation} conversation The existing group conversation to start the conference.
+         * @param {Object} mediaType The media type object, e.g. {audio: true, video: false}.
+         * @param {Object} additionalCallOptions The additional call options object, e.g. {desiredRegion: 'eu'}.
+         * @param {Function} cb A callback function replying with an error
+         */
+        this.startConferenceWithOptions = CircuitCallControlSvc.startConferenceWithOptions;
 
         /**
          * Returns true if there is an incoming call which cannot be answered before releasing
@@ -45280,7 +45562,7 @@ var Circuit = (function (circuit) {
                 MeetingPointSvc.toggleVideoMeetingPoint(participant.userId, function (err) {
                     if (err) {
                         LogSvc.warn('[CallControlSvc]: Failed to toggle video MeetingPoint participant');
-                        cb('res_StartVideoParticipantFailed');
+                        cb('res_ToggleVideoFailed');
                     } else {
                         cb();
                     }
@@ -45288,6 +45570,71 @@ var Circuit = (function (circuit) {
             } else {
                 LogSvc.warn('[CallControlSvc]: Cannot toggle video MeetingPoint participant: ', participant.userId);
                 cb('res_StartVideoParticipantFailed');
+            }
+        };
+
+
+        this.toggleScreenSharing = function (callId, participant, cb) {
+            if (!callId || !participant || !participant.userId) {
+                return;
+            }
+            cb = cb || function () {};
+
+            if (!isLocalCall(callId)) {
+                LogSvc.warn('[CallControlSvc]: toggleScreenSharing - There is no local call');
+                cb('Call invalid');
+                return;
+            }
+
+            if (participant.isMeetingPointInvitee) {
+                if (!MeetingPointSvc) {
+                    LogSvc.error('[CallControlSvc]: MeetingPointSvc is not initialized');
+                    cb('Cannot toggle Screen Sharing');
+                    return;
+                }
+                MeetingPointSvc.toggleScreenShareMeetingPoint(participant.userId, function (err) {
+                    if (err) {
+                        LogSvc.warn('[CallControlSvc]: Failed to toggle screen share MeetingPoint participant');
+                        cb('Cannot toggle Screen Sharing');
+                    } else {
+                        cb();
+                    }
+                });
+            } else {
+                LogSvc.warn('[CallControlSvc]: Cannot toggle video MeetingPoint participant: ', participant.userId);
+                cb('Cannot toggle Screen Sharing');
+            }
+        };
+
+        this.toggleWhiteboard = function (callId, participant, cb) {
+            if (!callId || !participant || !participant.userId) {
+                return;
+            }
+            cb = cb || function () {};
+
+            if (!isLocalCall(callId)) {
+                LogSvc.warn('[CallControlSvc]: toggleWhiteboard - There is no local call');
+                cb('Call invalid');
+                return;
+            }
+
+            if (participant.isMeetingPointInvitee) {
+                if (!MeetingPointSvc) {
+                    LogSvc.error('[CallControlSvc]: MeetingPointSvc is not initialized');
+                    cb('Cannot toggle Whiteboard');
+                    return;
+                }
+                MeetingPointSvc.toggleWhiteboardMeetingPoint(participant.userId, function (err) {
+                    if (err) {
+                        LogSvc.warn('[CallControlSvc]: Failed to toggle whiteboard MeetingPoint participant');
+                        cb('Cannot toggle Whiteboard');
+                    } else {
+                        cb();
+                    }
+                });
+            } else {
+                LogSvc.warn('[CallControlSvc]: Cannot toggle video MeetingPoint participant: ', participant.userId);
+                cb('Cannot toggle Whiteboard');
             }
         };
 
@@ -45541,8 +45888,6 @@ var Circuit = (function (circuit) {
         this.addSimulatedParticipants = CircuitCallControlSvc.addSimulatedParticipants;
 
         this.canStartScreenShare = CircuitCallControlSvc.canStartScreenShare;
-
-        this.canStartVideo = CircuitCallControlSvc.canStartVideo;
 
         this.addConferenceAsGuest = CircuitCallControlSvc.addConferenceAsGuest;
 
@@ -46610,10 +46955,12 @@ var Circuit = (function (circuit) {
         }
 
         function resetOAuthRenewTimer() {
-            if (_config.autoRenewToken && _expiresAt) {
-                // Start timer to auto-renew OAuth2 token 1 min prior to expiry
+            if (_config.client_secret && _config.autoRenewToken && _expiresAt) {
+                // Start timer to auto-renew OAuth2 token prior to expiry with a
+                // maximum of 2147483647 (24 days). Only for client credentials grant.
                 _oauthRenewTokenTimer && window.clearTimeout(_oauthRenewTokenTimer);
                 var duration = _expiresAt - Date.now() - (60 * 1000);
+                duration = Math.min(2147483648, duration);
                 if (duration > 0) {
                     _oauthRenewTokenTimer = window.setTimeout(renewToken, duration);
                 }
@@ -46738,7 +47085,7 @@ var Circuit = (function (circuit) {
                     } else {
                         _accessToken = null;
                         _expiresAt = null;
-                        reject(new Circuit.Error(Constants.ReturnCode.SDK_ERROR, 'Internal error with Client Credentials Grant authentication'));
+                        reject(new Circuit.Error(Constants.ReturnCode.SDK_ERROR, (obj && obj.error_description) || 'Internal error with Client Credentials Grant authentication'));
                     }
                 })
                 .catch(reject);
@@ -47085,7 +47432,7 @@ var Circuit = (function (circuit) {
                     if (apiError(err, reject, true)) { return; }
 
                     if (options.retrieveAction === Circuit.Enums.RetrieveAction.CONVERSATIONS) {
-                        var conversations = res.conversations || [];
+                        var conversations = res && res.conversations || [];
                         Promise.all(conversations.map(publicizeConversation))
                         .then(resolve)
                         .catch(reject);
@@ -47417,6 +47764,7 @@ var Circuit = (function (circuit) {
                         contentType: content.contentType || Constants.TextItemContentType.RICH,
                         subject: content.subject,
                         content: content.content,
+                        form: content.form,
                         externalAttachmentMetaData: content.externalAttachments
                     };
                     // Upload files first, then send message with file metadata
@@ -47821,6 +48169,9 @@ var Circuit = (function (circuit) {
             var result = {};
             settings && settings.forEach(function (s) {
                 switch (s.key) {
+                case Constants.UserSettingKey.HIDE_PROFILE_EXTERNAL_ENABLED:
+                    result.hideProfileExternal = s.booleanValue;
+                    break;
                 case Constants.UserSettingKey.OPT_OUT_PRESENCE:
                     result.presenceOptOut = s.booleanValue;
                     break;
@@ -47884,6 +48235,13 @@ var Circuit = (function (circuit) {
                         key: Constants.UserSettingKey.VOICEMAIL_CUSTOMGREETING_ENABLED,
                         dataType: Constants.UserSettingDataType.BOOLEAN,
                         booleanValue: !!userSettings.voicemailCustomGreetingEnabled
+                    });
+                }
+                if (userSettings.hideProfileExternal !== undefined) {
+                    settings.push({
+                        key: Constants.UserSettingKey.HIDE_PROFILE_EXTERNAL_ENABLED,
+                        dataType: Constants.UserSettingDataType.BOOLEAN,
+                        booleanValue: !!userSettings.hideProfileExternal
                     });
                 }
 
@@ -48015,7 +48373,7 @@ var Circuit = (function (circuit) {
 
         function subscribeTenantPresence() {
             return new Promise(function (resolve, reject) {
-                if (_config.client_secret) {
+                if (!_config.client_secret) {
                     reject(new Circuit.Error(Constants.ReturnCode.SDK_ERROR, 'API only allowed for bots'));
                     return;
                 }
@@ -48028,11 +48386,50 @@ var Circuit = (function (circuit) {
 
         function unsubscribeTenantPresence() {
             return new Promise(function (resolve, reject) {
-                if (_config.client_secret) {
+                if (!_config.client_secret) {
                     reject(new Circuit.Error(Constants.ReturnCode.SDK_ERROR, 'API only allowed for bots'));
                     return;
                 }
                 _clientApiHandler.unsubscribeTenantPresence(_self.loggedOnUser.tenantId, function (err) {
+                    if (apiError(err, reject)) { return; }
+                    resolve();
+                });
+            });
+        }
+
+        function subscribeTypingIndicator(convId) {
+            return new Promise(function (resolve, reject) {
+                if (!convId) {
+                    reject(new Circuit.Error(Constants.ReturnCode.SDK_ERROR, 'convId is required'));
+                    return;
+                }
+                _clientApiHandler.subscribe(convId, function (err) {
+                    if (apiError(err, reject)) { return; }
+                    resolve();
+                });
+            });
+        }
+
+        function unsubscribeTypingIndicator(convId) {
+            return new Promise(function (resolve, reject) {
+                if (!convId) {
+                    reject(new Circuit.Error(Constants.ReturnCode.SDK_ERROR, 'convId is required'));
+                    return;
+                }
+                _clientApiHandler.unsubscribe(convId, function (err) {
+                    if (apiError(err, reject)) { return; }
+                    resolve();
+                });
+            });
+        }
+
+        function typing(convId, isTyping, partentItemId) {
+            return new Promise(function (resolve, reject) {
+                if (!convId || isTyping === undefined) {
+                    reject(new Circuit.Error(Constants.ReturnCode.SDK_ERROR, 'missing parameter'));
+                    return;
+                }
+                _clientApiHandler.typing(convId, isTyping, partentItemId, function (err) {
                     if (apiError(err, reject)) { return; }
                     resolve();
                 });
@@ -48084,6 +48481,15 @@ var Circuit = (function (circuit) {
         function cancelSearch(searchId) {
             return new Promise(function (resolve, reject) {
                 _clientApiHandler.cancelSearch(searchId, function (err) {
+                    if (apiError(err, reject)) { return; }
+                    resolve();
+                });
+            });
+        }
+
+        function submitForm(itemId, form) {
+            return new Promise(function (resolve, reject) {
+                _clientApiHandler.submitFormData(itemId, form, function (err) {
                     if (apiError(err, reject)) { return; }
                     resolve();
                 });
@@ -50131,7 +50537,7 @@ var Circuit = (function (circuit) {
          * @scope `READ_USER` or `FULL`
          * @example
          *     client.subscribePresence(['874c528c-1410-4362-b519-6e7d26a2edb2','451e05a7-4649-4887-bfd2-21e70ec47e57'])
-         *       .then(() => console.log('Sucessfully subscribed'));
+         *       .then(() => console.log('Successfully subscribed'));
          */
         _self.subscribePresence = subscribePresence;
 
@@ -50143,7 +50549,7 @@ var Circuit = (function (circuit) {
          * @scope `READ_USER` or `FULL`
          * @example
          *     client.unsubscribePresence(['874c528c-1410-4362-b519-6e7d26a2edb2','451e05a7-4649-4887-bfd2-21e70ec47e57'])
-         *       .then(() => console.log('Sucessfully unsubscribed'));
+         *       .then(() => console.log('Successfully unsubscribed'));
          */
         _self.unsubscribePresence = unsubscribePresence;
 
@@ -50151,28 +50557,67 @@ var Circuit = (function (circuit) {
          * Subscribe to presence notifications of all users in the tenant. `userPresenceChanged` event
          * will only contain the new state and user ID. Other attributes such as location are not included
          * when subscribing for the whle tenant.
+         * API requires tenant admin permissions.
          * API only allowed for Client Credentials apps (bots).
          * @method subscribeTenantPresence
          * @returns {Promise} A promise without data
          * @scope `READ_USER` or `FULL`
          * @example
          *     client.subscribeTenantPresence()
-         *       .then(() => console.log('Sucessfully subscribed'));
+         *       .then(() => console.log('Successfully subscribed'));
          */
         _self.subscribeTenantPresence = subscribeTenantPresence;
 
         /**
          * Unsubscribe to presence notifications of all users in the tenant.
          * API only allowed for Client Credentials apps (bots).
+         * API requires tenant admin permissions.
          * @method unsubscribeTenantPresence
          * @returns {Promise} A promise without data
          * @scope `READ_USER` or `FULL`
          * @example
-         *     client.unsubscribePresence()
-         *       .then(() => console.log('Sucessfully unsubscribed'));
+         *     client.unsubscribeTenantPresence()
+         *       .then(() => console.log('Successfully unsubscribed'));
          */
         _self.unsubscribeTenantPresence = unsubscribeTenantPresence;
 
+        /**
+         * Subscribe to typing indicaticator of a conversation. Raises 'typing' event
+         * @method subscribeTypingIndicator
+         * @param {String} convId Conversation ID
+         * @returns {Promise} A promise without data
+         * @scope `READ_CONVERSATION` or `FULL`
+         * @example
+         *     client.subscribeTypingIndicator('2b5a62d4-575a-41bb-afef-87c34a52d70e')
+         *       .then(() => console.log('Successfully subscribed'));
+         */
+        _self.subscribeTypingIndicator = subscribeTypingIndicator;
+
+        /**
+         * Unsubscribe to typing indicaticator of a conversation.
+         * @method unsubscribeTypingIndicator
+         * @param {String} convId Conversation ID
+         * @returns {Promise} A promise without data
+         * @scope `READ_CONVERSATION` or `FULL`
+         * @example
+         *     client.unsubscribeTypingIndicator('2b5a62d4-575a-41bb-afef-87c34a52d70e')
+         *       .then(() => console.log('Successfully unsubscribed'));
+         */
+        _self.unsubscribeTypingIndicator = unsubscribeTypingIndicator;
+
+        /**
+         * Causes a typing event from the user in a given conversation.
+         * @method typing
+         * @param {String} convId Conversation ID
+         * @param {Boolean} isTyping Typing status
+         * @param {String} [itemId] Item ID of parent. Optional. Allows for more granular typing indicator.
+         * @returns {Promise} A promise without data
+         * @scope `WRITE_CONVERSATION` or `FULL`
+         * @example
+         *     client.typing('2b5a62d4-575a-41bb-afef-87c34a52d70e', true)
+         *       .then(() => console.log('Successfully sent'));
+         */
+        _self.typing = typing;
         /**
          * Renew the session token of the current user. This is the authentication session, not the OAuth token.
          * @method renewSessionToken
@@ -50577,7 +51022,7 @@ var Circuit = (function (circuit) {
          * @returns {Promise} A promise returning a list of archived conversations
          * @scope `READ_CONVERSATIONS` or `FULL`
          * @example
-         *     client.getConversationsByLabel({number: 10})
+         *     client.getArchivedConversations({number: 10})
          *       .then(convs => console.log(`Found: ${convs.length} conversations`));
          */
         _self.getArchivedConversations = getArchivedConversations;
@@ -51923,6 +52368,31 @@ var Circuit = (function (circuit) {
         _self.cancelSearch = cancelSearch;
 
         /**
+         * Submits a form posted in a message by the SDK
+         * @method submitForm
+         * @param {String} itemId Item ID
+         * @param {FormData} form Filled form
+         * @returns {Promise} A promise without data
+         * @scope `WRITE_CONVERSATION` or `FULL`
+         * @example
+         *     client.submitForm('e8b72e0e-d2d1-46da-9ed4-7378759314488', {
+         *       id: 'form1234',
+         *       data: [{
+         *         key: 'sport', // e.g. dropdown, input
+         *         value: 'F1'
+         *       }, {
+         *         key: 'isDangerous', // single checkbox
+         *         value: 'true'
+         *       }, {
+         *         key: 'drivers',  // multi-checkbox
+         *         value: 'Vettel,Alonso,LeClerc'
+         *       }]
+         *     })
+         *       .then(() => console.log('Form submitted');
+         */
+        _self.submitForm = submitForm;
+
+        /**
          * Send an application specific message to another user. Use `addUserMessageListener` to
          * listen for user messages on the receiving side. To send a message to your own clients,
          * use `sendAppMessageToClient`.
@@ -52038,6 +52508,39 @@ var Circuit = (function (circuit) {
          */
         _clientApiHandler.on('Conversation.UPDATE_ITEM', function (evt) {
             addToEventQueue({type: 'itemUpdated', item: evt.item});
+        });
+
+        /**
+         * Fired when a conversation item is flagged.
+         * @event itemFlagged
+         * @param {Object} event Object literal containing the event properties
+         * @param {String} event.type Event name
+         * @param {String} event.convId Conversation ID
+         * @param {String} event.itemId Item ID
+         */
+        _clientApiHandler.on('Conversation.FLAG_ITEM', function (evt) {
+            addToEventQueue({
+                type: 'itemFlagged',
+                convId: evt.convId,
+                itemId: evt.conversationItemId
+            });
+        });
+
+        /**
+         * Fired when a conversation item is unflagged.
+         * @event itemUnflagged
+         * @param {Object} event Object literal containing the event properties
+         * @param {String} event.type Event name
+         * @param {String} event.convId Conversation ID
+         * @param {String} event.itemId Item ID
+         */
+        _clientApiHandler.on('Conversation.CLEAR_FLAGGED_ITEM', function (evt) {
+            addToEventQueue({
+                type: 'itemUnflagged',
+                convId: evt.convId,
+                itemId: evt.conversationItemId
+
+            });
         });
 
         /**
@@ -52193,6 +52696,20 @@ var Circuit = (function (circuit) {
             evt.newState.forEach(function (state) {
                 addToEventQueue({type: 'userPresenceChanged', presenceState: state});
             });
+        });
+
+        /**
+         * Fired when a participant types a message in a conversation the user has subscribed to.
+         * @event typing
+         * @param {Object} event Object literal containing the event properties
+         * @param {String} event.type Event name
+         * @param {Boolean} event.data.isTyping Typing status
+         * @param {String} event.data.participantId Participant user ID
+         * @param {String} event.data.parentItemId Parent item ID
+         * @param {String} event.data.convId Conversation ID
+         */
+        _clientApiHandler.on('Conversation.TYPING', function (evt) {
+            addToEventQueue({type: 'typing', data: evt});
         });
 
         /**
@@ -52482,6 +52999,18 @@ var Circuit = (function (circuit) {
         });
 
         /**
+         * Fired when a user submits a form created by logged on user/bot.
+         * @event formSubmission
+         * @param {Object} event Object literal containing the event properties
+         * @param {String} event.type Event name
+         * @param {String} event.itemId Item ID containing the form
+         * @param {FormData} event.form Data of submitted form
+         */
+        _clientApiHandler.on('CPAAS.SUBMIT_FORM_DATA', function (evt) {
+            addToEventQueue({type: 'formSubmission', itemId: evt.itemId, form: evt.form});
+        });
+
+        /**
          * Fired when an incoming call is received. I.e. client is alerting
          * @event callIncoming
          * @param {Object} event Object literal containing the event properties
@@ -52697,6 +53226,8 @@ var Circuit = (function (circuit) {
                 'loggedOnUserUpdated',
                 'itemAdded',
                 'itemUpdated',
+                'itemFlagged',
+                'itemUnflagged',
                 'conversationCreated',
                 'conversationUpdated',
                 'conversationArchived',
@@ -52719,6 +53250,7 @@ var Circuit = (function (circuit) {
                 'whiteboardElement',
                 'whiteboardCleared',
                 'mention',
+                'formSubmission',
                 'callIncoming',
                 'callStatus',
                 'callNetworkQualityChanged',
@@ -52730,7 +53262,8 @@ var Circuit = (function (circuit) {
                 'whiteboardSync',
                 'labelsAdded',
                 'labelEdited',
-                'labelsRemoved'
+                'labelsRemoved',
+                'typing'
             ];
         },
         enumerable: true,
