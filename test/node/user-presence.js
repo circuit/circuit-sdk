@@ -65,4 +65,8 @@ describe('User Presence', () => {
         presence = res[0];
         assert(presence && presence.userId === user2.userId && presence.state === newState);
     });
+
+    it('should unsubscribe to users presence', async () => {
+        await client.subscribePresence([user2.userId]);
+    });    
 });

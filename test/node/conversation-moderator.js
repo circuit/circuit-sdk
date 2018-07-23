@@ -4,6 +4,7 @@ const assert = require('assert');
 const Circuit = require('../../circuit-node');
 const config = require('./config.json');
 const helper = require('./helper');
+const prep = require('../preparation');
 Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
 
 let client;
@@ -17,9 +18,7 @@ describe('Moderator Tests', () => {
         user = await client.logon();
         client2 = new Circuit.Client(config.bot2);
         user2 = await client2.logon();
-        const topic = `${Date.now()}a`;
-        conversation = await client.createConferenceBridge(topic);
-        conversation = await client.addParticipant(conversation.convId, [user2.userId]);
+        conversation = prep.conversation;
     });
 
     after(async () => {

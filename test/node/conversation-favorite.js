@@ -4,27 +4,21 @@ const assert = require('assert');
 const Circuit = require('../../circuit-node');
 const config = require('./config.json');
 const helper = require('./helper');
+const prep = require('../preparation');
 Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
 
 let client;
-let user;
 let conversation;
 describe('Conversation Favorites', () => {
     before(async () => {
         client = new Circuit.Client(config.bot1);
-        user = await client.logon();
+        await client.logon();
+        conversation = prep.conversation;
     });
 
     after(async () => {
         await client.logout();
     });
-
-    it('should create a conference', async () => {
-        const topic = `${Date.now()}a`;
-        const res = await client.createConferenceBridge(topic);
-        conversation = res;
-        assert(conversation && conversation.topic === topic && conversation.participants.includes(user.userId));
-    }); 
 
     it('should favorite the conversation and check it is favorited', async () => {
         await Promise.all([

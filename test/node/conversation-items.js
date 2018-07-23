@@ -4,20 +4,22 @@ const assert = require('assert');
 const Circuit = require('../../circuit-node');
 const config = require('./config.json');
 const helper = require('./helper');
+const prep = require('../preparation');
 Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
 
 let client;
 let user;
 let client2;
 let user2;
-let conversation;
 let item = {};
+let conversation;
 describe('Conversation Items', () => {
     before(async () => {
         client = new Circuit.Client(config.bot1);
         user = await client.logon();
         client2 = new Circuit.Client(config.bot2);
         user2 = await client2.logon();
+        conversation = prep.conversation;
     });
 
     after(async () => {
@@ -25,11 +27,6 @@ describe('Conversation Items', () => {
         await client2.logout();
     });
 
-    it('should create a group conversation', async () => {
-        const topic = `${Date.now()}a`;
-        conversation = await client.createGroupConversation([user2.userId], topic);
-        assert(conversation && conversation.participants.includes(user.userId) && conversation.participants.includes(user2.userId));
-    });
 
     it('should add a simple text item and raise an itemAdded event', async () => {
         const textValue = `${Date.now()}a`;
@@ -61,7 +58,7 @@ describe('Conversation Items', () => {
         ]);
         item = res[0];
         assert(item.itemId === content.itemId && item.text.content === textValue && item.text.subject === subject);
-    }); 
+    });
 
     it('should get conversation feed', async () => {
         const res  = await client.getConversationFeed(conversation.convId);
@@ -135,7 +132,38 @@ describe('Conversation Items', () => {
         assert(!res.text.likedByUsers || !res.text.likedByUsers.includes(user.userId));
     });
 
-    it('should unlike item and raise an itemUpdated event', async () => {
-        await client.markItemsAsRead(conversation.convId);
+    it('should mark items as read and raise a conversationReadItems event', async () => {
+        const res = await Promise.all([
+            client.markItemsAsRead(conversation.convId),
+            helper.expectEvents(client, [{
+                type: 'conversationReadItems',
+                predicate: evt => evt.data.convId === conversation.convId
+            }]) 
+        ]);
+        assert(res[1].data.convId === conversation.convId);
+    });
+
+    it('should mention the user and raise a mention event', async () => {
+        await client2.updateUser({
+            userId: user2.userId,
+            firstName: 'John',
+            lastName: 'Smith'
+        });
+        user2 = await client2.getUserById(user2.userId);
+        const content = `<span class="mention" abbr="${user2.userId}">@${user2.displayName}</span>`;
+        Circuit.Enums.TextItemContentType.RICH;
+        const res  = await Promise.all([
+            client.addTextItem(conversation.convId, {
+                content: content,
+                contentType: Circuit.Enums.TextItemContentType.RICH
+            }),
+            helper.expectEvents(client2, [{
+                type: 'mention',
+                predicate: evt => evt.mention.userReference.userId === user2.userId && evt.mention.itemReference.convId === conversation.convId
+            }]) 
+        ]);
+        const mentionedItem = res[0];
+        const mention = res[1].mention;
+        assert(mentionedItem.convId === conversation.convId && mentionedItem.creatorId === user.userId && mentionedItem.itemId === mention.itemReference.itemId && mention.userReference.userId === user2.userId);
     });
 });
