@@ -30,10 +30,10 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- *  @version: 1.2.3600
+ *  @version: 1.2.3700
  */
 
-var Circuit = {}; Object.defineProperty(Circuit, 'version', { value: '1.2.3600'});
+var Circuit = {}; Object.defineProperty(Circuit, 'version', { value: '1.2.3700'});
 
 // Define external globals for JSHint
 /*global Buffer, clearInterval, clearTimeout, process, require, setInterval, setTimeout*/
@@ -799,7 +799,8 @@ var Circuit = (function (circuit) {
 
             // It also does not like the shortcut attribute used for emoticons. Replace 'shortcut' tag with 'abbr'
             // (Needed for backward compatibility)
-            content = Emoticons.normalizeEmoticonHtml(content);
+            // Sanitize method is used for multiline text in svgWhiteboard.js on popupCallStage page, Emoticons aren't included there;
+            content = Emoticons ? Emoticons.normalizeEmoticonHtml(content) : content;
 
             // Remove <font> tags
             content = content.replace(/<font[^>]*>|<\/font>/gi, '');
@@ -886,12 +887,15 @@ var Circuit = (function (circuit) {
             // If type parameter is omitted or is 'RICH', convert to plain
             if (!type || (type === 'RICH')) {
                 // Replace emoticons with their shortcut
-                content = content.replace(Emoticons.HTML_REGEX, function (matchedString, submatchStr) {
-                    if (Emoticons.isEmoticonContent(matchedString)) {
-                        return submatchStr;
-                    }
-                    return matchedString;
-                });
+                // toPlainText method is used for multiline text in svgWhiteboard.js on popupCallStage page, Emoticons aren't included there;
+                if (Emoticons) {
+                    content = content.replace(Emoticons.HTML_REGEX, function (matchedString, submatchStr) {
+                        if (Emoticons.isEmoticonContent(matchedString)) {
+                            return submatchStr;
+                        }
+                        return matchedString;
+                    });
+                }
 
                 var elem = document.createElement('div');
                 elem.innerHTML = content.replace(/<(br[\/]?|\/li|hr[\/]?)>/gi, '&nbsp;');
@@ -1012,13 +1016,13 @@ var Circuit = (function (circuit) {
     // Pattern for numbers with * and + signs at the beginning of number(used in Cloud Telephony)
     Utils.NUMERIC_SIGN_PATTERN = '^[\*\+]?[0-9]*$';
 
-    //AlphaNumeric Pattern
+    // AlphaNumeric Pattern
     Utils.ALPHANUMERIC_PATTERN = '^[a-zA-Z0-9_]*$';
 
     // Helper pattern for finding urls.
     Utils.URL_SEPARATORS_PATTERN = /(?=[.,;!?]?\s+|[.,;!?]$)/;
 
-    // http, https, ftp url pattern
+    // http, https, ftp, circuit url pattern
     Utils.URL_PATTERN = /(http|ftp|https|circuit):\/\/[\w-]+?((\.|:)[\w-]+?)+?([\w.,@?'^=$%&amp;:\/~+#!\(\)\{\}\[\]-]*[\w@?'^=$%&amp;\/~+#!\(\)\{\}-])?/gim;
 
     // Matches URL_PATTERN (exact match)
@@ -1026,6 +1030,9 @@ var Circuit = (function (circuit) {
 
     // starting with www. sans http:// or https://
     Utils.PSEUDO_URL_PATTERN = /www\.+[\w-]+?(\.[\w-]+?)+?([\w.,@?\'^=$%&amp;:\/~+#!\(\)\{\}\[\]-]*[\w@?\'^=$%&amp;\/~+#!\(\)\{\}-])?/gim;
+
+    // String starts with http, https, ftp protocol
+    Utils.PROTOCOL_PATTERN = /^(?:http|https|ftp):\/\//;
 
     // Query expression retrieved from ui-bootstrap returning all tabbable elements
     Utils.TABBABLE_ELEMENTS_PATTERN = 'a[href], area[href], input:not([disabled]):not([tabindex=\'-1\']), ' +
@@ -1373,137 +1380,6 @@ var Circuit = (function (circuit) {
         return null;
     };
 
-    /**
-     * googLocalCandidateType, googRemoteCandidateType and candidateType return
-     * different candidate types. Here we convert them to what is used in the SDP
-     */
-    Utils.normalizeGoogCandidateType = function (type) {
-        switch (type) {
-        case 'local':
-            return 'host';
-        case 'stun':
-        case 'serverreflexive':
-            return 'srflx';
-        case 'peerreflexive':
-            return 'prflx';
-        case 'relayed':
-            return 'relay';
-        default:
-            return type;
-        }
-    };
-
-    Utils.getChannelInfo = function (res) {
-        // Get the local and remote IP addresses and port numbers
-        var ipl = Utils.parseIpWithPort(res.stat('googLocalAddress')) || {};
-        var ipr = Utils.parseIpWithPort(res.stat('googRemoteAddress')) || {};
-
-        return {
-            ipl: ipl.ipAddress,
-            ptl: ipl.port,
-            ipr: ipr.ipAddress,
-            ptr: ipr.port,
-            lct: Utils.normalizeGoogCandidateType(res.stat('googLocalCandidateType')),
-            rct: Utils.normalizeGoogCandidateType(res.stat('googRemoteCandidateType')),
-            tt: res.stat('googTransportType')
-        };
-    };
-
-    function getAddrByNetworkIdForQosReport(parsedMLine, selectedCandidate, type) {
-        var addr;
-        // Find corresponding address based on the type and networkid
-        parsedMLine.a.some(function (a) {
-            if (a.field === 'candidate' && a.value) {
-                var candidate = new circuit.IceCandidate(a.value);
-                if (candidate.typ === type && candidate['network-id'] === selectedCandidate['network-id']) {
-                    addr = candidate.address;
-                    return true;
-                }
-            }
-        });
-        return addr;
-    }
-
-    /**
-     * Get ICE candidate info (hAddr, sAddr and tt)
-     *
-     * @param {Object} res - Stat resource containing the candidate info
-     * @param {Object} sdp - Local SDP (needed for relay candidates)
-     * @param {String} media - Media type (audio or video)
-     * @returns {Object} - Object containing the candidate's hAddr, sAddr and tt (if applicable)
-     */
-    Utils.getIceCandidateInfo = function (res, sdp, media) {
-        var info = {};
-
-        if (!res || !sdp || !media) {
-            return info;
-        }
-
-        var port, ip;
-        var type = Utils.normalizeGoogCandidateType(res.stat('candidateType'));
-        if (type === 'prflx') {
-            // Peer reflexive candidates are not in the SDP, but we still need to collect
-            // their hAddr. For that we use their connection IP address (sAddr) to find
-            // the corresponding srflx candidate, then the host candidate (hAddr)
-            ip = res.stat('ipAddress');
-        } else {
-            port = res.stat('portNumber');
-        }
-
-        var parsed = (typeof sdp === 'string') ? circuit.sdpParser.parse(sdp) : sdp;
-        // Find the selected candidate in the SDP
-        parsed.m.some(function (m) {
-            if (m.media === media) {
-                m.a.some(function (a) {
-                    if (a.field !== 'candidate') {
-                        return;
-                    }
-                    // Only parse the ICE candidate if the port is found in it
-                    if (a.value) {
-                        var candidate;
-                        if (port && a.value.indexOf(port) >= 0) {
-                            candidate = new circuit.IceCandidate(a.value);
-                            if (String(candidate.port) === port && type === candidate.typ) {
-                                info.value = a.value;
-                                if (type === 'host') {
-                                    info.hAddr = res.stat('ipAddress');
-                                    // ANS-51833: In some cases of VPN connected calls, selected candidate is host
-                                    // but, backend needs srflx host address for the QoS bandwidth calculations
-                                    // get srflx address if there any otherwise default to host address.
-                                    info.sAddr = getAddrByNetworkIdForQosReport(m, candidate, 'srflx');
-                                    if (!info.sAddr) {
-                                        info.sAddr = info.hAddr;
-                                    }
-                                } else {
-                                    info.sAddr = candidate.raddr;
-                                    // Get the corresponding host address for srflx/relay candidate
-                                    info.hAddr = getAddrByNetworkIdForQosReport(m, candidate, 'host');
-
-                                    if (type === 'relay') {
-                                        info.tt = candidate.getRelayClientTransportType();
-                                    }
-                                }
-                                return true;
-                            }
-                        }
-                        if (ip && a.value.indexOf('srflx') >= 0) {
-                            // We're using the ip to search for the candidate, which must be srflx
-                            candidate = candidate || new circuit.IceCandidate(a.value);
-                            if (candidate.typ === 'srflx' && String(candidate.address) === ip) {
-                                info.sAddr = ip;
-                                // Now get the host address
-                                info.hAddr = getAddrByNetworkIdForQosReport(m, candidate, 'host');
-                                return true;
-                            }
-                        }
-                    }
-                });
-                return true;
-            }
-        });
-        return info;
-    };
-
     Utils.isEmptyObject = function (obj) {
         return Object.keys(obj).length === 0;
     };
@@ -1812,7 +1688,7 @@ var Circuit = (function (circuit) {
                         // Do not create new page for circuit:// link
                         createNewPage = false;
                     }
-                } else if (!/^(?:http|https|ftp):\/\//.exec(match)) {
+                } else if (!Utils.PROTOCOL_PATTERN.exec(match)) {
                     // Make sure that protocol is specified
                     url = 'http://' + url;
                 }
@@ -2411,15 +2287,14 @@ var Circuit = (function (circuit) {
         if (link.startsWith('#/')) { // relative links
             return true;
         }
-        var protocolPattern = /^(?:http|https|ftp):\/\//;
         // Normalization of params - failsafe
-        if (!protocolPattern.exec(host)) {
+        if (!Utils.PROTOCOL_PATTERN.exec(host)) {
             host = HTTPS + host;
         }
         if (!host.endsWith('\/')) {
             host = host + '\/';
         }
-        if (!protocolPattern.exec(link)) {
+        if (!Utils.PROTOCOL_PATTERN.exec(link)) {
             // Interpret circuit:// as https://
             link = link.startsWith(CIRCUIT_PROTOCOL) ? link.replace(CIRCUIT_PROTOCOL, HTTPS) : (HTTPS + link);
         }
@@ -4274,7 +4149,8 @@ var Circuit = (function (circuit) {
             GLOBAL_PROPERTIES: 'GLOBAL_PROPERTIES',
             TENANT: 'TENANT',
             NOTIFICATION_SUBSCRIPTIONS: 'NOTIFICATION_SUBSCRIPTIONS',
-            PENDING_SYSTEM_NOTIFICATIONS: 'PENDING_SYSTEM_NOTIFICATIONS'
+            PENDING_SYSTEM_NOTIFICATIONS: 'PENDING_SYSTEM_NOTIFICATIONS',
+            SUPPORT_INFO: 'SUPPORT_INFO'
         },
 
         NotificationSubscriptionType: {
@@ -4499,7 +4375,8 @@ var Circuit = (function (circuit) {
             ENHANCED_DESKTOP_MESSAGE_NOTIFICATION: 'ENHANCED_DESKTOP_MESSAGE_NOTIFICATION',
             ENHANCED_MOBILE_MESSAGE_NOTIFICATION: 'ENHANCED_MOBILE_MESSAGE_NOTIFICATION',
             HIDE_PROFILE_EXTERNAL_ENABLED: 'HIDE_PROFILE_EXTERNAL_ENABLED',
-            PLAY_PICKUP_SOUND: 'PLAY_PICKUP_SOUND'
+            PLAY_PICKUP_SOUND: 'PLAY_PICKUP_SOUND',
+            KEYBOARD_SHORTCUTS_ENABLED: 'KEYBOARD_SHORTCUTS_ENABLED'
         },
 
         OAuthScope: {
@@ -4567,6 +4444,7 @@ var Circuit = (function (circuit) {
             DISABLE_PARTNER_ADMINISTRATION: 'DISABLE_PARTNER_ADMINISTRATION',
             GET_RESELLER_INFO: 'GET_RESELLER_INFO',
             SET_SUPPORT_TYPE: 'SET_SUPPORT_TYPE',
+            SET_SUPPORT_EMAIL_ADDRESS: 'SET_SUPPORT_EMAIL_ADDRESS',
             EXPORT_DATA_USER: 'EXPORT_DATA_USER',
             EXPORT_DATA_TENANT: 'EXPORT_DATA_TENANT',
 
@@ -4651,6 +4529,10 @@ var Circuit = (function (circuit) {
             ASSIGN_OPENSCAPE_ITSP_TO_SITE: 'ASSIGN_OPENSCAPE_ITSP_TO_SITE',
             UNASSIGN_OPENSCAPE_ITSP_TO_SITE: 'UNASSIGN_OPENSCAPE_ITSP_TO_SITE',
             FIND_OPENSCAPE_SITES_BY_ITSP: 'FIND_OPENSCAPE_SITES_BY_ITSP',
+            GET_PICKUP_GROUP_MEMBER_CANDIDATES: 'GET_PICKUP_GROUP_MEMBER_CANDIDATES',
+            CREATE_PICKUP_GROUP: 'CREATE_PICKUP_GROUP',
+            GET_TENANT_PICKUP_GROUPS: 'GET_TENANT_PICKUP_GROUPS',
+            DELETE_PICKUP_GROUPS: 'DELETE_PICKUP_GROUPS',
 
             // Deprecated methods for users (but still used for TC)
             SUSPEND_USER: 'SUSPEND_USER',
@@ -4666,6 +4548,10 @@ var Circuit = (function (circuit) {
             UPDATE_MEETING_POINT_V2: 'UPDATE_MEETING_POINT_V2',
             SET_CMR_SETTINGS: 'SET_CMR_SETTINGS',
             GET_CMR_SETTINGS: 'GET_CMR_SETTINGS',
+            GET_CMR_INFO_BY_ID: 'GET_CMR_INFO_BY_ID',
+            GET_CMR_INFO_BY_IDS: 'GET_CMR_INFO_BY_IDS',
+            SET_ADMIN_MANAGED_CMR_SETTINGS: 'SET_ADMIN_MANAGED_CMR_SETTINGS',
+            SET_ADMIN_MANAGED_CMR_SETTINGS_BY_IDS: 'SET_ADMIN_MANAGED_CMR_SETTINGS_BY_IDS',
 
             // Automated Attendant
             GET_AUTOMATEDATTENDANT_CONFIGURATION: 'GET_AUTOMATEDATTENDANT_CONFIGURATION',
@@ -4852,7 +4738,35 @@ var Circuit = (function (circuit) {
         },
 
         CMRSettingKey: {
-            CMR_ADDRESS: 'CMR_ADDRESS'
+            CMR_ADDRESS: 'CMR_ADDRESS',
+            CMR_PLATFORM_VERSION: 'CMR_PLATFORM_VERSION',
+            CMR_OS_VERSION: 'CMR_OS_VERSION',
+            CMR_APP_VERSION: 'CMR_APP_VERSION',
+            CMR_MAC_ADDRESS: 'CMR_MAC_ADDRESS',
+            VIDEO_DEVICE: 'VIDEO_DEVICE',
+            AUDIO_DEVICE: 'AUDIO_DEVICE',
+            PRIMARY_DISPLAY: 'PRIMARY_DISPLAY',
+            SECONDARY_DISPLAY: 'SECONDARY_DISPLAY',
+            UPDATE_SERVER_STATUS: 'UPDATE_SERVER_STATUS'
+        },
+
+        AdminManagedCMRSettingKey: {
+            CMR_UDP_QOS: 'CMR_UDP_QOS',
+            CMR_UDP_AUDIO_DSCP: 'CMR_UDP_AUDIO_DSCP',
+            CMR_UDP_VIDEO_DSCP: 'CMR_UDP_VIDEO_DSCP',
+            CMR_TCP_QOS: 'CMR_TCP_QOS',
+            CMR_TCP_AUDIO_DSCP: 'CMR_TCP_AUDIO_DSCP',
+            CMR_TCP_VIDEO_DSCP: 'CMR_TCP_VIDEO_DSCP',
+            MANUAL_TIME: 'MANUAL_TIME',
+            TIMEZONE: 'TIMEZONE',
+            DATE: 'DATE',
+            TIME: 'TIME',
+            NTP_SERVER: 'NTP_SERVER',
+            REMOTE_ACCESS: 'REMOTE_ACCESS',
+            ENERGY_SAVING: 'ENERGY_SAVING',
+            SUSPEND_AFTER: 'SUSPEND_AFTER',
+            SW_UPDATE_INFO: 'SW_UPDATE_INFO',
+            DASHBOARD_PASSWORD: 'DASHBOARD_PASSWORD'
         },
 
         UcaasDeviceStatus: {
@@ -5093,7 +5007,8 @@ var Circuit = (function (circuit) {
             PARTNER_ADMIN: 'PARTNER_ADMIN',
             DEVELOPER_CONSOLE_ACCESS: 'DEVELOPER_CONSOLE_ACCESS',
             S4B_INTEGRATION: 'S4B_INTEGRATION',
-            RTC_WHITE_BOARD: 'RTC_WHITE_BOARD'
+            RTC_WHITE_BOARD: 'RTC_WHITE_BOARD',
+            SCREEN_CONTROL: 'SCREEN_CONTROL'
         },
 
         PermissionType: {
@@ -5181,7 +5096,6 @@ var Circuit = (function (circuit) {
             DIRECT_TO_CONF_UPGRADE: 'DIRECT_TO_CONF_UPGRADE',
             EXPORT_LEGAL_DATA: 'EXPORT_LEGAL_DATA',
             FILTER_BY_LABEL: 'FILTER_BY_LABEL',
-            GLOBAL_FUNCTIONS_REDESIGN: 'GLOBAL_FUNCTIONS_REDESIGN',
             GROUP_PICKUP: 'GROUP_PICKUP',
             HASHTAGS: 'HASHTAGS',
             INCOMING_CALL_ROUTING: 'INCOMING_CALL_ROUTING',
@@ -5190,6 +5104,7 @@ var Circuit = (function (circuit) {
             KEYBOARD_NAVIGATION: 'KEYBOARD_NAVIGATION',
             LANDSCAPE_MODE: 'LANDSCAPE_MODE',
             LEAK_CANARY: 'LEAK_CANARY',
+            LOCK_SCREEN_CALL_CONTROL: 'LOCK_SCREEN_CALL_CONTROL',
             MEETING_CANVAS: 'MEETING_CANVAS',
             OPEN_XCHANGE: 'OPEN_XCHANGE',
             ORGANISE_CONTENT: 'ORGANISE_CONTENT',
@@ -5198,6 +5113,8 @@ var Circuit = (function (circuit) {
             RICH_TOPIC_EDITOR_EXPANSION: 'RICH_TOPIC_EDITOR_EXPANSION',
             SCOPE_SEARCHES: 'SCOPE_SEARCHES',
             SCREEN_CONTROL: 'SCREEN_CONTROL',
+            SCREEN_CONTROL_CONF: 'SCREEN_CONTROL_CONF',
+            SCREEN_SHARE_FLOATING_CONTROL: 'SCREEN_SHARE_FLOATING_CONTROL',
             SECOND_LOCAL_CALL: 'SECOND_LOCAL_CALL',
             SHORT_LINKS: 'SHORT_LINKS',
             SIRI_SEARCH: 'SIRI_SEARCH',
@@ -5206,7 +5123,7 @@ var Circuit = (function (circuit) {
             UCAAS_ITSP: 'UCAAS_ITSP',
             UCAAS_PICKUP_GROUPS: 'UCAAS_PICKUP_GROUPS',
             VIDEO_PLAYER: 'VIDEO_PLAYER',
-            VOICEMAIL_CONFIG: 'VOICEMAIL_CONFIG',
+            VIDEO_FOR_EVENTS: 'VIDEO_FOR_EVENTS',
             VOTING: 'VOTING',
             WHITEBOARD: 'WHITEBOARD',
             ZAPIER_INTEGRATION: 'ZAPIER_INTEGRATION'
@@ -7554,6 +7471,12 @@ var Circuit = (function (circuit) {
         id: 0
     };
 
+    var RtcPromise;
+    if (typeof window.Promise !== 'undefined') {
+        // By default use the standard Promise object if supported by the browser
+        RtcPromise = window.Promise;
+    }
+
     /////////////////////////////////////////////////////////////////////////////////
     // Helper functions
     /////////////////////////////////////////////////////////////////////////////////
@@ -7717,6 +7640,12 @@ var Circuit = (function (circuit) {
                     kind: info.kind,
                     label: info.label
                 };
+
+                if (item.label) {
+                    // Strip device vendor/model from label
+                    var match = item.label.match(/(.*)\s\(.*\:.*\)/);
+                    item.label = match && match[1] || item.label;
+                }
 
                 // Fallback for electron issue: https://github.com/atom/electron/issues/4931
                 if (Circuit.isElectron) {
@@ -8394,16 +8323,16 @@ var Circuit = (function (circuit) {
             if (_browser.firefox) {
                 logger.info('Setting WebRTC APIs for Firefox');
 
-                var convertStats = function (stats) {
+                var convertStats = function (stats, kind) {
                     var items = [];
                     stats.forEach(function (item) {
-                        items.push(new Stat(item));
+                        items.push(new Stat(item, kind));
                     });
                     return items;
                 };
 
                 // Convert Firefox stats to Chrome's format
-                var Stat = function (stats) {
+                var Stat = function (stats, kind) {
                     this.stats = stats;
                     this.id = stats.id;
                     switch (stats.type) {
@@ -8411,7 +8340,7 @@ var Circuit = (function (circuit) {
                     case 'inbound-rtp':
                         if (!stats.isRemote) {
                             this.type = 'ssrc';
-                            if (stats.mediaType === 'audio') {
+                            if (kind === 'audio') {
                                 this.stats.audioOutputLevel = true;
                                 this.stats.googJitterReceived = stats.jitter;
                             } else {
@@ -8423,7 +8352,7 @@ var Circuit = (function (circuit) {
                     case 'outbound-rtp':
                         if (!stats.isRemote) {
                             this.type = 'ssrc';
-                            if (stats.mediaType === 'audio') {
+                            if (kind === 'audio') {
                                 this.stats.audioInputLevel = true;
                             } else {
                                 this.stats.googFrameHeightSent = true;
@@ -8436,9 +8365,18 @@ var Circuit = (function (circuit) {
                         // kind of media they belong to yet. Still waiting for more getStats improvements:
                         // https://bugzilla.mozilla.org/showdependencytree.cgi?id=964161&hide_resolved=1
                         this.type = 'googCandidatePair';
-                        if (typeof stats.selected === 'boolean') {
-                            this.googActiveConnection = stats.selected ? 'true' : 'false';
+                        if (typeof stats.selected === 'boolean' && stats.selected) {
+                            this.stats.googActiveConnection = 'true';
+                            if (kind === 'audio') {
+                                this.stats.googChannelId = 'Channel-audio-1';
+                            }
                         }
+                        break;
+                    case 'local-candidate':
+                        this.type = 'localcandidate';
+                        break;
+                    case 'remote-candidate':
+                        this.type = 'remotecandidate';
                         break;
                     default:
                         this.type = stats.type;
@@ -8492,9 +8430,35 @@ var Circuit = (function (circuit) {
                             if (typeof successCallback !== 'function') {
                                 return;
                             }
-                            pc.origGetStats().then(function (stats) {
-                                successCallback(convertStats(stats));
-                            }, errorCallback);
+                            var combinedStats = [];
+                            var rtpTransceivers = [];
+                            var promises = [];
+                            Array.prototype.push.apply(rtpTransceivers, pc.getReceivers());
+                            Array.prototype.push.apply(rtpTransceivers, pc.getSenders());
+                            rtpTransceivers.forEach(function (t) {
+                                var track = t.track;
+                                if (track) {
+                                    promises.push(new RtcPromise(function (resolve) {
+                                        t.getStats()
+                                        .then(function (stats) {
+                                            Array.prototype.push.apply(combinedStats, convertStats(stats, track.kind));
+                                            resolve();
+                                        })
+                                        .catch(function (error) {
+                                            logger.debug('[WebRTCAdapter]: Error collecting stats for track: ' + track.label + ' . Error: ', error);
+                                            resolve();
+                                        });
+                                    }));
+                                }
+                            });
+                            RtcPromise.all(promises)
+                            .then(function () {
+                                successCallback(combinedStats);
+                            })
+                            .catch(function (err) {
+                                logger.error('[WebRTCAdapter]: Unexpected error collecting stats:', err);
+                                errorCallback && errorCallback(err);
+                            });
                         };
                         pc.removeStream = function () {};
                         pc.createDTMFSender = function (audioTrack) {
@@ -9378,6 +9342,10 @@ var Circuit = (function (circuit) {
     }
 
     initWebRTCAdapter();
+
+    circuit.WebRTCAdapter.overridePromise = function ($q) {
+        RtcPromise = $q;
+    };
     return circuit;
 
 })(Circuit);
@@ -11986,7 +11954,8 @@ var Circuit = (function (circuit) {
                     isTelephonyCall: _that.isTelephonyCall,
                     isLargeConference: _that.isLarge,
                     isAtcPullCall: options.isAtcPullCall,
-                    reuseDesktopStreamFrom: options.reuseDesktopStreamFrom
+                    reuseDesktopStreamFrom: options.reuseDesktopStreamFrom,
+                    isSessionGuest: options.isSessionGuest
                 });
                 _sessionCtrl.onMediaUpdate = onMediaUpdate;
                 _sessionCtrl.onLocalVideoStream = onLocalVideoStream;
@@ -12858,9 +12827,11 @@ var Circuit = (function (circuit) {
             _api.installExtension = function () {
                 if (_extensionSvc) {
                     logger.debug('[ScreenSharingController]: Install Chrome extension');
-                    _extensionSvc.installExtension(true).then(function () {
+                    _extensionSvc.installExtension(true)
+                    .then(function () {
                         logger.info('[ScreenSharingController]: Chrome extension was successfully installed');
-                    }).catch(function (error) {
+                    })
+                    .catch(function (error) {
                         logger.warn('[ScreenSharingController]: Failed to install Chrome extension. ', error);
                     });
                 }
@@ -13098,9 +13069,206 @@ var Circuit = (function (circuit) {
         RtcPromise = window.Promise;
     }
 
+    var browserInfo = Utils.getBrowserInfo();
+
     /////////////////////////////////////////////////////////////////////////////
     // Helper functions
     /////////////////////////////////////////////////////////////////////////////
+    function normalizeCandidateType(type) {
+        switch (type) {
+        case 'local':
+            return 'host';
+        case 'stun':
+        case 'serverreflexive':
+            return 'srflx';
+        case 'peerreflexive':
+            return 'prflx';
+        case 'relayed':
+            return 'relay';
+        default:
+            return type;
+        }
+    }
+
+    function getAddrByNetworkIdForQosReport(parsedMLine, selectedCandidate, type) {
+        var addr;
+        // Find corresponding address based on the type and networkid
+        parsedMLine.a.some(function (a) {
+            if (a.field === 'candidate' && a.value) {
+                var candidate = new circuit.IceCandidate(a.value);
+                if (candidate.typ === type && candidate['network-id'] === selectedCandidate['network-id']) {
+                    addr = candidate.address;
+                    return true;
+                }
+            }
+        });
+        return addr;
+    }
+
+    /**
+    * Get ICE candidate info (hAddr, sAddr and tt)
+    *
+    * @param {Object} res - Stat resource containing the candidate info
+    * @param {Object} sdp - Local SDP (needed for relay candidates)
+    * @param {String} media - Media type (audio or video)
+    * @returns {Object} - Object containing the candidate's hAddr, sAddr and tt (if applicable)
+    */
+    function getIceCandidateInfo(res, sdp, media) {
+        var info = {};
+
+        if (!res || !sdp || !media) {
+            return info;
+        }
+
+        var port, ip;
+        var type = normalizeCandidateType(res.stat('candidateType'));
+        if (type === 'prflx') {
+            // Peer reflexive candidates are not in the SDP, but we still need to collect
+            // their hAddr. For that we use their connection IP address (sAddr) to find
+            // the corresponding srflx candidate, then the host candidate (hAddr)
+            ip = res.stat('ipAddress');
+        } else {
+            port = String(res.stat('portNumber'));
+        }
+
+        var parsed = (typeof sdp === 'string') ? circuit.sdpParser.parse(sdp) : sdp;
+        // Find the selected candidate in the SDP
+        parsed.m.some(function (m) {
+            if (m.media === media) {
+                m.a.some(function (a) {
+                    if (a.field !== 'candidate') {
+                        return;
+                    }
+                    // Only parse the ICE candidate if the port is found in it
+                    if (a.value) {
+                        var candidate;
+                        if (port && a.value.indexOf(port) >= 0) {
+                            candidate = new circuit.IceCandidate(a.value);
+                            if (String(candidate.port) === port && type === candidate.typ) {
+                                info.value = a.value;
+                                if (type === 'host') {
+                                    info.hAddr = res.stat('ipAddress');
+                                    // ANS-51833: In some cases of VPN connected calls, selected candidate is host
+                                    // but, backend needs srflx host address for the QoS bandwidth calculations
+                                    // get srflx address if there any otherwise default to host address.
+                                    info.sAddr = getAddrByNetworkIdForQosReport(m, candidate, 'srflx');
+                                    if (!info.sAddr) {
+                                        info.sAddr = info.hAddr;
+                                    }
+                                } else {
+                                    info.sAddr = candidate.raddr;
+                                    // Get the corresponding host address for srflx/relay candidate
+                                    info.hAddr = getAddrByNetworkIdForQosReport(m, candidate, 'host');
+
+                                    if (type === 'relay') {
+                                        info.tt = candidate.getRelayClientTransportType();
+                                    }
+                                }
+                                return true;
+                            }
+                        }
+                        if (ip && a.value.indexOf('srflx') >= 0) {
+                            // We're using the ip to search for the candidate, which must be srflx
+                            candidate = candidate || new circuit.IceCandidate(a.value);
+                            if (candidate.typ === 'srflx' && String(candidate.address) === ip) {
+                                info.sAddr = ip;
+                                // Now get the host address
+                                info.hAddr = getAddrByNetworkIdForQosReport(m, candidate, 'host');
+                                return true;
+                            }
+                        }
+                    }
+                });
+                return true;
+            }
+        });
+        return info;
+    }
+
+    function getChannelInfo(res) {
+        // Get the local and remote IP addresses and port numbers
+        var ipl = Utils.parseIpWithPort(res.stat('googLocalAddress')) || {};
+        var ipr = Utils.parseIpWithPort(res.stat('googRemoteAddress')) || {};
+        return {
+            ipl: ipl.ipAddress,
+            ptl: ipl.port,
+            ipr: ipr.ipAddress,
+            ptr: ipr.port,
+            lct: normalizeCandidateType(res.stat('googLocalCandidateType')),
+            rct: normalizeCandidateType(res.stat('googRemoteCandidateType')),
+            tt: res.stat('googTransportType')
+        };
+    }
+
+    function getChannelInfoFromCandidates(local, remote) {
+        return {
+            ipl: local && local.stat('ipAddress'),
+            ptl: local && local.stat('portNumber'),
+            ipr: remote && remote.stat('ipAddress'),
+            ptr: remote && remote.stat('portNumber'),
+            lct: local && normalizeCandidateType(local.stat('candidateType')),
+            rct: remote && normalizeCandidateType(remote.stat('candidateType')),
+            tt: local && local.stat('transport')
+        };
+    }
+
+    function processCandidatePair(res, formattedStats, candidateIds, includeQosData) {
+        if (res.stat('googChannelId') === 'Channel-audio-1') {
+            formattedStats.audio.rtt = parseInt(res.stat('googRtt'), 10);
+            if (includeQosData) {
+                candidateIds.audio.local = res.stat('localCandidateId');
+                if (browserInfo.firefox) {
+                    candidateIds.audio.remote = res.stat('remoteCandidateId');
+                } else {
+                    formattedStats.audio.channelInfo = getChannelInfo(res);
+                }
+            }
+        } else {
+            formattedStats.video.rtt = parseInt(res.stat('googRtt'), 10);
+            if (includeQosData) {
+                candidateIds.video.local = res.stat('localCandidateId');
+                if (browserInfo.firefox) {
+                    candidateIds.video.remote = res.stat('remoteCandidateId');
+                } else {
+                    formattedStats.video.channelInfo = getChannelInfo(res);
+                }
+            }
+        }
+    }
+
+    function processSsrc(res, formattedStats) {
+        var statsPtr = null;
+        // For lack of better method, we check for specific stats in each ssrc so we can
+        // tell if it's audio or video (receive or transmit)
+        var commonData = {
+            id: res.id,
+            ssrc: res.stat('ssrc'),
+            timestamp: res.timestamp
+        };
+        if (res.stat('audioInputLevel')) {
+            if (!formattedStats.audio.transmit) {
+                formattedStats.audio.transmit = commonData;
+            }
+            statsPtr = formattedStats.audio.transmit;
+        } else if (res.stat('audioOutputLevel')) {
+            if (!formattedStats.audio.receive) {
+                formattedStats.audio.receive = commonData;
+            }
+            statsPtr = formattedStats.audio.receive;
+        } else if (res.stat('googFrameHeightSent')) {
+            if (!formattedStats.video.transmit) {
+                formattedStats.video.transmit = commonData;
+            }
+            statsPtr = formattedStats.video.transmit;
+        } else if (res.stat('googFrameHeightReceived')) {
+            if (!formattedStats.video.receive) {
+                formattedStats.video.receive = commonData;
+            }
+            statsPtr = formattedStats.video.receive;
+        }
+        return statsPtr;
+    }
+
     function formatStatsForClientDiagnostics(startTime, stats, pc, pcType, includeQosData) {
         if (!stats || !pc) {
             return null;
@@ -13112,7 +13280,8 @@ var Circuit = (function (circuit) {
             audio: {},
             video: {}
         };
-        var audioCandidateId, videoCandidateId;
+        var candidateIds = {audio: {}, video: {}};
+        var candidateList = {};
         var results = (stats.result) ? stats.result() : stats;
         if (!Array.isArray(results)) {
             return null;
@@ -13130,54 +13299,25 @@ var Circuit = (function (circuit) {
                 return;
             }
             var statsPtr = null;
-            if ((res.type === 'googCandidatePair') && (res.stat('googActiveConnection') === 'true')) {
-                if (res.stat('googChannelId') === 'Channel-audio-1') {
-                    formattedStats.audio.rtt = parseInt(res.stat('googRtt'), 10);
-                    if (includeQosData) {
-                        audioCandidateId = res.stat('localCandidateId');
-                        formattedStats.audio.channelInfo = Utils.getChannelInfo(res);
-                    }
-                } else {
-                    formattedStats.video.rtt = parseInt(res.stat('googRtt'), 10);
-                    if (includeQosData) {
-                        videoCandidateId = res.stat('localCandidateId');
-                        formattedStats.video.channelInfo = Utils.getChannelInfo(res, res.stat('localCandidateId'));
-                    }
+            switch (res.type) {
+            case 'googCandidatePair':
+                if (res.stat('googActiveConnection') === 'true') {
+                    processCandidatePair(res, formattedStats, candidateIds, includeQosData);
                 }
-            } else if (res.type === 'ssrc') {
-                // For lack of better method, we check for specific stats in each ssrc so we can
-                // tell if it's audio or video (receive or transmit)
-                var commonData = {
-                    id: res.id,
-                    ssrc: res.stat('ssrc'),
-                    timestamp: res.timestamp
-                };
-                if (res.stat('audioInputLevel')) {
-                    if (!formattedStats.audio.transmit) {
-                        formattedStats.audio.transmit = commonData;
-                    }
-                    statsPtr = formattedStats.audio.transmit;
-                } else if (res.stat('audioOutputLevel')) {
-                    if (!formattedStats.audio.receive) {
-                        formattedStats.audio.receive = commonData;
-                    }
-                    statsPtr = formattedStats.audio.receive;
-                } else if (res.stat('googFrameHeightSent')) {
-                    if (!formattedStats.video.transmit) {
-                        formattedStats.video.transmit = commonData;
-                    }
-                    statsPtr = formattedStats.video.transmit;
-                } else if (res.stat('googFrameHeightReceived')) {
-                    if (!formattedStats.video.receive) {
-                        formattedStats.video.receive = commonData;
-                    }
-                    statsPtr = formattedStats.video.receive;
-                }
-            } else if (res.type === 'VideoBwe') {
+                break;
+            case 'ssrc':
+                statsPtr = processSsrc(res, formattedStats);
+                break;
+            case 'VideoBwe':
                 if (!formattedStats.video.bw) {
                     formattedStats.video.bw = {id: res.id};
                 }
                 statsPtr = formattedStats.video.bw;
+                break;
+            case 'localcandidate':
+            case 'remotecandidate':
+                candidateList[res.id] = res;
+                break;
             }
 
             // Now get only the stats that we are interested in
@@ -13194,32 +13334,21 @@ var Circuit = (function (circuit) {
         });
 
         if (includeQosData) {
-            // First determine how many local candidates we need to stat (audio/video or audio+video)
-            var count = formattedStats.audio.channelInfo ? 1 : 0;
-            if (formattedStats.video.channelInfo) {
-                count++;
-            }
-            var parsedLocalSdp; // Save parsed local SDP so we won't have to parse it twice
-            results.some(function (res) {
-                if (!res) {
-                    return;
-                }
-                if (res.type === 'localcandidate') {
-                    // Get network interface info and IP address from the local candidate
-                    if (audioCandidateId === res.id && formattedStats.audio.channelInfo) {
-                        // Audio
-                        formattedStats.audio.channelInfo.ni = res.stat('networkType');
-                        parsedLocalSdp = parsedLocalSdp || circuit.sdpParser.parse(pc.localDescription && pc.localDescription.sdp);
-                        formattedStats.audio.channelInfo.candidate = Utils.getIceCandidateInfo(res, parsedLocalSdp, 'audio');
-                        return --count <= 0;
+            var parsedLocalSdp;
+            var mediaList = ['audio', 'video'];
+
+            mediaList.forEach(function (m) {
+                var media = formattedStats[m] || {};
+
+                var local = candidateList[candidateIds[m].local];
+                if (local) {
+                    if (!media.channelInfo) {
+                        var remote = candidateList[candidateIds[m].remote];
+                        media.channelInfo = getChannelInfoFromCandidates(local, remote);
                     }
-                    if (videoCandidateId === res.id && formattedStats.video.channelInfo) {
-                        // Video
-                        formattedStats.video.channelInfo.ni = res.stat('networkType');
-                        parsedLocalSdp = parsedLocalSdp || circuit.sdpParser.parse(pc.localDescription && pc.localDescription.sdp);
-                        formattedStats.video.channelInfo.candidate = Utils.getIceCandidateInfo(res, parsedLocalSdp, 'video');
-                        return --count <= 0;
-                    }
+                    media.channelInfo.ni = local.stat('networkType');
+                    parsedLocalSdp = parsedLocalSdp || circuit.sdpParser.parse(pc.localDescription && pc.localDescription.sdp);
+                    media.channelInfo.candidate = getIceCandidateInfo(local, parsedLocalSdp, m);
                 }
             });
         }
@@ -14153,6 +14282,7 @@ var Circuit = (function (circuit) {
         var _isScreenOwner = false;
 
         var _largeConference = !!options.isLargeConference;
+        var _isSessionGuest = !!options.isSessionGuest;
 
         // For an ATC pull call scenario the first received SDP Offer is a dummy Offer which
         // will not be used for the actual connection. In this case we should not waste time
@@ -14181,6 +14311,8 @@ var Circuit = (function (circuit) {
         var _lastGUMAudioConstraints = {};
 
         var _isDirectUpgradingToConf = false;
+
+        var _dontReuseAudioStream = false;
 
         /////////////////////////////////////////////////////////////////////////////
         // Media Capture and Streams
@@ -14228,7 +14360,8 @@ var Circuit = (function (circuit) {
                 enableAudioAGC: RtcSessionController.enableAudioAGC,
                 sourceId: source && source.id
             };
-            if (_renegotiationInProgress && (_browser.firefox || _browser.chrome) &&
+            if (!_dontReuseAudioStream &&
+                _renegotiationInProgress && (_browser.firefox || _browser.chrome) &&
                 _mediaConstraints.audio === _oldMediaConstraints.audio &&
                 _lastGUMAudioConstraints.enableAudioAGC === constraints.enableAudioAGC &&
                 _lastGUMAudioConstraints.sourceId === constraints.sourceId) {
@@ -16157,7 +16290,7 @@ var Circuit = (function (circuit) {
 
         function getOfferToReceiveVideo(constraints) {
             return (!_remoteVideoDisabled || !!(constraints && constraints.video))
-                    && (Utils.isMobile() || !_largeConference) && !_isTelephonyCall;
+                    && !_isTelephonyCall;
         }
 
         function updateTrickleIceAndStatus(pc, type, parsedSdp) {
@@ -16662,8 +16795,9 @@ var Circuit = (function (circuit) {
                 return false;
             }
 
-            if (_largeConference) {
-                logger.debug('[RtcSessionController]: Number of extra video channels for large conference is 0 (zero)');
+            if (_largeConference && _isSessionGuest) {
+                logger.debug('[RtcSessionController]: Number of extra video channels for guests in large conference is 0');
+                _numberOfExtraVideoChannels = 0;
                 return false;
             }
 
@@ -16966,6 +17100,18 @@ var Circuit = (function (circuit) {
         /////////////////////////////////////////////////////////////////////////////
         // Public interfaces
         /////////////////////////////////////////////////////////////////////////////
+
+        Object.defineProperty(this, 'dontReuseAudioStream', {
+            get: function () {
+                return _dontReuseAudioStream;
+            },
+            set: function (value) {
+                _dontReuseAudioStream = value;
+            },
+            enumerable: true,
+            configurable: false
+        });
+
         this.setTurnCredentials = function (credentials) {
             _turnCredentials = credentials || {};
         };
@@ -18795,6 +18941,7 @@ var Circuit = (function (circuit) {
         var SP96_API_VERSION = 2090079; // 2.9.79-x
         var SP97_API_VERSION = 2090083; // 2.9.83-x
         var SP98_API_VERSION = 2090084; // 2.9.84-x
+        var SP99_API_VERSION = 2090088; // 2.9.88-x
 
         var NOP = function () {};
 
@@ -19016,8 +19163,24 @@ var Circuit = (function (circuit) {
                     Constants.GetStuffType.GLOBAL_PROPERTIES,
                     Constants.GetStuffType.TENANT,
                     Constants.GetStuffType.NOTIFICATION_SUBSCRIPTIONS,
-                    Constants.GetStuffType.PENDING_SYSTEM_NOTIFICATIONS
+                    Constants.GetStuffType.PENDING_SYSTEM_NOTIFICATIONS,
+                    Constants.GetStuffType.SUPPORT_INFO
                 ];
+
+                if (this.isEmailSupportFeatureSupported()) {
+                    types.push(Constants.GetStuffType.SUPPORT_INFO);
+                }
+
+            } else if (!this.isEmailSupportFeatureSupported()) {
+                var idx = types.indexOf(Constants.GetStuffType.SUPPORT_INFO);
+                if (idx !== -1) {
+                    logger.warn('[ClientApiHandler]: The SUPPORT_INFO type is not supported by the backend');
+                    types.splice(idx, 1);
+                    if (types.length === 0) {
+                        sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                        return;
+                    }
+                }
             }
 
             var request = {
@@ -19209,10 +19372,6 @@ var Circuit = (function (circuit) {
             return _clientApiVersion > SP97_API_VERSION;
         };
 
-        this.isEmailSupportFeatureSupported = function () {
-            return _clientApiVersion > SP97_API_VERSION;
-        };
-
         this.isScreenTakeOverSupported = function () {
             return _clientApiVersion > SP97_API_VERSION;
         };
@@ -19230,6 +19389,26 @@ var Circuit = (function (circuit) {
         };
 
         this.isExportUserDataSupported = function () {
+            return _clientApiVersion > SP98_API_VERSION;
+        };
+
+        this.isPickupGroupsSupported = function () {
+            return _clientApiVersion > SP99_API_VERSION;
+        };
+
+        this.isCMRDeviceManagementSupported = function () {
+            return _clientApiVersion > SP99_API_VERSION;
+        };
+
+        this.isEmailSupportFeatureSupported = function () {
+            return _clientApiVersion > SP99_API_VERSION;
+        };
+
+        this.isShortcutsSettingFeatureSupported = function () {
+            return _clientApiVersion > SP99_API_VERSION;
+        };
+
+        this.isVideoForEventsSupported = function () {
             return _clientApiVersion > SP98_API_VERSION;
         };
 
@@ -19681,7 +19860,8 @@ var Circuit = (function (circuit) {
 
             settings = settings.filter(function (setting) {
                 if ((setting.key === Constants.UserSettingKey.HIDE_PROFILE_EXTERNAL_ENABLED && !_self.isHideProfileExternalSupported()) ||
-                    (setting.key === Constants.UserSettingKey.PLAY_PICKUP_SOUND && !_self.isPickupSoundSupported())) {
+                    (setting.key === Constants.UserSettingKey.PLAY_PICKUP_SOUND && !_self.isPickupSoundSupported()) ||
+                    (setting.key === Constants.UserSettingKey.KEYBOARD_SHORTCUTS_ENABLED && !_self.isShortcutsSettingFeatureSupported())) {
                     logger.warn('[ClientApiHandler]: Requested setting is not supported by backend: ', setting);
                     return false;
                 }
@@ -22227,7 +22407,7 @@ var Circuit = (function (circuit) {
         this.inviteToStage = function (data, cb) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: inviteToStage...');
-            data.allowedMediaTypes = convertMediaType();    // AUDIO
+            data.allowedMediaTypes = data.allowedMediaTypes || convertMediaType();  // default: AUDIO only
             var request = {
                 type: Constants.RTCSessionActionType.INVITE_TO_STAGE,
                 inviteToStage: data
@@ -22705,7 +22885,7 @@ var Circuit = (function (circuit) {
                         firstName: data.firstName,
                         locale: data.locale,
                         location: data.location,
-                        registrationCodeTtl: data.timeout
+                        registrationCodeTtl: data.timeout || undefined
                     },
                     packageId: data.packageId
                 }
@@ -22729,7 +22909,7 @@ var Circuit = (function (circuit) {
                 type: Constants.AdministrationActionType.UPDATE_MEETING_POINT_V2,
                 updateMeetingPoint: {
                     userId: data.id,
-                    registrationCodeTtl: data.timeout
+                    registrationCodeTtl: data.timeout || undefined
                 }
             };
 
@@ -23790,6 +23970,103 @@ var Circuit = (function (circuit) {
             });
         };
 
+        this.getCMRInfoById = function (userId, cb) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: getCMRInfoById...');
+
+            if (!this.isCMRDeviceManagementSupported()) {
+                logger.warn('[ClientApiHandler]: The getCMRInfoById operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            var request = {
+                type: Constants.AdministrationActionType.GET_CMR_INFO_BY_ID,
+                getCMRInfoById: {
+                    userId: userId
+                }
+            };
+
+            sendRequest(Constants.ContentType.ADMINISTRATION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(err, rsp.administration.getCMRInfoByIdResult.cmrInfo);
+                }
+            });
+        };
+
+        this.getCMRInfoByIds = function (userIds, cb) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: getCMRInfoByIds...');
+
+            if (!this.isCMRDeviceManagementSupported()) {
+                logger.warn('[ClientApiHandler]: The getCMRInfoByIds operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            var request = {
+                type: Constants.AdministrationActionType.GET_CMR_INFO_BY_IDS,
+                getCMRInfoByIds: {
+                    userId: userIds
+                }
+            };
+
+            sendRequest(Constants.ContentType.ADMINISTRATION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb, true)) {
+                    cb(err, rsp.administration.getCMRInfoByIdsResult.cmrInfo);
+                }
+            });
+        };
+
+        this.setAdminManagedCMRSettings = function (userId, settings, cb) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: setAdminManagedCMRSettings...');
+
+            if (!this.isCMRDeviceManagementSupported()) {
+                logger.warn('[ClientApiHandler]: The setAdminManagedCMRSettings operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            var request = {
+                type: Constants.AdministrationActionType.SET_ADMIN_MANAGED_CMR_SETTINGS,
+                setAdminManagedCMRSettings: {
+                    userId: userId,
+                    setting: settings
+                }
+            };
+
+            sendRequest(Constants.ContentType.ADMINISTRATION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null);
+                }
+            });
+        };
+
+        this.setAdminManagedCMRSettingsByIds = function (settings, cb) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: setAdminManagedCMRSettingsByIds...');
+
+            if (!this.isCMRDeviceManagementSupported()) {
+                logger.warn('[ClientApiHandler]: The setAdminManagedCMRSettingsByIds operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            var request = {
+                type: Constants.AdministrationActionType.SET_ADMIN_MANAGED_CMR_SETTINGS_BY_IDS,
+                setAdminManagedCMRSettingsByIds: {
+                    settings: settings
+                }
+            };
+
+            sendRequest(Constants.ContentType.ADMINISTRATION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null);
+                }
+            });
+        };
+
         this.getHuntGroups = function (cb, tenantContext) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: getHuntGroups...');
@@ -24167,6 +24444,110 @@ var Circuit = (function (circuit) {
             }, null, null, tenantContext);
         };
 
+        this.getPickupGroupMemberDNs = function (cb, tenantContext) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: getPickupGroupMemberDNs...');
+
+            if (!this.isPickupGroupsSupported()) {
+                logger.warn('[ClientApiHandler]: The getPickupGroupMemberDNs operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            var request = {
+                type: Constants.AdministrationActionType.GET_PICKUP_GROUP_MEMBER_CANDIDATES,
+                getPickupGroupMemberCandidates: {}
+            };
+
+            sendRequest(Constants.ContentType.ADMINISTRATION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb, true)) {
+                    cb(null, rsp.administration.getPickupGroupMemberCandidatesResult.pickupGroupUsers || []);
+                }
+            }, null, null, tenantContext);
+        };
+
+        this.createPickupGroup = function (pickupGroup, cb, tenantContext) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: createPickupGroup...');
+
+            if (!this.isPickupGroupsSupported()) {
+                logger.warn('[ClientApiHandler]: The createPickupGroup operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            if (!pickupGroup) {
+                logger.warn('[ClientApiHandler]: No pickup group data were provided');
+                sendAsyncResp(cb, Constants.ReturnCode.INVALID_MESSAGE);
+                return;
+            }
+
+            var request = {
+                type: Constants.AdministrationActionType.CREATE_PICKUP_GROUP,
+                createPickupGroup: {
+                    pickupGroup: pickupGroup
+                }
+            };
+
+            sendRequest(Constants.ContentType.ADMINISTRATION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null, rsp.administration.createPickupGroupResult.pickupGroupResponse);
+                }
+            }, null, null, tenantContext);
+        };
+
+        this.getPickupGroupList = function (cb, tenantContext) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: getPickupGroupList...');
+
+            if (!this.isPickupGroupsSupported()) {
+                logger.warn('[ClientApiHandler]: The getPickupGroupList operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            var request = {
+                type: Constants.AdministrationActionType.GET_TENANT_PICKUP_GROUPS,
+                getTenantPickupGroups: {}
+            };
+
+            sendRequest(Constants.ContentType.ADMINISTRATION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb, true)) {
+                    cb(null, rsp.administration.getTenantPickupGroupsResult.queryPickupGroupResponse || []);
+                }
+            }, null, null, tenantContext);
+        };
+
+        this.deletePickupGroup = function (pickupGroups, cb, tenantContext) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: deletePickupGroup...');
+
+            if (!this.isPickupGroupsSupported()) {
+                logger.warn('[ClientApiHandler]: The deletePickupGroup operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            if (!pickupGroups || !pickupGroups.length) {
+                logger.warn('[ClientApiHandler]: No pickup group ids were provided');
+                sendAsyncResp(cb, Constants.ReturnCode.INVALID_MESSAGE);
+                return;
+            }
+
+            var request = {
+                type: Constants.AdministrationActionType.DELETE_PICKUP_GROUPS,
+                deletePickupGroups: {
+                    pickupGroupId: pickupGroups
+                }
+            };
+
+            sendRequest(Constants.ContentType.ADMINISTRATION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null);
+                }
+            }, null, null, tenantContext);
+        };
+
         this.getSystemNotifications = function (systemNotificationType, cb, tenantContext) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: getSystemNotifications...');
@@ -24329,11 +24710,34 @@ var Circuit = (function (circuit) {
                 return;
             }
 
-
             var request = {
                 type: Constants.AdministrationActionType.SET_SUPPORT_TYPE,
                 setSupportType: {
                     supportType: supportType
+                }
+            };
+
+            sendRequest(Constants.ContentType.ADMINISTRATION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null);
+                }
+            });
+        };
+
+        this.setSupportEmail = function (email, cb) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: setSupportEmail...');
+
+            if (!this.isEmailSupportFeatureSupported()) {
+                logger.warn('[ClientApiHandler]: The setSupportEmail operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            var request = {
+                type: Constants.AdministrationActionType.SET_SUPPORT_EMAIL_ADDRESS,
+                setSupportEmailaddress: {
+                    supportEmailaddress: email
                 }
             };
 
@@ -24357,7 +24761,7 @@ var Circuit = (function (circuit) {
             var request = {
                 type: Constants.AdministrationActionType.EXPORT_DATA_USER,
                 exportDataUser: {
-                    exportData: exportData,
+                    data: exportData,
                     userId: exportUserId
                 }
             };
@@ -24382,7 +24786,7 @@ var Circuit = (function (circuit) {
             var request = {
                 type: Constants.AdministrationActionType.EXPORT_DATA_TENANT,
                 exportDataTenant: {
-                    exportData: exportData
+                    data: exportData
                 }
             };
 
@@ -25445,7 +25849,10 @@ var Circuit = (function (circuit) {
         TOGGLE_VIDEO_REQUEST: 'TOGGLE_VIDEO_REQUEST',
         TOGGLE_VIDEO_RESPONSE: 'TOGGLE_VIDEO_RESPONSE',
         START_HD_VIDEO_REQUEST: 'START_HD_VIDEO_REQUEST',
-        START_HD_VIDEO_RESPONSE: 'START_HD_VIDEO_RESPONSE'
+        START_HD_VIDEO_RESPONSE: 'START_HD_VIDEO_RESPONSE',
+        TOGGLE_WHITEBOARD: 'TOGGLE_WHITEBOARD',
+        TOGGLE_SCREENSHARING: 'TOGGLE_SCREENSHARING'
+
     });
 
     var MeetingPointResponseCode = Object.freeze({
@@ -25460,7 +25867,10 @@ var Circuit = (function (circuit) {
         UNMUTE_FAILED: 'UNMUTE_FAILED',
         INVALID_PIN: 'INVALID_PIN',
         MEETINGPOINT_BUSY: 'MEETINGPOINT_BUSY',
-        TOGGLE_VIDEO_FAILED: 'START_VIDEO_FAILED'
+        TOGGLE_VIDEO_FAILED: 'START_VIDEO_FAILED',
+        TOGGLE_SCREENSHARING_FAILED: 'TOGGLE_SCREENSHARING_FAILED',
+        TOGGLE_WHITEBOARD_FAILED: 'TOGGLE_WHITEBOARD_FAILED'
+
     });
 
     var MobileBreakoutMessage = Object.freeze({
@@ -26307,8 +26717,8 @@ var Circuit = (function (circuit) {
             var data = rs.SCR;
             var parsedResp = {
                 endpoints: [],
-                callingDevice: (data.caD && data.caD.dIR) || '',
-                calledDevice: (data.cDe && data.cDe.dIR) || '',
+                callingDevice: (data.caD && data.caD.dIr) || '',
+                calledDevice: (data.cDe && data.cDe.dIr) || '',
                 servicesPermitted: {}
             };
             if (data.cRID.sDa.sCRIo) {
@@ -29265,6 +29675,16 @@ var Circuit = (function (circuit) {
      */
     circuit.Enums.GetAccountsOrdering = circuit.Constants.GetAccountsOrdering;
 
+
+    /**
+     * Enum determining Locale
+     * @class Locale
+     * @static
+     * @final
+     */
+    circuit.Enums.Locale = circuit.Constants.Locale;
+
+
     /**
      * Enum for video resolutions. VGA (480), HD (720p) and Full HD (1080p)
      * @class VideoResolution
@@ -29342,7 +29762,7 @@ var Circuit = (function (circuit) {
             var currentCallerId = user.callerId;
             if (account.telephonyConfiguration) {
                 user.phoneNumber = account.telephonyConfiguration.phoneNumber || null;
-                if (account.telephonyConfiguration.associatedTelephonyUserType === Constants.GtcTrunkType.ATC_TRUNK_TYPE) {
+                if (user.isAtc) {
                     // User is assigned to an ATC
                     user.callerId = account.telephonyConfiguration.phoneNumber;
                     user.cstaNumber = Utils.cleanPhoneNumber(account.telephonyConfiguration.phoneNumber);
@@ -30015,7 +30435,6 @@ var Circuit = (function (circuit) {
         ///////////////////////////////////////////////////////////////////////////////////////
         var SANDBOX_HOSTNAME = 'circuitsandbox.net';
         var BETA_HOSTNAME = 'beta.circuit.com';
-        var T_SYSTEMS_HOSTNAME = 'de.circuit.com';
         var T_AND_I_HOSTNAME = 'tandi.circuitsandbox.net';
         var HEIDELBERG_HOSTNAME = 'circuit.uni-heidelberg.de';
         var UNIVERGEBLUE_HOSTNAME = 'ubtc.univergeblue.com';
@@ -30031,10 +30450,8 @@ var Circuit = (function (circuit) {
 
         var ExtensionInstallErrorCodes = Object.freeze({
             UNSUPPORTED_BROWSER: 'UNSUPPORTED_BROWSER',
-            INSTALL_ALREADY_IN_PROGRESS: 'INSTALL_ALREADY_IN_PROGRESS',
             UNSUPPORTED_EXT_VERSION: 'UNSUPPORTED_EXT_VERSION',
             USER_CANCELLED_INSTALL: 'USER_CANCELLED_INSTALL',
-            INSTALL_FAILED: 'INSTALL_FAILED',
             INTERNAL_ERROR: 'INTERNAL_ERROR'
         });
 
@@ -30047,10 +30464,6 @@ var Circuit = (function (circuit) {
         var _extensionVersion = '';
         var _extensionVersionSupported = true;
         var _extensionUrl = '';
-        var _hasInlineInstall = false;
-
-        var _inlineInstallInProgress = false;
-        var _inlineInstallFailed = false;
 
         var _ipcRenderer = circuit.isElectron ? require('electron').ipcRenderer : null;
 
@@ -30070,13 +30483,10 @@ var Circuit = (function (circuit) {
             if ($rootScope.siemensAGUser) {
                 // Siemens AG Extension: we can't trigger an inline installation, so just
                 // open the webstore link in a new tab
-                _hasInlineInstall = false;
                 _extensionUrl += 'siemens-circuit-by-unify/mnkbplodbhpkiphfeldjmaoickanlanc';
                 LogSvc.info('[ExtensionSvc]: Set URL to Siemens AG Circuit extension webstore link');
                 return;
             }
-
-            _hasInlineInstall = true;
 
             var hostname = $window.location.hostname;
             switch (hostname) {
@@ -30095,23 +30505,16 @@ var Circuit = (function (circuit) {
                 _extensionUrl += 'gdgfgnopapmocggkadgfkjekdlcohmdl';
                 LogSvc.info('[ExtensionSvc]: Set URL to T&I-Circuit extension. ', _extensionUrl);
                 break;
-            case T_SYSTEMS_HOSTNAME:
-                // T-Systems extension
-                _extensionUrl += 'mdgbjijndgkkllljdaoohenhhaenilam';
-                LogSvc.info('[ExtensionSvc]: Set URL to T-Systems extension. ', _extensionUrl);
-                break;
             case HEIDELBERG_HOSTNAME:
-                // Heidelberg Univerity extension (no inline installation available)
-                _hasInlineInstall = false;
+                // Heidelberg Univerity extension
                 _extensionUrl += 'nnlgegdgijgicheaipembfeaggifmalb';
-                LogSvc.info('[ExtensionSvc]: Set URL to Heidelberg Univerity extension webstore link ', _extensionUrl);
+                LogSvc.info('[ExtensionSvc]: Set URL to Heidelberg Univerity extension. ', _extensionUrl);
                 return;
             case UNIVERGEBLUE_HOSTNAME:
             case BLUEBETA_HOSTNAME:
-                // Univerge Blue TC (no inline installation available)
-                _hasInlineInstall = false;
+                // Univerge Blue TC
                 _extensionUrl += 'jhpcobccapenojpdohnfmhmdmppngdad';
-                LogSvc.info('[ExtensionSvc]: Set URL to Univerge Blue TC extension webstore link ', _extensionUrl);
+                LogSvc.info('[ExtensionSvc]: Set URL to Univerge Blue TC extension. ', _extensionUrl);
                 return;
             default:
                 _extensionUrl += 'mhkbaognlahkdimlfcfhbeihldmjofgg';
@@ -30168,16 +30571,6 @@ var Circuit = (function (circuit) {
                 return ExtensionInstallErrorCodes.UNSUPPORTED_BROWSER;
             }
 
-            if (_inlineInstallInProgress || _inlineInstallFailed) {
-                // Something went wrong: the extension has been just installed and hasn't sent the init message yet.
-                LogSvc.warn('[ExtensionSvc]: The first extension installation attempt failed. Redirect the user to web store page. Url: ', _extensionUrl);
-                if (showErrorPopup && PopupSvc) {
-                    PopupSvc.error({message: 'res_ExtensionCannotBeInstalled', messageParams: [_extensionUrl]});
-                }
-                return _inlineInstallInProgress ? ExtensionInstallErrorCodes.INSTALL_ALREADY_IN_PROGRESS :
-                    ExtensionInstallErrorCodes.INSTALL_FAILED;
-            }
-
             // Check if the extension needs to be updated
             if (!_extensionVersionSupported) {
                 LogSvc.warn('[ExtensionSvc]: We are running an outdated extension:', _extensionVersion);
@@ -30204,7 +30597,6 @@ var Circuit = (function (circuit) {
                     _extensionVersion = evt.data.version;
                     validateExtensionVersion();
                     if (_extensionVersionSupported) {
-                        _inlineInstallInProgress = false;
                         $rootScope.isChromeExtRunning = true;
                         LogSvc.setExtensionVersion(_extensionVersion);
                         LogSvc.debug('[ExtensionSvc]: Publish /chromeExt/initialized event');
@@ -30293,7 +30685,6 @@ var Circuit = (function (circuit) {
 
                 var options = {
                     message: 'res_ActionInstallExtensionText',
-                    controller: 'ChromeExtensionInstallDialogCtrl',
                     title: 'res_ActionInstallExtensionTitle',
                     yesLabel: 'res_ActionInstall',
                     noLabel: 'res_Close',
@@ -30302,13 +30693,13 @@ var Circuit = (function (circuit) {
 
                 PopupSvc.confirm(options)
                 .result
-                .then(resolve)
-                .catch(function (err) {
-                    if (showErrorPopup && err === ExtensionInstallErrorCodes.INSTALL_FAILED) {
-                        LogSvc.warn('[ExtensionSvc]: The extension installation failed. Redirect the user to web store page. Url: ', _extensionUrl);
-                        PopupSvc.error({message: 'res_ExtensionCannotBeInstalled', messageParams: [_extensionUrl]});
-                    }
-                    reject(err || ExtensionInstallErrorCodes.USER_CANCELLED_INSTALL);
+                .then(function () {
+                    _self.inlineInstallation(showErrorPopup)
+                    .then(resolve)
+                    .catch(reject);
+                })
+                .catch(function () {
+                    reject(ExtensionInstallErrorCodes.USER_CANCELLED_INSTALL);
                 });
             });
         };
@@ -30321,50 +30712,15 @@ var Circuit = (function (circuit) {
          */
         this.inlineInstallation = function (showErrorPopup) {
             return new $q(function (resolve, reject) {
-                try {
-                    var error = extensionInstallPreChecks(showErrorPopup);
-                    if (error) {
-                        reject(error);
-                        return;
-                    }
-
-                    LogSvc.debug('[ExtensionSvc]: Extension URL = ', _extensionUrl);
-
-                    if (!_hasInlineInstall) {
-                        LogSvc.debug('[ExtensionSvc]: Extension does not support inline installation. Open store link.');
-                        $window.open(_extensionUrl);
-                        resolve();
-                        return;
-                    }
-
-                    chrome.webstore.install(_extensionUrl, function () {
-                        $rootScope.$apply(function () {
-                            LogSvc.debug('[ExtensionSvc]: Circuit extension was successfully installed');
-                            _inlineInstallInProgress = true;
-                            resolve();
-                        });
-                    }, function (err) {
-                        LogSvc.error('[ExtensionSvc]: There was an error installing the Circuit extension. ', err);
-                        $rootScope.$apply(function () {
-                            if (err !== 'User cancelled install' /*This message should not be localized*/) {
-                                // If the user cancelled the install, let them try again. Otherwise, mark this
-                                // installation as complete and don't try to do an inline installation again.
-                                _inlineInstallFailed = true;
-                                if (showErrorPopup) {
-                                    LogSvc.warn('[ExtensionSvc]: The extension installation failed. Redirect the user to web store page. Url: ', _extensionUrl);
-                                    PopupSvc.error({message: 'res_ExtensionCannotBeInstalled', messageParams: [_extensionUrl]});
-                                }
-                                reject(ExtensionInstallErrorCodes.INSTALL_FAILED);
-                            } else {
-                                reject(ExtensionInstallErrorCodes.USER_CANCELLED_INSTALL);
-                            }
-                        });
-                    });
-                } catch (e) {
-                    LogSvc.error('[ExtensionSvc]: There was an exception installing the Circuit extension. ', e);
-                    _inlineInstallFailed = true;
-                    reject(ExtensionInstallErrorCodes.INSTALL_FAILED);
+                var error = extensionInstallPreChecks(showErrorPopup);
+                if (error) {
+                    reject(error);
+                    return;
                 }
+
+                LogSvc.debug('[ExtensionSvc]: Open store link for ', _extensionUrl);
+                $window.open(_extensionUrl);
+                resolve();
             });
         };
 
@@ -30680,7 +31036,7 @@ var Circuit = (function (circuit) {
             }, delayTime * 1000);
         }
 
-        function atcRegister() {
+        function atcRegister(renewRegistration) {
             var data = {
                 content: {
                     type: 'REGISTER',
@@ -30695,8 +31051,8 @@ var Circuit = (function (circuit) {
                     userId: $rootScope.localUser.userId,
                     conversationId: _telephonyConversation.convId,
                     rtcSessionId: _telephonyConversation.rtcSessionId,
-                    lastItemTime: _telephonyConversation.lastItemModificationTime
-
+                    lastItemTime: _telephonyConversation.lastItemModificationTime,
+                    renewRegistration: renewRegistration || undefined
                 },
                 destUserId: $rootScope.localUser.associatedTelephonyUserID,
                 keysToOmitFromLogging: [
@@ -30787,6 +31143,9 @@ var Circuit = (function (circuit) {
                 destUserId: _atcRegistrationData.associatedTelephonyUserID
             };
             setAtcState(AtcRegistrationState.Unregistered);
+            // If the associated ATC is changed, the client needs to indicate that to the new ATC so that it renews
+            // the registration with the PBX
+            var renewRegistration = $rootScope.localUser.associatedTelephonyUserID !== _atcRegistrationData.associatedTelephonyUserID;
             _atcRegistrationData.associatedTelephonyUserID = '';
 
             _userToUserHandler.sendAtcRequest(data, function (err) {
@@ -30797,7 +31156,7 @@ var Circuit = (function (circuit) {
                         LogSvc.info('[AtcRegistrationSvc]: Unregistered successfully with ATC');
                     }
                     if (_reRegister) {
-                        atcRegister();
+                        atcRegister(renewRegistration);
                         _reRegister = false;
                     }
                 });
@@ -31321,6 +31680,8 @@ var Circuit = (function (circuit) {
     var Constants = circuit.Constants;
     var Proto = circuit.Proto;
     var Utils = circuit.Utils;
+    var WebRTCAdapter = circuit.WebRTCAdapter;
+    var RtcSessionController = circuit.RtcSessionController;
 
     /**
      * Creates a new DeviceDiagnosticSvcImpl.
@@ -31626,30 +31987,45 @@ var Circuit = (function (circuit) {
             return null;
         }
 
+        function getDeviceName(device) {
+            if (!device || !device.label || typeof device.label !== 'string') {
+                return '';
+            }
+            var label = device.label;
+            if (label.startsWith('res_')) {
+                return $rootScope.i18n.localize(label) || '';
+            }
+            return label;
+        }
+
         function sendCallConnected(call) {
             LogSvc.debug('[DeviceDiagnosticSvc]: Send call connected event to backend');
 
             var stats = getDeviceStatistics() || {};
 
-            // Additional data for call connected
-            stats.recordingDevice = call.recordingDevice;
-            stats.playbackDevice = call.playbackDevice;
-            stats.negotiationInfos = [];
+            WebRTCAdapter.getMediaSources(function (audioSources, videoSources, audioOutputDevices) {
+                // Additional data for call connected
+                var device = Utils.selectMediaDevice(audioSources, RtcSessionController.recordingDevices);
+                stats.recordingDevice = getDeviceName(device);
+                device = Utils.selectMediaDevice(audioOutputDevices, RtcSessionController.playbackDevices);
+                stats.playbackDevice = getDeviceName(device);
+                stats.negotiationInfos = [];
 
-            var clientInfo = {
-                userId: $rootScope.localUser.userId,
-                convId: call.convId,
-                clientInfoType: Constants.RtcClientInfoType.CALL_CONNECTED,
-                reason: Constants.RtcClientInfoReason.CALL_CONNECTED,
-                timestamp: Date.now(),
-                sessionId: call.callId,
-                deviceDiagnostics: stats
-            };
+                var clientInfo = {
+                    userId: $rootScope.localUser.userId,
+                    convId: call.convId,
+                    clientInfoType: Constants.RtcClientInfoType.CALL_CONNECTED,
+                    reason: Constants.RtcClientInfoReason.CALL_CONNECTED,
+                    timestamp: Date.now(),
+                    sessionId: call.callId,
+                    deviceDiagnostics: stats
+                };
 
-            _clientApiHandler.sendClientInfo([clientInfo], function (err) {
-                if (err) {
-                    LogSvc.debug('[DeviceDiagnosticSvc]: Failed to send call connected event. ', err);
-                }
+                _clientApiHandler.sendClientInfo([clientInfo], function (err) {
+                    if (err) {
+                        LogSvc.debug('[DeviceDiagnosticSvc]: Failed to send call connected event. ', err);
+                    }
+                });
             });
         }
 
@@ -31762,7 +32138,7 @@ var Circuit = (function (circuit) {
         var ATC_HANDOVER_TIME = 6000;         // 6 seconds
         var REVERSE_LOOKUP_MAX_TIME = 2000;   // 2 seconds
         var MIN_TIME_CALL_ESTABLISHED = 5000; // Update lastCallTime if call lasts more than this value (the same as on the backend side)
-        var ATC_PICKUP_TIMER = 3000;          // 3 seconds
+        var ATC_PICKUP_TIMER = 4000;          // 4 seconds
 
         var _that = this;
 
@@ -32107,6 +32483,10 @@ var Circuit = (function (circuit) {
                 simulateActiveSpeakers();
             }
             _lastEndedCall = null;
+        }
+
+        function hasScreenControlFeature(call) {
+            return !!call && (($rootScope.circuitLabs.SCREEN_CONTROL && call.isDirect) || ($rootScope.circuitLabs.SCREEN_CONTROL_CONF && !call.isDirect));
         }
 
         function removeCallFromList(call) {
@@ -32555,7 +32935,10 @@ var Circuit = (function (circuit) {
                 if (_primaryLocalCall) {
                     _secondaryLocalCall = _primaryLocalCall;
                 }
-                var newCallOptions = {clientId: _clientApiHandler.clientId};
+                var newCallOptions = {
+                    clientId: _clientApiHandler.clientId,
+                    isSessionGuest: $rootScope.isSessionGuest
+                };
                 if (options.replaces && mediaType.desktop) {
                     // This call should reuse the desktop stream from the call it's replacing (option used by VDI)
                     newCallOptions.reuseDesktopStreamFrom = options.replaces.sessionCtrl;
@@ -32704,7 +33087,7 @@ var Circuit = (function (circuit) {
                 if ($rootScope.circuitLabs.DIRECT_TO_CONF_UPGRADE && _primaryLocalCall.isDirect) {
                     joinData.rtcSupportedFeatures.push(Constants.RtcSupportedFeatures.UPGRADE_TO_CONFERENCE);
                 }
-                if ($rootScope.circuitLabs.SCREEN_CONTROL && !Utils.isMobile()) {
+                if (hasScreenControlFeature(_primaryLocalCall) && $rootScope.localUser.canStartScreenControl && !Utils.isMobile()) {
                     joinData.rtcSupportedFeatures.push(Constants.RtcSupportedFeatures.SCREEN_CONTROLLER);
                 }
 
@@ -32883,7 +33266,7 @@ var Circuit = (function (circuit) {
                 if ($rootScope.circuitLabs.DIRECT_TO_CONF_UPGRADE && call.isDirect) {
                     rtcSupportedFeatures.push(Constants.RtcSupportedFeatures.UPGRADE_TO_CONFERENCE);
                 }
-                if ($rootScope.circuitLabs.SCREEN_CONTROL && !Utils.isMobile()) {
+                if (hasScreenControlFeature(call) && $rootScope.localUser.canStartScreenControl && !Utils.isMobile()) {
                     if (!data.mediaType.desktop) {
                         rtcSupportedFeatures.push(Constants.RtcSupportedFeatures.SCREEN_CONTROLLER);
                     } else if (data.screenShareOptions && data.screenShareOptions.screenControlSupported) {
@@ -32944,8 +33327,8 @@ var Circuit = (function (circuit) {
                     };
 
                     sessionCtrl.changeMediaType(data.mediaType, options, function (err) {
-                        if (err) {
-                            $rootScope.$apply(function () {
+                        $rootScope.$apply(function () {
+                            if (err) {
                                 LogSvc.warn('[CircuitCallControlSvc]: changeMediaType failed - reason: ', err);
                                 sessionCtrl.onSessionDescription = null;
                                 sessionCtrl.renegotiationFailed(err);
@@ -32953,29 +33336,27 @@ var Circuit = (function (circuit) {
                                     sessionCtrl.updateScreenControlData(false, false);
                                 }
                                 cb(err || 'Error changing media');
-                            });
-                        } else {
-                            var isScreenOwner = (call.screenOwnerId === $rootScope.localUser.userId);
+                            } else {
+                                var isScreenOwner = (call.screenOwnerId === $rootScope.localUser.userId);
 
-                            if (screenShareWasActive && !call.localMediaType.desktop) {
-                                // Screen share was removed
-                                LogSvc.debug('[CircuitCallControlSvc]: Publish /screenshare/ended event');
-                                PubSubSvc.publish('/screenshare/ended');
-                                call.pointer.isSupported = call.pointer.isEnabled = false;
+                                if (screenShareWasActive && !call.localMediaType.desktop) {
+                                    // Screen share was removed
+                                    LogSvc.debug('[CircuitCallControlSvc]: Publish /screenshare/ended event');
+                                    PubSubSvc.publish('/screenshare/ended');
+                                    call.pointer.isSupported = call.pointer.isEnabled = false;
 
-                                if (isScreenOwner) {
+                                    if (isScreenOwner) {
+                                        doStopScreenControl(call.callId);
+                                    }
+                                } else if (isScreenOwner && data.screenShareOptions &&
+                                    (data.screenShareOptions.screenIndex !== _lastScreenIndex || !data.screenShareOptions.screenControlSupported)) {
+                                    // Stop screen control in case of screen switch
                                     doStopScreenControl(call.callId);
                                 }
-                            } else if (isScreenOwner && data.screenShareOptions &&
-                                (data.screenShareOptions.screenIndex !== _lastScreenIndex || !data.screenShareOptions.screenControlSupported)) {
-                                // Stop screen control in case of screen switch
-                                doStopScreenControl(call.callId);
+                                _lastScreenIndex = (data.screenShareOptions && data.screenShareOptions.screenIndex) || null;
+                                cb();
                             }
-                            _lastScreenIndex = (data.screenShareOptions && data.screenShareOptions.screenIndex) || null;
-
-                            call.updateMediaDevices();
-                            cb();
-                        }
+                        });
                     });
                 }
             })
@@ -33011,7 +33392,7 @@ var Circuit = (function (circuit) {
                 return;
             }
 
-            if (!call.hasLocalScreenShare() || !$rootScope.circuitLabs.SCREEN_CONTROL) {
+            if (!call.hasLocalScreenShare() || !hasScreenControlFeature(call) || !$rootScope.localUser.canStartScreenControl) {
                 onError('Screen control not possible');
                 return;
             }
@@ -33292,7 +33673,7 @@ var Circuit = (function (circuit) {
                 if ($rootScope.circuitLabs.DIRECT_TO_CONF_UPGRADE && call.isDirect) {
                     data.rtcSupportedFeatures.push(Constants.RtcSupportedFeatures.UPGRADE_TO_CONFERENCE);
                 }
-                if ($rootScope.circuitLabs.SCREEN_CONTROL && !Utils.isMobile()) {
+                if (hasScreenControlFeature(call) && $rootScope.localUser.canStartScreenControl && !Utils.isMobile()) {
                     data.rtcSupportedFeatures.push(Constants.RtcSupportedFeatures.SCREEN_CONTROLLER);
                 }
 
@@ -34205,6 +34586,8 @@ var Circuit = (function (circuit) {
 
             if (event.renegotiationInProgress) {
                 call.terminateReason = null;
+                // Update media devices only after the QoS is sent out (so it contains the correct devices)
+                call.updateMediaDevices();
             }
         }
 
@@ -34729,7 +35112,7 @@ var Circuit = (function (circuit) {
             }
 
             var options = {
-                isAtcPullCall: conversation.isTelephonyConv && autoAnswer && evt.sdp.type === 'offer',
+                isAtcPullCall: conversation.isTelephonyConv && autoAnswer && evt.sdp.type === 'offer' && !_callToPickup,
                 clientId: _clientApiHandler.clientId
             };
             if (replaces && replaces.localMediaType.desktop) {
@@ -34773,8 +35156,6 @@ var Circuit = (function (circuit) {
                     incomingCall.setRedirectingUser(redirectingUser.phoneNumber, redirectingUser.fullyQualifiedNumber,
                         redirectingUser.displayName, redirectingUser.userId, RedirectionTypes.CallPickedUp);
 
-                    // OSV triggers 2 renegotiations on a picked up call. We need to avoid collecting all ICE candidates in the first one
-                    incomingCall.sessionCtrl.setIgnoreNextConnection();
                     _callToPickup = null;
                     callPickedUp = true;
                 }
@@ -35309,6 +35690,40 @@ var Circuit = (function (circuit) {
             options.callOut = !!options.callOut;
             options.handover = !!options.handover;
             return options;
+        }
+
+        function addRemoveMedia(callId, mediaToChange, logMethodName, dataCb) {
+            logMethodName = logMethodName || 'addRemoveMedia';
+            var logTopic = '[CircuitCallControlSvc]: ' + logMethodName + ': ';
+            var localCall = findLocalCallByCallId(callId);
+            if (!localCall) {
+                LogSvc.warn(logTopic + 'There is no local call');
+                return $q.reject('No active call');
+            }
+
+            LogSvc.debug(logTopic, mediaToChange);
+
+            var data = {
+                callId: callId,
+                mediaType: {
+                    audio: localCall.localMediaType.audio,
+                    video: localCall.localMediaType.video,
+                    desktop: localCall.localMediaType.desktop
+                }
+            };
+            Object.assign(data.mediaType, mediaToChange);
+            dataCb && dataCb(data);
+
+            return new $q(function (resolve, reject) {
+                changeMediaType(data, function (err) {
+                    if (err) {
+                        LogSvc.warn(logTopic + 'failed - ', err);
+                        reject(err);
+                    } else {
+                        resolve();
+                    }
+                });
+            });
         }
 
         ///////////////////////////////////////////////////////////////////////////////////////
@@ -37016,7 +37431,7 @@ var Circuit = (function (circuit) {
                 LogSvc.info('[CircuitCallControlSvc]: Event is not for local call. Ignore it.');
                 return;
             }
-            if (!localCall.hasLocalScreenShare() || !circuit.isElectron || !$rootScope.circuitLabs.SCREEN_CONTROL) {
+            if (!localCall.hasLocalScreenShare() || !circuit.isElectron || !hasScreenControlFeature(localCall) || !$rootScope.localUser.canStartScreenControl) {
                 LogSvc.info('[CircuitCallControlSvc]: Screen control is not possible for local call. Reject it.');
                 _that.rejectScreenControlRequest(localCall.callId, evt.controllerId);
                 return;
@@ -37801,32 +38216,10 @@ var Circuit = (function (circuit) {
          */
         this.removeMediaStream = function (callId, cb) {
             cb = cb || function () {};
-            var localCall = findLocalCallByCallId(callId);
-            if (!localCall) {
-                LogSvc.warn('[CircuitCallControlSvc]: removeMediaStream - There is no local call');
-                cb('No active call');
-                return;
-            }
-            LogSvc.debug('[CircuitCallControlSvc]: removeMediaStream...');
-
-            var mediaType = {
-                audio: localCall.localMediaType.audio,
-                video: localCall.localMediaType.video,
-                desktop: false
-            };
-
-            var data = {
-                callId: callId,
-                mediaType: mediaType
-            };
-
-            changeMediaType(data, function (err) {
-                if (err) {
-                    LogSvc.warn('[CircuitCallControlSvc]: removeMediaStream failed: ', err);
-                    cb('res_RemoveMediaStreamFailed');
-                } else {
-                    cb();
-                }
+            addRemoveMedia(callId, {desktop: false}, 'removeMediaStream')
+            .then(cb)
+            .catch(function () {
+                cb('res_RemoveMediaStreamFailed');
             });
         };
 
@@ -38000,32 +38393,10 @@ var Circuit = (function (circuit) {
          */
         this.removeScreenShare = function (callId, cb) {
             cb = cb || function () {};
-            var localCall = findLocalCallByCallId(callId);
-            if (!localCall) {
-                LogSvc.warn('[CircuitCallControlSvc]: removeScreenShare - There is no local call');
-                cb('No active call');
-                return;
-            }
-            LogSvc.debug('[CircuitCallControlSvc]: removeScreenShare...');
-
-            var mediaType = {
-                audio: localCall.localMediaType.audio,
-                video: localCall.localMediaType.video,
-                desktop: false
-            };
-
-            var data = {
-                callId: callId,
-                mediaType: mediaType
-            };
-
-            changeMediaType(data, function (err) {
-                if (err) {
-                    LogSvc.warn('[CircuitCallControlSvc]: removeScreenShare failed: ', err);
-                    cb('res_RemoveScreenShareFailed');
-                } else {
-                    cb();
-                }
+            addRemoveMedia(callId, {desktop: false}, 'removeScreenShare')
+            .then(cb)
+            .catch(function () {
+                cb('res_RemoveScreenShareFailed');
             });
         };
 
@@ -38037,32 +38408,10 @@ var Circuit = (function (circuit) {
          */
         this.addAudio = function (callId, cb) {
             cb = cb || function () {};
-            var localCall = findLocalCallByCallId(callId);
-            if (!localCall) {
-                LogSvc.warn('[CircuitCallControlSvc]: addAudio - There is no local call');
-                cb('No active call');
-                return;
-            }
-
-            var mediaType = {
-                audio: true,
-                video: localCall.localMediaType.video,
-                desktop: localCall.localMediaType.desktop
-            };
-
-            var data = {
-                callId: callId,
-                mediaType: mediaType
-            };
-
-            changeMediaType(data, function (err) {
-                if (err) {
-                    LogSvc.warn('[CircuitCallControlSvc]: addAudio -> Failed to renegotiate the media. ', err);
-                    cb('Renegotiate for receive-only media failed');
-                } else {
-                    LogSvc.debug('[CircuitCallControlSvc]: addAudio -> Media renegotiation was successful');
-                    cb();
-                }
+            addRemoveMedia(callId, {audio: true}, 'addAudio')
+            .then(cb)
+            .catch(function () {
+                cb('Renegotiate for receive-only media failed');
             });
         };
 
@@ -38074,33 +38423,10 @@ var Circuit = (function (circuit) {
          */
         this.removeAudio = function (callId, cb) {
             cb = cb || function () {};
-            var localCall = findLocalCallByCallId(callId);
-            if (!localCall) {
-                LogSvc.warn('[CircuitCallControlSvc]: removeAudio - There is no local call');
-                cb('No active call');
-                return;
-            }
-            LogSvc.debug('[CircuitCallControlSvc]: removeAudio...');
-
-            var mediaType = {
-                audio: false,
-                video: localCall.localMediaType.video,
-                desktop: localCall.localMediaType.desktop
-            };
-
-            var data = {
-                callId: callId,
-                mediaType: mediaType
-            };
-
-            changeMediaType(data, function (err) {
-                if (err) {
-                    LogSvc.warn('[CircuitCallControlSvc]: removeAudio -> Failed to renegotiate the media. ', err);
-                    cb('Renegotiate for receive-only media failed');
-                } else {
-                    LogSvc.debug('[CircuitCallControlSvc]: removeAudio -> Media renegotiation was successful');
-                    cb();
-                }
+            addRemoveMedia(callId, {audio: false}, 'removeAudio')
+            .then(cb)
+            .catch(function () {
+                cb('Renegotiate for receive-only media failed');
             });
         };
 
@@ -38150,31 +38476,10 @@ var Circuit = (function (circuit) {
          */
         this.addVideo = function (callId, cb) {
             cb = cb || function () {};
-            var localCall = findLocalCallByCallId(callId);
-            if (!localCall) {
-                LogSvc.warn('[CircuitCallControlSvc]: addVideo - There is no local call');
-                cb('No active call');
-                return;
-            }
-
-            var mediaType = {
-                audio: localCall.localMediaType.audio,
-                video: true,
-                desktop: false // only support either video or desktop for now
-            };
-
-            var data = {
-                callId: callId,
-                mediaType: mediaType
-            };
-
-            changeMediaType(data, function (err) {
-                if (err) {
-                    LogSvc.warn('[CircuitCallControlSvc]: addVideo failed: ', err);
-                    cb('res_AddVideoFailed');
-                } else {
-                    cb();
-                }
+            addRemoveMedia(callId, {video: true, desktop: false}, 'addVideo')  // only support either video or desktop for now
+            .then(cb)
+            .catch(function () {
+                cb('res_AddVideoFailed');
             });
         };
 
@@ -38186,32 +38491,10 @@ var Circuit = (function (circuit) {
          */
         this.removeVideo = function (callId, cb) {
             cb = cb || function () {};
-            var localCall = findLocalCallByCallId(callId);
-            if (!localCall) {
-                LogSvc.warn('[CircuitCallControlSvc]: removeVideo - There is no local call');
-                cb('No active call');
-                return;
-            }
-            LogSvc.debug('[CircuitCallControlSvc]: removeVideo...');
-
-            var mediaType = {
-                audio: localCall.localMediaType.audio,
-                video: false,
-                desktop: localCall.localMediaType.desktop
-            };
-
-            var data = {
-                callId: callId,
-                mediaType: mediaType
-            };
-
-            changeMediaType(data, function (err) {
-                if (err) {
-                    LogSvc.warn('[CircuitCallControlSvc]: removeVideo failed: ', err);
-                    cb('res_RemoveVideoFailed');
-                } else {
-                    cb();
-                }
+            addRemoveMedia(callId, {video: false}, 'removeVideo')
+            .then(cb)
+            .catch(function () {
+                cb('res_RemoveVideoFailed');
             });
         };
 
@@ -38327,35 +38610,15 @@ var Circuit = (function (circuit) {
          */
         this.toggleVideo = function (callId, cb) {
             cb = cb || function () {};
-            var localCall = findLocalCallByCallId(callId);
-            if (!localCall) {
-                LogSvc.warn('[CircuitCallControlSvc]: toggleVideo - There is no local call');
-                cb('No active call');
-                return;
-            }
-            LogSvc.debug('[CircuitCallControlSvc]: toggleVideo...');
-
-            var mediaType = {
-                audio: localCall.localMediaType.audio,
-                video: !localCall.localMediaType.video,
-                desktop: localCall.localMediaType.desktop
-            };
-            if (mediaType.video) {
-                mediaType.desktop = false; // only support either video or desktop for now
-            }
-
-            var data = {
-                callId: callId,
-                mediaType: mediaType
-            };
-
-            changeMediaType(data, function (err) {
-                if (err) {
-                    LogSvc.warn('[CircuitCallControlSvc]: toggleVideo failed: ', err);
-                    cb('res_ToggleVideoFailed');
-                } else {
-                    cb();
+            addRemoveMedia(callId, {}, 'toggleVideo', function (data) {
+                data.mediaType.video = !data.mediaType.video;
+                if (data.mediaType.video) {
+                    data.mediaType.desktop = false; // only support either video or desktop for now
                 }
+            })
+            .then(cb)
+            .catch(function () {
+                cb('res_ToggleVideoFailed');
             });
         };
 
@@ -38367,26 +38630,10 @@ var Circuit = (function (circuit) {
          */
         this.renegotiateMedia = function (callId, cb) {
             cb = cb || function () {};
-            var localCall = findLocalCallByCallId(callId);
-            if (!localCall) {
-                LogSvc.warn('[CircuitCallControlSvc]: renegotiateMedia - There is no local call');
-                cb('No active call');
-                return;
-            }
-            LogSvc.debug('[CircuitCallControlSvc]: renegotiateMedia...');
-
-            var data = {
-                callId: callId,
-                mediaType: localCall.localMediaType
-            };
-
-            changeMediaType(data, function (err) {
-                if (err) {
-                    LogSvc.warn('[CircuitCallControlSvc]: Failed to renegotiate the media');
-                    cb('Renegotiate media failed');
-                } else {
-                    cb();
-                }
+            addRemoveMedia(callId, {}, 'renegotiateMedia')
+            .then(cb)
+            .catch(function () {
+                cb('Renegotiate media failed');
             });
         };
 
@@ -39094,8 +39341,13 @@ var Circuit = (function (circuit) {
             var data = {
                 convId: _primaryLocalCall.convId,
                 rtcSessionId: _primaryLocalCall.callId,
-                questionNumber: questionNumber
+                questionNumber: questionNumber,
+                allowedMediaTypes: [Constants.RealtimeMediaType.AUDIO]
             };
+            if (_that.isVideoForEventsSupported() && $rootScope.circuitLabs.VIDEO_FOR_EVENTS) {
+                data.allowedMediaTypes.push(Constants.RealtimeMediaType.VIDEO);
+            }
+
             _clientApiHandler.inviteToStage(data, function (err) {
                 $rootScope.$apply(function () {
                     cb && cb(err);
@@ -39543,6 +39795,14 @@ var Circuit = (function (circuit) {
             publishCallState(localCall);
         };
 
+        /**
+         * Checks screen control Feature support for a call
+         *
+         * @param call to check
+         * @returns {boolean}
+         */
+        this.hasScreenControlFeature = hasScreenControlFeature;
+
         this.canStartScreenShare = function (callId) {
             var localCall = findLocalCallByCallId(callId);
             if (!localCall) {
@@ -39563,6 +39823,26 @@ var Circuit = (function (circuit) {
             }
             var conversation = ConversationSvc.getConversationFromCache(localCall.convId);
             return !!conversation && conversation.userIsModerator($rootScope.localUser);
+        };
+
+        this.canStartVideo = function (callId) {
+            var localCall = findLocalCallByCallId(callId);
+            if (!localCall) {
+                LogSvc.warn('[CircuitCallControlSvc]: canStartVideo - There is no local call');
+                return false;
+            }
+            // guest in large conference (event) ?
+            if (($rootScope.isSessionGuest || localCall.isGuestInvite) && localCall.isLarge) {
+                if (!localCall.hasRemoteVideo()) {
+                    return true;
+                }
+                var moderatorSending = localCall.participants.some(function (p) {
+                    return p.isModerator && p.mediaType && (p.mediaType.desktop || p.mediaType.video);
+                });
+                return !moderatorSending;
+            } else {
+                return true;
+            }
         };
 
         this.addConferenceAsGuest = function (convId) {
@@ -39661,6 +39941,8 @@ var Circuit = (function (circuit) {
                 });
             });
         };
+
+        this.isVideoForEventsSupported = _clientApiHandler.isVideoForEventsSupported;
 
         ///////////////////////////////////////////////////////////////////////////////////////
         // Public Factory Interface for Angular
@@ -40176,6 +40458,15 @@ var Circuit = (function (circuit) {
 
         function createCallFromSnapshot(snapshotCallResp) {
             var data = snapshotCallResp.endpoints;
+            var callingDevice = snapshotCallResp.callingDevice;
+            var calledDevice = snapshotCallResp.calledDevice;
+            var direction;
+
+            if (callingDevice && callingDevice.replace('+', '') === $rootScope.localUser.phoneNumber.replace('+', '')) {
+                direction = CallDirection.OUTGOING;
+            } else {
+                direction = CallDirection.INCOMING;
+            }
 
             if (!data || data.length < 2) {
                 return;
@@ -40206,6 +40497,7 @@ var Circuit = (function (circuit) {
                         }
                     } else {
                         newCall = createAtcRemoteCall(callId);
+                        newCall.direction = direction;
                     }
 
                     newCall.atcCallInfo.setPosition(position);
@@ -40228,7 +40520,7 @@ var Circuit = (function (circuit) {
                         callState = null;
                         return;
                     }
-                    var display = getDisplayInfo(ep.deviceOnCall);
+                    var display = newCall.direction === CallDirection.OUTGOING ? getDisplayInfo(calledDevice) : getDisplayInfo(callingDevice);
                     newCall.atcCallInfo.setPartnerDisplay(display);
                     setCallPeerUser(newCall, newCall.atcCallInfo.peerDn, newCall.atcCallInfo.peerFQN, newCall.atcCallInfo.peerName);
 
@@ -40237,12 +40529,6 @@ var Circuit = (function (circuit) {
                     }
                 }
             });
-
-            if (snapshotCallResp.callingDevice && snapshotCallResp.callingDevice.replace('+', '') === $rootScope.localUser.phoneNumber.replace('+', '')) {
-                newCall.direction = CallDirection.OUTGOING;
-            } else {
-                newCall.direction = CallDirection.INCOMING;
-            }
 
             if (callState) {
                 newCall.atcCallInfo.setServicesPermitted(snapshotCallResp.servicesPermitted);
@@ -41286,6 +41572,11 @@ var Circuit = (function (circuit) {
                         PubSubSvc.publish('/atccall/info', [call]);
                         return;
                     }
+
+                    // For some reason the Established event is for a local call that does not exist anymore
+                    LogSvc.debug('[CstaSvc]: There is no local or remote call, change the position to Other');
+                    position = Targets.Other;
+
                     // If the call is answered by the VM, the established event has no epid. This call should
                     // not be shown
                     if (isMyDeviceId(event.answeringDevice) && !event.epid) {
@@ -44891,6 +45182,12 @@ var Circuit = (function (circuit) {
         this.hasUnmutedParticipants = CircuitCallControlSvc.hasUnmutedParticipants;
 
         /**
+         * check for Permission for Screen Control
+         * @param {Object} call The object of the current call
+         */
+        this.hasScreenControlFeature = CircuitCallControlSvc.hasScreenControlFeature;
+
+        /**
          * mute RTC session
          *
          * @param {String} callId The call ID of active call
@@ -45245,6 +45542,8 @@ var Circuit = (function (circuit) {
 
         this.canStartScreenShare = CircuitCallControlSvc.canStartScreenShare;
 
+        this.canStartVideo = CircuitCallControlSvc.canStartVideo;
+
         this.addConferenceAsGuest = CircuitCallControlSvc.addConferenceAsGuest;
 
         this.removeConferenceAsGuest = CircuitCallControlSvc.removeConferenceAsGuest;
@@ -45254,6 +45553,8 @@ var Circuit = (function (circuit) {
          * @returns {Promise} Returns an object containing the assigned TURN servers and the gathered ICE candidates.
          */
         this.testCandidatesCollection = CircuitCallControlSvc.testCandidatesCollection;
+
+        this.isVideoForEventsSupported = CircuitCallControlSvc.isVideoForEventsSupported;
 
         ///////////////////////////////////////////////////////////////////////////////////////
         // Public Factory Interface for Angular
@@ -45354,11 +45655,17 @@ var Circuit = (function (circuit) {
                 }
             }
 
-            if (user.associatedTelephonyUserID && user.associatedTelephonyUserType === Constants.GtcTrunkType.ATC_TRUNK_TYPE) {
-                // Set associatedGTCUserId field for backwards compatibility until mobile clients remove all references to it
-                user.associatedGTCUserId = user.associatedTelephonyUserID;
-                user.isATC = true;
+            if (user.associatedTelephonyUserID) {
+                // Relevant when UC is enabled for an OSBiz client. Used to adjust some client behaviour for OSBiz
+                user.isOsBizCTIEnabled = (user.associatedTelephonyUserType === Constants.GtcTrunkType.OSBIZ_TRUNK_TYPE && telConfig.isOsBizCTIEnabled);
+                user.isATC = user.isOsBizCTIEnabled || (user.associatedTelephonyUserType === Constants.GtcTrunkType.ATC_TRUNK_TYPE);
+
+                if (user.isATC) {
+                    // Set associatedGTCUserId field for backwards compatibility until mobile clients remove all references to it
+                    user.associatedGTCUserId = user.associatedTelephonyUserID;
+                }
             } else {
+                user.isOsBizCTIEnabled = false;
                 user.isATC = false;
             }
         } else {
@@ -46865,6 +47172,17 @@ var Circuit = (function (circuit) {
             });
         }
 
+        function getItemsById(itemIds) {
+            return new Promise(function (resolve, reject) {
+                _clientApiHandler.getItemsByIds(itemIds, function (err, items) {
+                    if (apiError(err, reject)) { return; }
+                    Promise.all(items.map(publicizeItem))
+                    .then(resolve)
+                    .catch(reject);
+                });
+            });
+        }
+
         function getConversationItems(convId, options) {
             return new Promise(function (resolve, reject) {
                 options = options || {};
@@ -48074,6 +48392,15 @@ var Circuit = (function (circuit) {
             }).map(publicizeCall));
         }
 
+        function getConferenceInvitationText(locale, convId) {
+            return new Promise(function (resolve, reject) {
+                _clientApiHandler.getConferenceInvitationText(locale, convId, function (err, conferenceInvitationText) {
+                    if (apiError(err, reject)) { return; }
+                    resolve(conferenceInvitationText);
+                });
+            });
+        }
+
         function startConference(convId, mediaType) {
             return getConversationById(convId).then(function (conv) {
                 return new Promise(function (resolve, reject) {
@@ -48569,7 +48896,9 @@ var Circuit = (function (circuit) {
                 Circuit.WebRTCAdapter.getUserMedia = function (constraint, cb) {
                     cb && cb(stream);
                 };
+                call.sessionCtrl.dontReuseAudioStream = true;
                 _services.CallControlSvc.setMediaType(callId, mediaType, function (err) {
+                    call.sessionCtrl.dontReuseAudioStream = false;
                     Circuit.WebRTCAdapter.getUserMedia = Circuit.WebRTCAdapter.origGetUserMedia;
                     delete Circuit.WebRTCAdapter.origGetUserMedia;
                     if (svcError(err, reject)) { return; }
@@ -50307,6 +50636,18 @@ var Circuit = (function (circuit) {
         _self.getItemById = getItemById;
 
         /**
+         * Retrieve multiple conversation items by their ID.
+         * @method getItemsById
+         * @param {String[]} itemIds Conversation Item IDs
+         * @returns {Promise|Item[]} A promise returning an array of items
+         * @scope `READ_CONVERSATIONS` or `FULL`
+         * @example
+         *     client.getItemsById(['cc02d9ca-fb10-4a86-96b3-0198665525b8'])
+         *       .then(console.log);
+         */
+        _self.getItemsById = getItemsById;
+
+        /**
          * Retrieve multiple conversation items. By default the most recent items are returned.
          * @method getConversationItems
          * @param {String} convId Conversation ID
@@ -50759,6 +51100,19 @@ var Circuit = (function (circuit) {
          *       .then(calls => console.log(`Started calls: ${calls.length}`));
          */
         _self.getStartedCalls = getStartedCalls;
+
+        /**
+         * Get the conference invitation HTML
+         * @method getConferenceInvitationText
+         * @param {String} locale Locale/language to retrieve the text for as defined in Circuit.Contants.LOCALE. Defaults to EN_US
+         * @param {String} convId Conversation ID
+         * @returns {Promise|String} A promise returning a string containing the HTML of the conference invitation
+         * @scope `READ_CONVERSATIONS` or `FULL`
+         * @example
+         *     client.getConferenceInvitationText('EN_US', 'b3b97aa7-fe6c-48e1-9069-2e8d3b12f18a')
+         *       .then(conferenceText => console.log('Conference Text: ', conferenceText));
+         */
+        _self.getConferenceInvitationText = getConferenceInvitationText;
 
         /**
          * Start a conference call.
@@ -51767,6 +52121,39 @@ var Circuit = (function (circuit) {
         });
 
         /**
+         * Fired when new labels are added
+         * @event labelsAdded
+         * @param {Object} event Object literal containing the event properties
+         * @param {String} event.type Event name
+         * @param {Label[]} event.labels Array of added label objects
+         */
+        _clientApiHandler.on('ConversationUserData.LABELS_ADDED', function (evt) {
+            addToEventQueue({type: 'labelsAdded', labels: evt.labelsAdded});
+        });
+
+        /**
+         * Fired when an existing label is edited
+         * @event labelEdited
+         * @param {Object} event Object literal containing the event properties
+         * @param {String} event.type Event name
+         * @param {Label} event.label Edited label object
+         */
+        _clientApiHandler.on('ConversationUserData.LABEL_EDITED', function (evt) {
+            addToEventQueue({type: 'labelEdited', label: evt.labelEdited});
+        });
+
+        /**
+         * Fired when labels are removed
+         * @event labelsRemoved
+         * @param {Object} event Object literal containing the event properties
+         * @param {String} event.type Event name
+         * @param {String[]} event.labels Array of removed label IDs
+         */
+        _clientApiHandler.on('ConversationUserData.LABELS_REMOVED', function (evt) {
+            addToEventQueue({type: 'labelsRemoved', labelIds: evt.labelsRemoved});
+        });
+
+        /**
          * Fired when conversation user data changes. E.g. label added/changed/removed
          * @event conversationUserDataChanged
          * @param {Object} event Object literal containing the event properties
@@ -52340,7 +52727,10 @@ var Circuit = (function (circuit) {
                 'callEnded',
                 'whiteboardBackground',
                 'whiteboardOverlayToggled',
-                'whiteboardSync'
+                'whiteboardSync',
+                'labelsAdded',
+                'labelEdited',
+                'labelsRemoved'
             ];
         },
         enumerable: true,
