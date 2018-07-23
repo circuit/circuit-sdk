@@ -59,8 +59,8 @@ describe('Users', () => {
             firstName: `${Date.now()}a`,
             lastName: `${Date.now()}b`,
             phoneNumbers: [{
-                phoneNumber: "+15615551234",
-                type: "WORK",
+                phoneNumber: '+15615551234',
+                type: 'WORK',
                 isExternallyManaged: false
             }],
             emailAddresses: [{
