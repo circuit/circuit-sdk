@@ -16,12 +16,7 @@ let searchResults = {} // hashtable of search results from basicSearchResults
 let searchId; // results returned from searchStatus event for startBasicSearch
 let searchId2; // results returned from searchStatus event for startUserSearch by name
 let searchId3; // results returned from searchStatus event for startUserSearch by phone number
-let phoneNumber = {
-    phoneNumber: "+15611234567",
-    type: "WORK",
-    isExternallyManaged: false
-}
-// __preperation.js must be run before this test
+let phoneNumber;
 describe('Search Tests', () => {
     before(async () => {
         client = new Circuit.Client(config.bot1);
@@ -29,18 +24,11 @@ describe('Search Tests', () => {
         client2 = new Circuit.Client(config.sdktester1.config);
         user2 = await client2.logon(config.sdktester1.credentials);
         client.addEventListener('basicSearchResults', evt => searchResults[evt.data.searchId] = evt);
-        await client2.updateUser({
-            userId: user2.userId,
-            phoneNumbers: [phoneNumber]
-        });
         conversation = prep.conversation;
+        phoneNumber = prep.phoneNumber;
     });
 
     after(async () => {
-        await client2.updateUser({
-            userId: user2.userId,
-            phoneNumbers: user2.phoneNumbers || []
-        });
         await client.logout();
         await client2.logout();
     });

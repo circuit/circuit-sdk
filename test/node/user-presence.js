@@ -67,6 +67,6 @@ describe('User Presence', () => {
     });
 
     it('should unsubscribe to users presence', async () => {
-        await client.subscribePresence([user2.userId]);
+        await client.unsubscribePresence([user2.userId]);
     });    
 });
