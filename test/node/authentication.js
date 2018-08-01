@@ -20,6 +20,10 @@ describe('Authentication', () => {
         await client.isAuthenticated();
     });
 
+    it('should get a cookie', async () => {
+        let cookie = client.getCookie();
+        assert(!!cookie);
+    });
     /*
     it('should have valid token', async () => {
         const token = await client.validateToken();
