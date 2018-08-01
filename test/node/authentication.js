@@ -20,7 +20,7 @@ describe('Authentication', () => {
         await client.isAuthenticated();
     });
 
-    it('should get a cookie', async () => {
+    it('should get client cookie', async () => {
         let cookie = client.getCookie();
         assert(!!cookie);
     });
