@@ -34,67 +34,67 @@ describe('Conversation Form', () => {
             controls: [{
                 type: 'RADIO',
                 name: 'radioButton',
-                defaultValue: '1', // optional  
+                defaultValue: '1', // optional
                 options: [{
-                    text: 'button1', 
+                    text: 'button1',
                     value: '1'
-              }, { 
-                text: 'button2', 
+                },{
+                text: 'button2',
                 value: '2'
-              }, {
-                text: 'button3', 
+                },{
+                text: 'button3',
                 value: '3'
-              }]
-            }, {
+                }]
+            },{
                 type: 'CHECKBOX',
                 name: 'checkBox',
                 options: [{ // required for multi select
                     text: 'check1',
                     value: '1',
-                    defaultValue: 'true'  
-              }, {
-                text: 'check2', 
+                    defaultValue: 'true'
+                }, {
+                text: 'check2',
                 value: '2',
-              }, {
-                text: 'check3', 
-                value: '3', 
-              }]
-            }, {
+                }, {
+                text: 'check3',
+                value: '3',
+                }]
+            },{
                 type: 'DROPDOWN',
-                name: 'dropDown', 
+                name: 'dropDown',
                 defaultValue: '3', // optional
                 options: [{
-                    text: 'dropDown1', 
+                    text: 'dropDown1',
                     value: '1',
-              }, { 
+                },{
                 text: 'dropDown2',
                 value: '2',
-              }, {
+                },{
                 text: 'dropDown3',
-                value: '3',    
-              }]
-            }, {
+                value: '3',
+                }]
+            },{
                 type: 'INPUT',
                 name: 'inputField',
-                text: 'Input field',    
-            }, {
+                text: 'Input field',
+            },{
                 type: 'SPACER'
-            }, {
+            },{
                 type: 'LABEL',
-                text: 'Label'  
-            }, {
-                type: 'BUTTON', // submit the form 
+                text: 'Label'
+            },{
+                type: 'BUTTON', // submit the form
                 options: [{
                     text: 'Submit',
                     action: 'submit',
                     notification: 'Form submitted successfully'
-              }, { 
-                text: 'Reset',  
-                action: 'reset', 
-                notification: 'Form reset successfully' 
-              }]
+                },{
+                text: 'Reset',
+                action: 'reset',
+                notification: 'Form reset successfully'
+                }]
             }]
-          }
+        }
         const content = {
             content: `${Date.now()}a`,
             form: form
@@ -110,13 +110,13 @@ describe('Conversation Form', () => {
             data: [{
                 name: 'radioButton',
                 value: '2'
-               }, {
+               },{
                 name: 'checkBox',
                 value: '3'
-               }, {
+               },{
                 name: 'dropDown',
                 value: '1'
-               }, {
+               },{
                 name: 'inputField',
                 value: `${Date.now()}input`
                }
@@ -128,7 +128,7 @@ describe('Conversation Form', () => {
             helper.expectEvents(client, [{
                 type: 'formSubmission',
                 predicate: evt => evt.itemId === item.itemId &&  evt.form.id === item.text.formMetaData.id && evt.form.data.every(entry => dataValues[entry.name] && dataValues[entry.name].value === entry.value)
-            }])  
+            }])
         ]);
         assert(res[1].itemId === item.itemId &&  res[1].form.id === item.text.formMetaData.id && res[1].form.data.every(entry => dataValues[entry.name] && dataValues[entry.name].value === entry.value));
     });
