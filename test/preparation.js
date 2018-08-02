@@ -12,7 +12,7 @@ if (!exports.conversation) {
             const user3 = await client3.logon(config.sdktester1.credentials);
             module.exports.conversation = await client.createGroupConversation([user2.userId], `globalTestConversation${Date.now()}`);
             const existingConversations = await client.getConversations({ numberOfConversations: 10 });
-            // create up to 10 past conversations to be used for testing
+            // Ensure there are at least 10 conversations present
             for (let i = 0; i < 10 - existingConversations.length; i++) {
                 await client.createConferenceBridge(`newConversation${i + 1}`);
             }
