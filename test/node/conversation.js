@@ -39,13 +39,10 @@ describe('Conversation Tests', () => {
     // });
 
     it('should get a specified number of conversations', async () => {
-        //random number of conversations to retrieve numberOfConvs 
-        const numberOfConvs = Math.floor(Math.random() * 10) + 1;
         const res = await client.getConversations({
-            numberOfConversations: numberOfConvs
+            numberOfConversations: 3
         });
-        // less than or equal to in the case numberOfConvs does not exist
-        assert(res && res.length <= numberOfConvs);
+        assert(res && res.length === 3);
     });
 
     it('should get conversations AFTER a timestamp', async () => {
