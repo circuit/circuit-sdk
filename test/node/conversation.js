@@ -18,7 +18,8 @@ describe('Conversation Tests', () => {
         user = await client.logon();
         client2 = new Circuit.Client(config.bot2);
         user2 = await client2.logon();
-        conversation = prep.conversation;
+        // get the conversation by its Id to get the latest modification times
+        conversation = await client.getConversationById(prep.conversation.convId); 
     });
 
     after(async () => {
