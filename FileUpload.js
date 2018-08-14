@@ -183,13 +183,12 @@ module.exports = function FileUpload(config) {
         });
     };
 
-    this.uploadWhiteboardFile = function (file, rtcSessionId, convId) {
+    this.uploadWhiteboardFile = function (file, rtcSessionId) {
         logger.debug('[FileUpload] node SDK uploadWhiteboardFile: ', file);
 
         var url = 'https://' + _config.domain + '/fileapi';
         var opts = {
-            rtcSessionId: rtcSessionId,
-            convId: convId
+            rtcSessionId: rtcSessionId
         };
 
         return uploadFile(file, url, opts)

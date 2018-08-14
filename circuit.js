@@ -30,10 +30,10 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- *  @version: 1.2.3900
+ *  @version: 1.2.4000
  */
 
-var Circuit = {}; Object.defineProperty(Circuit, 'version', { value: '1.2.3900'});
+var Circuit = {}; Object.defineProperty(Circuit, 'version', { value: '1.2.4000'});
 
 // Define external globals for JSHint
 /*global Buffer, clearInterval, clearTimeout, process, require, setInterval, setTimeout*/
@@ -3285,7 +3285,8 @@ var Circuit = (function (circuit) {
             EXISTING_USERS_IN_PUBLIC_RANGE: 'EXISTING_USERS_IN_PUBLIC_RANGE',
             EXISTING_USERS_IN_PRIVATE_RANGE: 'EXISTING_USERS_IN_PRIVATE_RANGE',
             AREA_CODES_INCONSISTENT: 'AREA_CODES_INCONSISTENT',
-            DELETE_ITSP_ALREADY_ASSIGNED: 'DELETE_ITSP_ALREADY_ASSIGNED'
+            DELETE_ITSP_ALREADY_ASSIGNED: 'DELETE_ITSP_ALREADY_ASSIGNED',
+            DN_NOT_FOUND_IN_SITE: 'DN_NOT_FOUND_IN_SITE'
         },
 
         CloudTelephonyCmpNextError: {
@@ -3995,6 +3996,7 @@ var Circuit = (function (circuit) {
         // Search Action
         ///////////////////////////////////////////////////////////////////////////
         SearchActionType: {
+            START_ADVANCED_USER_SEARCH: 'START_ADVANCED_USER_SEARCH',
             START_BASIC_SEARCH: 'START_BASIC_SEARCH',
             START_DETAIL_SEARCH: 'START_DETAIL_SEARCH',
             START_USER_SEARCH: 'START_USER_SEARCH',
@@ -4081,6 +4083,11 @@ var Circuit = (function (circuit) {
             FILTER: 'FILTER'
         },
 
+        SearchContext: {
+            USER: 'USER',
+            MEETING_POINT: 'MEETING_POINT'
+        },
+
         ///////////////////////////////////////////////////////////////////////////
         // User Action
         ///////////////////////////////////////////////////////////////////////////
@@ -4122,6 +4129,7 @@ var Circuit = (function (circuit) {
             RESET_OPENSCAPE_DEVICE_PINS: 'RESET_OPENSCAPE_DEVICE_PINS',
             SUBSCRIBE_TENANT_PRESENCE: 'SUBSCRIBE_TENANT_PRESENCE',
             UNSUBSCRIBE_TENANT_PRESENCE: 'UNSUBSCRIBE_TENANT_PRESENCE',
+            GET_TENANT_ID_TO_NAME_MAP: 'GET_TENANT_ID_TO_NAME_MAP',
 
             // Used between clients and Access Server. Not part of official API.
             WAKE_UP: 'WAKE_UP',
@@ -4515,6 +4523,9 @@ var Circuit = (function (circuit) {
             SET_TENANT_VOICEMAIL_NUMBERS: 'SET_TENANT_VOICEMAIL_NUMBERS',
             GET_TENANT_VOICEMAIL_NUMBERS: 'GET_TENANT_VOICEMAIL_NUMBERS',
             UPDATE_TRUNK: 'UPDATE_TRUNK',
+            START_TRUNK_SOFT_SUSPENSION: 'START_TRUNK_SOFT_SUSPENSION',
+            CANCEL_TRUNK_SOFT_SUSPENSION: 'CANCEL_TRUNK_SOFT_SUSPENSION',
+            GET_TRUNK_REMAINING_CALLS: 'GET_TRUNK_REMAINING_CALLS',
 
             // UCaaS
             GET_VACANT_HOME_DIRECTORY_NUMBERS: 'GET_VACANT_HOME_DIRECTORY_NUMBERS',
@@ -4552,6 +4563,11 @@ var Circuit = (function (circuit) {
             DELETE_PICKUP_GROUPS: 'DELETE_PICKUP_GROUPS',
             GET_PICKUP_GROUP: 'GET_PICKUP_GROUP',
             UPDATE_PICKUP_GROUP: 'UPDATE_PICKUP_GROUP',
+            CREATE_AUTOMATED_ATTENDANT_CONFIGURATION: 'CREATE_AUTOMATED_ATTENDANT_CONFIGURATION',
+            GET_AUTOMATED_ATTENDANT_CONFIGURATIONS: 'GET_AUTOMATED_ATTENDANT_CONFIGURATIONS',
+            GET_AUTOMATED_ATTENDANT_CONFIGURATION: 'GET_AUTOMATED_ATTENDANT_CONFIGURATION',
+            UPDATE_AUTOMATED_ATTENDANT_CONFIGURATION: 'UPDATE_AUTOMATED_ATTENDANT_CONFIGURATION',
+            DELETE_AUTOMATED_ATTENDANT_CONFIGURATIONS: 'DELETE_AUTOMATED_ATTENDANT_CONFIGURATIONS',
 
             // Deprecated methods for users (but still used for TC)
             SUSPEND_USER: 'SUSPEND_USER',
@@ -4571,10 +4587,11 @@ var Circuit = (function (circuit) {
             GET_CMR_INFO_BY_IDS: 'GET_CMR_INFO_BY_IDS',
             SET_ADMIN_MANAGED_CMR_SETTINGS: 'SET_ADMIN_MANAGED_CMR_SETTINGS',
             SET_ADMIN_MANAGED_CMR_SETTINGS_BY_IDS: 'SET_ADMIN_MANAGED_CMR_SETTINGS_BY_IDS',
+            SHARE_CMR: 'SHARE_CMR',
+            UNSHARE_CMR: 'UNSHARE_CMR',
+            GET_CMR_SHARED_TENANT_INFO: 'GET_CMR_SHARED_TENANT_INFO',
 
-            // Automated Attendant
-            GET_AUTOMATEDATTENDANT_CONFIGURATION: 'GET_AUTOMATEDATTENDANT_CONFIGURATION',
-            SET_AUTOMATEDATTENDANT_CONFIGURATION: 'SET_AUTOMATEDATTENDANT_CONFIGURATION',
+            // Partner administration
             GET_PARTNER_MANAGEABLE_TENANTS: 'GET_PARTNER_MANAGEABLE_TENANTS',
 
             // System notifications
@@ -4671,6 +4688,7 @@ var Circuit = (function (circuit) {
             EXTENSION_MICROSOFT_EXCHANGE_ENABLED: 'EXTENSION_MICROSOFT_EXCHANGE_ENABLED',
             EXTENSION_SYNCPLICITY_ENABLED: 'EXTENSION_SYNCPLICITY_ENABLED',
             EXTENSION_BOX_ENABLED: 'EXTENSION_BOX_ENABLED',
+            EXTENSION_CONCEPTBOARD_ENABLED: 'EXTENSION_CONCEPTBOARD_ENABLED',
             EXTENSION_GOOGLE_DRIVE_ENABLED: 'EXTENSION_GOOGLE_DRIVE_ENABLED',
             EXTENSION_ONE_DRIVE_ENABLED: 'EXTENSION_ONE_DRIVE_ENABLED',
             EXTENSION_JABRA_ENABLED: 'EXTENSION_JABRA_ENABLED',
@@ -4704,7 +4722,8 @@ var Circuit = (function (circuit) {
             UP: 'UP',
             DOWN: 'DOWN',
             NOT_REQUESTED: 'NOT_REQUESTED',
-            REQUESTED: 'REQUESTED'
+            REQUESTED: 'REQUESTED',
+            SUSPENDING: 'SUSPENDING'
         },
 
         GtcTrunkType: {
@@ -4833,7 +4852,8 @@ var Circuit = (function (circuit) {
             SYNCPLICITY: 'SYNCPLICITY',
             ONE_DRIVE: 'ONE_DRIVE',
             CLIENT_THIRDPARTY: 'CLIENT_THIRDPARTY',
-            ZAPIER: 'ZAPIER'
+            ZAPIER: 'ZAPIER',
+            CONCEPTBOARD: 'CONCEPTBOARD'
         },
 
         ///////////////////////////////////////////////////////////////////////////
@@ -5111,16 +5131,19 @@ var Circuit = (function (circuit) {
         ///////////////////////////////////////////////////////////////////////////
         LabFeatureName: {
             ADD_CMR_VIA_QR_CODE: 'ADD_CMR_VIA_QR_CODE',
+            ADMIN_DEVICE_MANAGEMENT: 'ADMIN_DEVICE_MANAGEMENT',
             ANSWER_CALL_SCREEN: 'ANSWER_CALL_SCREEN',
             AUTHENTICATION_SETTINGS: 'AUTHENTICATION_SETTINGS',
+            AUTOMATED_ATTENDANT: 'AUTOMATED_ATTENDANT',
             BROADCAST_MESSAGES: 'BROADCAST_MESSAGES',
             COLOR_CONTRAST: 'COLOR_CONTRAST',
+            CONCEPTBOARD_INTEGRATION: 'CONCEPTBOARD_INTEGRATION',
             DEVELOPER_CONSOLE_EDIT: 'DEVELOPER_CONSOLE_EDIT',
             DIRECT_TO_CONF_UPGRADE: 'DIRECT_TO_CONF_UPGRADE',
-            DIRECT_ARCHIVE: 'DIRECT_ARCHIVE',
             EMBRAVA_INTEGRATION: 'EMBRAVA_INTEGRATION',
             EXPORT_LEGAL_DATA: 'EXPORT_LEGAL_DATA',
             FILTER_BY_LABEL: 'FILTER_BY_LABEL',
+            FLOATING_ONGOING_CALL_CONTROL: 'FLOATING_ONGOING_CALL_CONTROL',
             GROUP_PICKUP: 'GROUP_PICKUP',
             HASHTAGS: 'HASHTAGS',
             INCOMING_CALL_ROUTING: 'INCOMING_CALL_ROUTING',
@@ -5136,19 +5159,21 @@ var Circuit = (function (circuit) {
             ORGANISE_CONTENT: 'ORGANISE_CONTENT',
             PARTICIPANT_DRAWING: 'PARTICIPANT_DRAWING',
             SCOPE_SEARCHES: 'SCOPE_SEARCHES',
-            SCREEN_CONTROL: 'SCREEN_CONTROL',
             SCREEN_CONTROL_CONF: 'SCREEN_CONTROL_CONF',
             SCREEN_SHARE_FLOATING_CONTROL: 'SCREEN_SHARE_FLOATING_CONTROL',
             SECOND_LOCAL_CALL: 'SECOND_LOCAL_CALL',
+            SHARE_CMR_WITH_TENANT: 'SHARE_CMR_WITH_TENANT',
             SHORT_LINKS: 'SHORT_LINKS',
             SIRI_SEARCH: 'SIRI_SEARCH',
             THREADABLE_RTC_ITEM: 'THREADABLE_RTC_ITEM',
             TODAY_WIDGET: 'TODAY_WIDGET',
             TOPIC_LISTING: 'TOPIC_LISTING',
+            TRUNK_SOFT_SUSPENSION: 'TRUNK_SOFT_SUSPENSION',
             UCAAS_ITSP: 'UCAAS_ITSP',
             UCAAS_PICKUP_GROUPS: 'UCAAS_PICKUP_GROUPS',
-            VIDEO_PLAYER: 'VIDEO_PLAYER',
+            VIDEO_AND_SCREEN_SHARE: 'VIDEO_AND_SCREEN_SHARE',
             VIDEO_FOR_EVENTS: 'VIDEO_FOR_EVENTS',
+            VIDEO_PLAYER: 'VIDEO_PLAYER',
             WHITEBOARD: 'WHITEBOARD',
             WIDER_FEED: 'WIDER_FEED',
             ZAPIER_INTEGRATION: 'ZAPIER_INTEGRATION'
@@ -10137,7 +10162,6 @@ var Circuit = (function (circuit) {
         Unmute: {name: 'Unmute', type: 'microphone', icon: 'muted', localize: 'res_Unmute'},
         StartVideo: {name: 'StartVideo', type: 'video', icon: 'inactive', localize: 'res_StartVideo'},
         StopVideo: {name: 'StopVideo', type: 'video', icon: 'active', localize: 'res_StopVideo'},
-        ToggleVideoInProgress: {name: 'ToggleVideoInProgress', type: 'video', icon: 'progress-icon', localize: ''},
         RemoveFromStage: {name: 'DropFromStage', type: 'hangup', icon: 'drop-from-stage', localize: ''},
         ToggleWhiteboard: {name: 'ToggleWhiteboard', type: 'video', icon: '', localize: 'res_Whiteboard'},
         ToggleScreenShare: {name: 'ToggleScreenShare', type: 'video', icon: '', localize: 'res_Screenshare'}
@@ -10260,11 +10284,7 @@ var Circuit = (function (circuit) {
         }
 
         if (participant.isMeetingPointInvitee) {
-            if (participant.toggleVideoInProgress) {
-                participant.actions.push(ParticipantAction.ToggleVideoInProgress);
-            } else {
-                participant.actions.push(participant.mediaType.video ? ParticipantAction.StopVideo : ParticipantAction.StartVideo);
-            }
+            participant.actions.push(participant.mediaType.video ? ParticipantAction.StopVideo : ParticipantAction.StartVideo);
             participant.actions.push(participant.muted ? ParticipantAction.Unmute : ParticipantAction.Mute);
             participant.actions.push(ParticipantAction.Drop);
             participant.screenDisplayActions.push(ParticipantAction.ToggleWhiteboard);
@@ -18344,7 +18364,7 @@ var Circuit = (function (circuit) {
         };
 
         // Upload a single file (image) for the whiteboard
-        this.uploadWhiteboardFile = function (file, rtcSessionId, convId, token) {
+        this.uploadWhiteboardFile = function (file, rtcSessionId, token) {
             if (!UploadPromise) {
                 throw new Error('Promise support is required to use FileUpload');
             }
@@ -18359,7 +18379,6 @@ var Circuit = (function (circuit) {
 
             var options = {
                 rtcSessionId: rtcSessionId,
-                convId: convId,
                 token: token
             };
             var uploadPromise = uploadFile(reqId, file, url, null, options)
@@ -19019,10 +19038,9 @@ var Circuit = (function (circuit) {
         ///////////////////////////////////////////////////////////////////////////
         // Constants
         ///////////////////////////////////////////////////////////////////////////
-        var SP98_API_VERSION = 2090084; // 2.9.84-x
-        var SP99_API_VERSION = 2090088; // 2.9.88-x
         var SP100_API_VERSION = 2090090; // 2.9.90-x
         var SP101_API_VERSION = 2090093; // 2.9.93-x
+        var SP102_API_VERSION = 2090098; // 2.9.98-x
 
         var NOP = function () {};
 
@@ -19249,21 +19267,6 @@ var Circuit = (function (circuit) {
                     Constants.GetStuffType.PENDING_SYSTEM_NOTIFICATIONS,
                     Constants.GetStuffType.SUPPORT_INFO
                 ];
-
-                if (this.isEmailSupportFeatureSupported()) {
-                    types.push(Constants.GetStuffType.SUPPORT_INFO);
-                }
-
-            } else if (!this.isEmailSupportFeatureSupported()) {
-                var idx = types.indexOf(Constants.GetStuffType.SUPPORT_INFO);
-                if (idx !== -1) {
-                    logger.warn('[ClientApiHandler]: The SUPPORT_INFO type is not supported by the backend');
-                    types.splice(idx, 1);
-                    if (types.length === 0) {
-                        sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
-                        return;
-                    }
-                }
             }
 
             var request = {
@@ -19304,9 +19307,9 @@ var Circuit = (function (circuit) {
             }, null, keysToOmitFromResponse);
         }
 
-        function checkITSPSupport(cb) {
-            if (!_self.isITSPSupported()) {
-                logger.warn('[ClientApiHandler]: The ITSP operation is not supported by the backend');
+        function checkConceptboardSupport(provider, cb) {
+            if (provider === Constants.ThirdPartyConnectorType.CONCEPTBOARD && !_self.isConceptboardIntegrationSupported()) {
+                logger.warn('[ClientApiHandler]: Integration with CONCEPTBOARD is not supported by the backend');
                 sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
                 return false;
             }
@@ -19425,32 +19428,12 @@ var Circuit = (function (circuit) {
             _connHandler.on(msgType, cb, keysToOmitFromEvent);
         };
 
-        this.isITSPSupported = function () {
-            return _clientApiVersion > SP98_API_VERSION;
-        };
-
-        this.isExportUserDataSupported = function () {
-            return _clientApiVersion > SP98_API_VERSION;
-        };
-
         this.isPickupGroupsSupported = function () {
             return _clientApiVersion > SP100_API_VERSION;
         };
 
-        this.isCMRDeviceManagementSupported = function () {
-            return _clientApiVersion > SP99_API_VERSION;
-        };
-
-        this.isEmailSupportFeatureSupported = function () {
-            return _clientApiVersion > SP99_API_VERSION;
-        };
-
-        this.isShortcutsSettingFeatureSupported = function () {
-            return _clientApiVersion > SP99_API_VERSION;
-        };
-
-        this.isVideoForEventsSupported = function () {
-            return _clientApiVersion > SP98_API_VERSION;
+        this.isAutomatedAttendantSupported = function () {
+            return _clientApiVersion > SP100_API_VERSION;
         };
 
         this.isRemoteControlAdministrationSupported = function () {
@@ -19467,6 +19450,26 @@ var Circuit = (function (circuit) {
 
         this.isGetConversationTopicsSupported = function () {
             return _clientApiVersion > SP101_API_VERSION;
+        };
+
+        this.isAdminDeviceConfigurationSupported = function () {
+            return _clientApiVersion > SP102_API_VERSION;
+        };
+
+        this.isConceptboardIntegrationSupported = function () {
+            return _clientApiVersion > SP102_API_VERSION;
+        };
+
+        this.isShareCMRWithOtherTenantSupported = function () {
+            return _clientApiVersion > SP102_API_VERSION;
+        };
+
+        this.isSoftSuspensionSupported = function () {
+            return _clientApiVersion > SP102_API_VERSION;
+        };
+
+        this.isStartAdvancedUserSearchSupported = function () {
+            return _clientApiVersion > SP102_API_VERSION;
         };
 
         ///////////////////////////////////////////////////////////////////////////////
@@ -19915,13 +19918,6 @@ var Circuit = (function (circuit) {
                 settings = [settings];
             }
 
-            settings = settings.filter(function (setting) {
-                if ((setting.key === Constants.UserSettingKey.KEYBOARD_SHORTCUTS_ENABLED && !_self.isShortcutsSettingFeatureSupported())) {
-                    logger.warn('[ClientApiHandler]: Requested setting is not supported by backend: ', setting);
-                    return false;
-                }
-                return true;
-            });
             if (!settings.length) {
                 sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
                 return;
@@ -20191,6 +20187,30 @@ var Circuit = (function (circuit) {
             });
         };
 
+        this.getTenantIdToNameMap = function (secIds, cb, tenantContext) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: getTenantIdToNameMap...');
+
+            if (!this.isShareCMRWithOtherTenantSupported()) {
+                logger.warn('[ClientApiHandler]: The getTenantIdToNameMap operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            var request = {
+                type: Constants.UserActionType.GET_TENANT_ID_TO_NAME_MAP,
+                getTenantIdToNameMap: {
+                    secIds: secIds
+                }
+            };
+
+            sendRequest(Constants.ContentType.USER, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb, true)) {
+                    cb(null, rsp.user.getTenantIdToNameMapResult.tenantIdToNameMap || []);
+                }
+            }, null, null, tenantContext);
+        };
+
         ///////////////////////////////////////////////////////////////////////////////
         // Public Search related interfaces
         ///////////////////////////////////////////////////////////////////////////////
@@ -20277,6 +20297,32 @@ var Circuit = (function (circuit) {
             var request = {
                 type: Constants.SearchActionType.START_USER_SEARCH,
                 startUserSearch: {query: constraints.query, reversePhoneNumberLookup: !!constraints.reversePhoneNumberLookup}
+            };
+            sendRequest(Constants.ContentType.SEARCH, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null, rsp.search.startSearchResult.searchId);
+                }
+            });
+        };
+
+        this.startAdvancedUserSearch = function (constraints, cb) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: startAdvancedUserSearch...');
+
+            if (!this.isStartAdvancedUserSearchSupported()) {
+                logger.warn('[ClientApiHandler]: The startAdvancedUserSearch operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            var request = {
+                type: Constants.SearchActionType.START_ADVANCED_USER_SEARCH,
+                startAdvancedUserSearch: {
+                    searchContext: constraints.searchContext,
+                    query: constraints.query,
+                    searchExactAssignedPhoneNumber: constraints.searchExactAssignedPhoneNumber,
+                    resultSetLimit: constraints.resultSetLimit
+                }
             };
             sendRequest(Constants.ContentType.SEARCH, request, function (err, rsp) {
                 if (isResponseValid(err, rsp, cb)) {
@@ -22783,11 +22829,6 @@ var Circuit = (function (circuit) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: undoWhiteboard...');
 
-            if (_clientApiVersion <= SP98_API_VERSION) {
-                // Set "userid" field
-                data.userid = data.userId;
-            }
-
             var request = {
                 type: Constants.RTCSessionActionType.UNDO_WHITEBOARD,
                 undoWhiteboard: data
@@ -23541,6 +23582,71 @@ var Circuit = (function (circuit) {
             });
         };
 
+        this.startTrunkSoftSuspension = function (trunkId, cb, tenantContext) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: startTrunkSoftSuspension...');
+
+            if (!this.isSoftSuspensionSupported()) {
+                logger.warn('[ClientApiHandler]: The startTrunkSoftSuspension operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            var request = {
+                type: Constants.AdministrationActionType.START_TRUNK_SOFT_SUSPENSION,
+                startTrunkSoftSuspension: {
+                    trunkId: trunkId
+                }
+            };
+
+            sendRequest(Constants.ContentType.ADMINISTRATION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null);
+                }
+            }, null, null, tenantContext);
+        };
+
+        this.cancelTrunkSoftSuspension = function (trunkId, cb, tenantContext) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: cancelTrunkSoftSuspension...');
+
+            if (!this.isSoftSuspensionSupported()) {
+                logger.warn('[ClientApiHandler]: The cancelTrunkSoftSuspension operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            var request = {
+                type: Constants.AdministrationActionType.CANCEL_TRUNK_SOFT_SUSPENSION,
+                cancelTrunkSoftSuspension: {
+                    trunkId: trunkId
+                }
+            };
+
+            sendRequest(Constants.ContentType.ADMINISTRATION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null);
+                }
+            }, null, null, tenantContext);
+        };
+
+        // eslint-disable-next-line no-unused-vars
+        this.getTrunkRemainingCalls = function (trunkId, cb, tenantContext) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: getTrunkRemainingCalls...');
+
+            if (!this.isSoftSuspensionSupported()) {
+                logger.warn('[ClientApiHandler]: The getTrunkRemainingCalls operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            /* Mock workaround until API is available */
+            window.setTimeout(function () {
+                cb(null, Utils.randomNumber(1, 10000));
+            }, 1000);
+        };
+
         this.setTenantSettings = function (tenantSettings, cb, tenantContext) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: setTenantSettings...');
@@ -23549,6 +23655,9 @@ var Circuit = (function (circuit) {
                 switch (setting.key) {
                 case Constants.TenantSettingsType.EXTENSION_EMBRAVA_ENABLED:
                     if (_self.isEmbravaIntegrationSupported()) { return true; }
+                    break;
+                case Constants.TenantSettingsType.EXTENSION_CONCEPTBOARD_ENABLED:
+                    if (_self.isConceptboardIntegrationSupported()) { return true; }
                     break;
                 case Constants.TenantSettingsType.REMOTE_CONTROL_ENABLED:
                 case Constants.TenantSettingsType.REMOTE_CONTROL_EXTERNAL_ENABLED:
@@ -23779,7 +23888,7 @@ var Circuit = (function (circuit) {
 
             sendRequest(Constants.ContentType.ADMINISTRATION, request, function (err, rsp) {
                 if (isResponseValid(err, rsp, cb)) {
-                    cb(null, rsp.administration.createOpenScapeUserResult);
+                    cb(null, rsp.administration.createOpenScapeUserResult.user);
                 }
             }, null, null, tenantContext);
         };
@@ -23810,7 +23919,7 @@ var Circuit = (function (circuit) {
 
             sendRequest(Constants.ContentType.ADMINISTRATION, request, function (err, rsp) {
                 if (isResponseValid(err, rsp, cb)) {
-                    cb(null, rsp.administration.updateOpenScapeUserResult);
+                    cb(null, rsp.administration.updateOpenScapeUserResult.user);
                 }
             }, null, null, tenantContext);
         };
@@ -23984,45 +24093,6 @@ var Circuit = (function (circuit) {
             }, null, null, tenantContext);
         };
 
-        this.getAutomatedAttendantConfiguration = function (cb, tenantContext) {
-            cb = cb || NOP;
-            logger.debug('[ClientApiHandler]: getAutomatedAttendantConfiguration...');
-
-            var request = {
-                type: Constants.AdministrationActionType.GET_AUTOMATEDATTENDANT_CONFIGURATION
-            };
-
-            sendRequest(Constants.ContentType.ADMINISTRATION, request, function (err, rsp) {
-                if (isResponseValid(err, rsp, cb, true)) {
-                    var result = rsp.administration.getAutomatedAttendantConfigurationResult;
-                    cb(null, result.configuration || []);
-                }
-            }, null, null, tenantContext);
-        };
-
-        this.setAutomatedAttendantConfiguration = function (config, cb, tenantContext) {
-            cb = cb || NOP;
-            logger.debug('[ClientApiHandler]: setAutomatedAttendantConfiguration...');
-
-            if (!config) {
-                logger.warn('[ClientApiHandler]: No configuration were provided');
-                sendAsyncResp(cb, Constants.ReturnCode.INVALID_MESSAGE);
-                return;
-            }
-
-            var request = {
-                type: Constants.AdministrationActionType.SET_AUTOMATEDATTENDANT_CONFIGURATION,
-                setAutomatedAttendantConfiguration: {
-                    configuration: config
-                }
-            };
-            sendRequest(Constants.ContentType.ADMINISTRATION, request, function (err, rsp) {
-                if (isResponseValid(err, rsp, cb)) {
-                    cb(null);
-                }
-            }, null, null, tenantContext);
-        };
-
         this.getManageableTenants = function (cb) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: getManageableTenants...');
@@ -24092,12 +24162,6 @@ var Circuit = (function (circuit) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: getCMRInfoById...');
 
-            if (!this.isCMRDeviceManagementSupported()) {
-                logger.warn('[ClientApiHandler]: The getCMRInfoById operation is not supported by the backend');
-                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
-                return;
-            }
-
             var request = {
                 type: Constants.AdministrationActionType.GET_CMR_INFO_BY_ID,
                 getCMRInfoById: {
@@ -24116,12 +24180,6 @@ var Circuit = (function (circuit) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: getCMRInfoByIds...');
 
-            if (!this.isCMRDeviceManagementSupported()) {
-                logger.warn('[ClientApiHandler]: The getCMRInfoByIds operation is not supported by the backend');
-                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
-                return;
-            }
-
             var request = {
                 type: Constants.AdministrationActionType.GET_CMR_INFO_BY_IDS,
                 getCMRInfoByIds: {
@@ -24139,12 +24197,6 @@ var Circuit = (function (circuit) {
         this.setAdminManagedCMRSettings = function (userId, settings, cb) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: setAdminManagedCMRSettings...');
-
-            if (!this.isCMRDeviceManagementSupported()) {
-                logger.warn('[ClientApiHandler]: The setAdminManagedCMRSettings operation is not supported by the backend');
-                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
-                return;
-            }
 
             var request = {
                 type: Constants.AdministrationActionType.SET_ADMIN_MANAGED_CMR_SETTINGS,
@@ -24165,12 +24217,6 @@ var Circuit = (function (circuit) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: setAdminManagedCMRSettingsByIds...');
 
-            if (!this.isCMRDeviceManagementSupported()) {
-                logger.warn('[ClientApiHandler]: The setAdminManagedCMRSettingsByIds operation is not supported by the backend');
-                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
-                return;
-            }
-
             var request = {
                 type: Constants.AdministrationActionType.SET_ADMIN_MANAGED_CMR_SETTINGS_BY_IDS,
                 setAdminManagedCMRSettingsByIds: {
@@ -24183,6 +24229,80 @@ var Circuit = (function (circuit) {
                     cb(null);
                 }
             });
+        };
+
+        this.shareCMR = function (cmrUserId, secIds, cb, tenantContext) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: shareCMR...');
+
+            if (!this.isShareCMRWithOtherTenantSupported()) {
+                logger.warn('[ClientApiHandler]: The shareCMR operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            var request = {
+                type: Constants.AdministrationActionType.SHARE_CMR,
+                shareCMR: {
+                    cmrUserId: cmrUserId,
+                    secIds: secIds
+                }
+            };
+
+            sendRequest(Constants.ContentType.ADMINISTRATION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null);
+                }
+            }, null, null, tenantContext);
+        };
+
+        this.unshareCMR = function (cmrUserId, secIds, cb, tenantContext) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: unshareCMR...');
+
+            if (!this.isShareCMRWithOtherTenantSupported()) {
+                logger.warn('[ClientApiHandler]: The shareCMR operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            var request = {
+                type: Constants.AdministrationActionType.UNSHARE_CMR,
+                unshareCMR: {
+                    cmrUserId: cmrUserId,
+                    secIds: secIds
+                }
+            };
+
+            sendRequest(Constants.ContentType.ADMINISTRATION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null);
+                }
+            }, null, null, tenantContext);
+        };
+
+        this.getCMRSharedTenantInfo = function (cmrUserId, cb, tenantContext) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: getCMRSharedTenantInfo...');
+
+            if (!this.isShareCMRWithOtherTenantSupported()) {
+                logger.warn('[ClientApiHandler]: The getCMRSharedTenantInfo operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            var request = {
+                type: Constants.AdministrationActionType.GET_CMR_SHARED_TENANT_INFO,
+                getCMRSharedTenantInfo: {
+                    cmrUserId: cmrUserId
+                }
+            };
+
+            sendRequest(Constants.ContentType.ADMINISTRATION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb, true)) {
+                    cb(null, rsp.administration.getCMRSharedTenantInfoResult.tenantIdToName || []);
+                }
+            }, null, null, tenantContext);
         };
 
         this.getHuntGroups = function (cb, tenantContext) {
@@ -24333,10 +24453,6 @@ var Circuit = (function (circuit) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: getITSPtemplates...');
 
-            if (!checkITSPSupport(cb)) {
-                return;
-            }
-
             var request = {
                 type: Constants.AdministrationActionType.GET_OPENSCAPE_ITSP_TEMPLATES,
                 getOpenscapeITSPTemplates: {}
@@ -24364,10 +24480,6 @@ var Circuit = (function (circuit) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: createITSP...');
 
-            if (!checkITSPSupport(cb)) {
-                return;
-            }
-
             if (!itsp) {
                 logger.warn('[ClientApiHandler]: No ITSP data were provided');
                 sendAsyncResp(cb, Constants.ReturnCode.INVALID_MESSAGE);
@@ -24391,10 +24503,6 @@ var Circuit = (function (circuit) {
         this.getITSP = function (id, cb, tenantContext) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: getITSP...');
-
-            if (!checkITSPSupport(cb)) {
-                return;
-            }
 
             if (!id) {
                 logger.warn('[ClientApiHandler]: No ITSP id was provided');
@@ -24420,10 +24528,6 @@ var Circuit = (function (circuit) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: getITSPs...');
 
-            if (!checkITSPSupport(cb)) {
-                return;
-            }
-
             var request = {
                 type: Constants.AdministrationActionType.GET_OPENSCAPE_ITSPS,
                 getOpenscapeITSPs: {}
@@ -24439,10 +24543,6 @@ var Circuit = (function (circuit) {
         this.updateITSP = function (itsp, cb, tenantContext) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: updateITSP...');
-
-            if (!checkITSPSupport(cb)) {
-                return;
-            }
 
             if (!itsp) {
                 logger.warn('[ClientApiHandler]: No ITSP data were provided');
@@ -24468,10 +24568,6 @@ var Circuit = (function (circuit) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: deleteITSP...');
 
-            if (!checkITSPSupport(cb)) {
-                return;
-            }
-
             if (!itspIds) {
                 logger.warn('[ClientApiHandler]: No ITSP ids were provided');
                 sendAsyncResp(cb, Constants.ReturnCode.INVALID_MESSAGE);
@@ -24495,10 +24591,6 @@ var Circuit = (function (circuit) {
         this.assignITSPToSite = function (itspId, siteId, cb, tenantContext) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: assignITSPToSite...');
-
-            if (!checkITSPSupport(cb)) {
-                return;
-            }
 
             if (!itspId) {
                 logger.warn('[ClientApiHandler]: No ITSP id was provided');
@@ -24530,10 +24622,6 @@ var Circuit = (function (circuit) {
         this.unassignITSPFromSite = function (itspId, siteId, cb, tenantContext) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: unassignITSPFromSite...');
-
-            if (!checkITSPSupport(cb)) {
-                return;
-            }
 
             if (!itspId) {
                 logger.warn('[ClientApiHandler]: No ITSP id was provided');
@@ -24726,6 +24814,148 @@ var Circuit = (function (circuit) {
             }, null, null, tenantContext);
         };
 
+        this.createAutomatedAttendantConfiguration = function (automatedAttendant, cb, tenantContext) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: createAutomatedAttendantConfiguration...');
+
+            if (!this.isAutomatedAttendantSupported()) {
+                logger.warn('[ClientApiHandler]: The createAutomatedAttendantConfiguration operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            if (!automatedAttendant) {
+                logger.warn('[ClientApiHandler]: No Automated Attendant configuration was provided');
+                sendAsyncResp(cb, Constants.ReturnCode.INVALID_MESSAGE);
+                return;
+            }
+
+            var request = {
+                type: Constants.AdministrationActionType.CREATE_AUTOMATED_ATTENDANT_CONFIGURATION,
+                createAutomatedAttendantConfiguration: {
+                    automatedAttendantConfiguration: automatedAttendant
+                }
+            };
+
+            sendRequest(Constants.ContentType.ADMINISTRATION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null);
+                }
+            }, null, null, tenantContext);
+        };
+
+        this.getAutomatedAttendantConfigurations = function (cb, tenantContext) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: getAutomatedAttendantConfigurations...');
+
+            if (!this.isAutomatedAttendantSupported()) {
+                logger.warn('[ClientApiHandler]: The getAutomatedAttendantConfigurations operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            var request = {
+                type: Constants.AdministrationActionType.GET_AUTOMATED_ATTENDANT_CONFIGURATIONS,
+                getAutomatedAttendantConfigurations: {}
+            };
+
+            sendRequest(Constants.ContentType.ADMINISTRATION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb, true)) {
+                    cb(null, rsp.administration.getAutomatedAttendantConfigurationsResult.automatedAttendantConfigurations || []);
+                }
+            }, null, null, tenantContext);
+        };
+
+        this.getAutomatedAttendantConfiguration = function (accessNumber, cb, tenantContext) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: getAutomatedAttendantConfiguration...');
+
+            if (!this.isAutomatedAttendantSupported()) {
+                logger.warn('[ClientApiHandler]: The getAutomatedAttendantConfiguration operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            if (!accessNumber) {
+                logger.warn('[ClientApiHandler]: No Automated Attendant access nubmer was provided');
+                sendAsyncResp(cb, Constants.ReturnCode.INVALID_MESSAGE);
+                return;
+            }
+
+            var request = {
+                type: Constants.AdministrationActionType.GET_AUTOMATED_ATTENDANT_CONFIGURATION,
+                getAutomatedAttendantConfiguration: {
+                    automatedAttendantNumber: accessNumber
+                }
+            };
+
+            sendRequest(Constants.ContentType.ADMINISTRATION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null, rsp.administration.getAutomatedAttendantConfigurationResult.automatedAttendantConfiguration);
+                }
+            }, null, null, tenantContext);
+        };
+
+        this.updateAutomatedAttendantConfiguration = function (automatedAttendant, cb, tenantContext) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: updateAutomatedAttendantConfiguration...');
+
+            if (!this.isAutomatedAttendantSupported()) {
+                logger.warn('[ClientApiHandler]: The updateAutomatedAttendantConfiguration operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            if (!automatedAttendant) {
+                logger.warn('[ClientApiHandler]: No Automated Attendant configuration was provided');
+                sendAsyncResp(cb, Constants.ReturnCode.INVALID_MESSAGE);
+                return;
+            }
+
+            var request = {
+                type: Constants.AdministrationActionType.UPDATE_AUTOMATED_ATTENDANT_CONFIGURATION,
+                updateAutomatedAttendantConfiguration: {
+                    updatedAutoAttendant: automatedAttendant
+                }
+            };
+
+            sendRequest(Constants.ContentType.ADMINISTRATION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null, rsp.administration);
+                }
+            }, null, null, tenantContext, true);
+        };
+
+        this.deleteAutomatedAttendantConfigurations = function (automatedAttendantNumbers, cb, tenantContext) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: deleteAutomatedAttendantConfigurations...');
+
+            if (!this.isAutomatedAttendantSupported()) {
+                logger.warn('[ClientApiHandler]: The deleteAutomatedAttendantConfigurations operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            if (!automatedAttendantNumbers) {
+                logger.warn('[ClientApiHandler]: No Automated Attendant numbers were provided');
+                sendAsyncResp(cb, Constants.ReturnCode.INVALID_MESSAGE);
+                return;
+            }
+
+            var request = {
+                type: Constants.AdministrationActionType.DELETE_AUTOMATED_ATTENDANT_CONFIGURATIONS,
+                deleteAutomatedAttendantConfigurations: {
+                    autoAttendants: automatedAttendantNumbers
+                }
+            };
+
+            sendRequest(Constants.ContentType.ADMINISTRATION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null);
+                }
+            }, null, null, tenantContext);
+        };
+
         this.getSystemNotifications = function (systemNotificationType, cb, tenantContext) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: getSystemNotifications...');
@@ -24864,12 +25094,6 @@ var Circuit = (function (circuit) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: setSupportType...');
 
-            if (!this.isEmailSupportFeatureSupported()) {
-                logger.warn('[ClientApiHandler]: The setSupportType operation is not supported by the backend');
-                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
-                return;
-            }
-
             var request = {
                 type: Constants.AdministrationActionType.SET_SUPPORT_TYPE,
                 setSupportType: {
@@ -24887,12 +25111,6 @@ var Circuit = (function (circuit) {
         this.setSupportEmail = function (email, cb) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: setSupportEmail...');
-
-            if (!this.isEmailSupportFeatureSupported()) {
-                logger.warn('[ClientApiHandler]: The setSupportEmail operation is not supported by the backend');
-                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
-                return;
-            }
 
             var request = {
                 type: Constants.AdministrationActionType.SET_SUPPORT_EMAIL_ADDRESS,
@@ -24912,12 +25130,6 @@ var Circuit = (function (circuit) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: exportUserData...');
 
-            if (!this.isExportUserDataSupported()) {
-                logger.warn('[ClientApiHandler]: The exportUserData operation is not supported by the backend');
-                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
-                return;
-            }
-
             var request = {
                 type: Constants.AdministrationActionType.EXPORT_DATA_USER,
                 exportDataUser: {
@@ -24936,12 +25148,6 @@ var Circuit = (function (circuit) {
         this.exportDomainData = function (exportData, cb, tenantContext) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: exportDomainData...');
-
-            if (!this.isExportUserDataSupported()) {
-                logger.warn('[ClientApiHandler]: The exportDomainData operation is not supported by the backend');
-                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
-                return;
-            }
 
             var request = {
                 type: Constants.AdministrationActionType.EXPORT_DATA_TENANT,
@@ -25138,10 +25344,15 @@ var Circuit = (function (circuit) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: connectToThirdParty ' + provider + '...');
 
+            if (!checkConceptboardSupport(provider, cb)) {
+                return;
+            }
+
             var request;
             switch (provider) {
             case Constants.ThirdPartyConnectorType.BOX:
             case Constants.ThirdPartyConnectorType.ZAPIER:
+            case Constants.ThirdPartyConnectorType.CONCEPTBOARD:
             case Constants.ThirdPartyConnectorType.SYNCPLICITY:
             case Constants.ThirdPartyConnectorType.GOOGLE_DRIVE:
             case Constants.ThirdPartyConnectorType.ONE_DRIVE:
@@ -25285,10 +25496,15 @@ var Circuit = (function (circuit) {
             cb = cb || NOP;
             logger.debug('[ClientApiHandler]: disconnectFromThirdParty ' + provider + '...');
 
+            if (!checkConceptboardSupport(provider, cb)) {
+                return;
+            }
+
             var request;
             switch (provider) {
             case Constants.ThirdPartyConnectorType.BOX:
             case Constants.ThirdPartyConnectorType.ZAPIER:
+            case Constants.ThirdPartyConnectorType.CONCEPTBOARD:
             case Constants.ThirdPartyConnectorType.OPEN_XCHANGE:
             case Constants.ThirdPartyConnectorType.SYNCPLICITY:
             case Constants.ThirdPartyConnectorType.GOOGLE_DRIVE:
@@ -27001,6 +27217,7 @@ var Circuit = (function (circuit) {
             };
             parsedEvent.servicesPermitted = parseServicesPermitted(data);
             parsedEvent.epid = parseEpid(data);
+            parsedEvent.pickupNotificationEarly = parsedEvent.device && parsedEvent.device.includes('Pickup Group Number');
             return parsedEvent;
         }
 
@@ -27043,6 +27260,7 @@ var Circuit = (function (circuit) {
             };
             parsedEvent.servicesPermitted = parseServicesPermitted(data);
             parsedEvent.epid = parseEpid(data);
+            parsedEvent.pickupNotificationTerminated = parsedEvent.releasingDevice && parsedEvent.releasingDevice.includes('Pickup Group Number');
             return parsedEvent;
         }
 
@@ -32702,7 +32920,7 @@ var Circuit = (function (circuit) {
         }
 
         function hasScreenControlFeature(call) {
-            return !!call && (($rootScope.circuitLabs.SCREEN_CONTROL && call.isDirect) || ($rootScope.circuitLabs.SCREEN_CONTROL_CONF && !call.isDirect));
+            return !!call && (call.isDirect || $rootScope.circuitLabs.SCREEN_CONTROL_CONF);
         }
 
         function removeCallFromList(call) {
@@ -35220,9 +35438,16 @@ var Circuit = (function (circuit) {
                         call: conversation.call
                     }
                 };
-                if (conversation.isTelephonyConv) {
-                    // For telephony calls, the userId is not sufficient, so send the whole user object to the NotificationSvc
-                    notification.user = conversation.call.peerUser;
+                if (conversation.isTelephonyConv && conversation.call.peerUser) {
+                    // For telephony calls, the userId should be the one resolved by lookup is any.
+                    notification.userId = conversation.call.peerUser.userId;
+                    if (!notification.userId) {
+                        // If not resolved provide user object to satisfy notification service.
+                        notification.user = conversation.call.peerUser;
+                    }
+                    // Original calling phone number may be overwritten in the user object
+                    notification.extras.phoneNumber = conversation.call.peerUser.phoneNumber;
+                    notification.extras.displayName = conversation.call.peerUser.displayName;
                 }
                 NotificationSvc.show(notification);
             }
@@ -35362,6 +35587,13 @@ var Circuit = (function (circuit) {
                         incomingCall.restartScreenControlSession = true;
                         incomingCall.screenControllerId = replaces.screenControllerId;
                     }
+                }
+                oldStream = replaces.sessionCtrl.getLocalStream(RtcSessionController.LOCAL_STREAMS.AUDIO_VIDEO);
+                if (oldStream) {
+                    LogSvc.debug('[CircuitCallControlSvc] Reusing audio/video stream from call ID=', replaces.callId);
+                    incomingCall.sessionCtrl.setLocalStream(RtcSessionController.LOCAL_STREAMS.AUDIO_VIDEO, oldStream);
+                    // Set old desktop stream to null so it won't be stopped by the old RtcSessionController
+                    replaces.sessionCtrl.setLocalStream(RtcSessionController.LOCAL_STREAMS.AUDIO_VIDEO, null);
                 }
             }
             if (_disableRemoteVideoByDefault) {
@@ -36220,8 +36452,6 @@ var Circuit = (function (circuit) {
                             LogSvc.debug('[CircuitCallControlSvc]: This is a mocked call');
                             localCall.setMockedCall();
                         }
-
-                        terminateReplacedCall(localCall);
 
                         localCall.setInstanceId(evt.instanceId);
                         // We also need to call setRemoteDescription for mock scenarios in order
@@ -39614,7 +39844,7 @@ var Circuit = (function (circuit) {
                 questionNumber: questionNumber,
                 allowedMediaTypes: [Constants.RealtimeMediaType.AUDIO]
             };
-            if (_that.isVideoForEventsSupported() && $rootScope.circuitLabs.VIDEO_FOR_EVENTS) {
+            if ($rootScope.circuitLabs.VIDEO_FOR_EVENTS) {
                 data.allowedMediaTypes.push(Constants.RealtimeMediaType.VIDEO);
             }
 
@@ -40192,8 +40422,6 @@ var Circuit = (function (circuit) {
             });
         };
 
-        this.isVideoForEventsSupported = _clientApiHandler.isVideoForEventsSupported;
-
         ///////////////////////////////////////////////////////////////////////////////////////
         // Public Factory Interface for Angular
         ///////////////////////////////////////////////////////////////////////////////////////
@@ -40571,7 +40799,9 @@ var Circuit = (function (circuit) {
         }
 
         function createJournalEntry(remoteCall) {
-            if ($rootScope.localUser.noCallLog) {
+            // If it's a pickupNotification call the $rootScope.localUser.noCallLog should always be true, but we need
+            // to add an extra check in case the OSV call log monitoring fails to be initiated
+            if ($rootScope.localUser.noCallLog || remoteCall.pickupNotification) {
                 return;
             }
             if (!remoteCall) {
@@ -41246,7 +41476,7 @@ var Circuit = (function (circuit) {
             // CallInformation usually updates the services permitted
             var callId = event.connection.cID;
             var call = null;
-            if (event.device && event.device.includes('Pickup Group Number')) {
+            if (event.pickupNotificationEarly) {
                 // This a Group Pickup notification
                 if (isMyDeviceId(event.connection.dID)) {
                     LogSvc.debug('[CstaSvc]: The pickup notification is for this user. Ignore it');
@@ -41397,6 +41627,11 @@ var Circuit = (function (circuit) {
 
             if (call) {
                 if (call.pickupNotification && call.isHandoverInProgress) {
+                    return;
+                }
+                if (event.pickupNotificationTerminated && isMyDeviceId(event.droppedConnection.dID)) {
+                    // This a Group Pickup notification terminated event
+                    LogSvc.debug('[CstaSvc]: The pickup notification terminated event is for this user. Ignore it');
                     return;
                 }
                 if (event.localConnectionInfo !== 'null') {
@@ -41715,8 +41950,8 @@ var Circuit = (function (circuit) {
         function copyDataFromMovingCall(call, callId) {
             if (_movingCall && _movingCall.newCallId === callId) {
                 call.direction = _movingCall.direction;
-                setRedirectingUser(call, _movingCall.redirectingUser.phoneNumber, _movingCall.redirectingUser.fqNumber,
-                    _movingCall.redirectingUser.displayName, _movingCall.redirectingUser.redirectionType);
+                call.setRedirectingUser(_movingCall.redirectingUser.phoneNumber, _movingCall.redirectingUser.fqNumber,
+                    _movingCall.redirectingUser.displayName, _movingCall.redirectingUser.userId, _movingCall.redirectingUser.redirectionType);
                 call.atcCallInfo.transferCb = _movingCall.transferCb;
                 delete _movingCall.transferCb;
                 _movingCall = {};
@@ -42786,7 +43021,8 @@ var Circuit = (function (circuit) {
                 if (_osmoData && _osmoData.cell && call.getPosition() !== Targets.Cell) {
                     devices.push(Targets.Cell);
                 }
-                if (_osmoData && _osmoData.vm && !call.pickupNotification) {
+                // Only add VM in the list if VM is active
+                if (_osmoData && _osmoData.vm && $rootScope.localUser.voicemailActive && !call.pickupNotification) {
                     devices.push(Targets.VM);
                 }
             }
@@ -45899,8 +46135,6 @@ var Circuit = (function (circuit) {
          */
         this.testCandidatesCollection = CircuitCallControlSvc.testCandidatesCollection;
 
-        this.isVideoForEventsSupported = CircuitCallControlSvc.isVideoForEventsSupported;
-
         ///////////////////////////////////////////////////////////////////////////////////////
         // Public Factory Interface for Angular
         ///////////////////////////////////////////////////////////////////////////////////////
@@ -47178,8 +47412,17 @@ var Circuit = (function (circuit) {
                 _accessToken = null;
                 _expiresAt = null;
                 storeToken();
-
+                // It's possible that the websocket is closed prior to receiving the response from the server,
+                // so make sure the promise is resolved in that case.
+                var revokePromise = window.setTimeout(function () {
+                    revokePromise = null;
+                    resolve();
+                }, 2000);
                 _clientApiHandler.revokeAccessToken(token, function (err) {
+                    if (!revokePromise) {
+                        return;
+                    }
+                    window.clearTimeout(revokePromise);
                     if (err === Constants.ReturnCode.DISCONNECTED || !apiError(err, reject)) {
                         resolve();
                     }
@@ -49520,7 +49763,7 @@ var Circuit = (function (circuit) {
             });
         }
 
-        function clearWhiteboard(callId, userId) {
+        function clearWhiteboard(callId, userId, preserveBackground) {
             return new Promise(function (resolve, reject) {
                 if (!callId) {
                     reject(new Circuit.Error(Constants.ReturnCode.MISSING_REQUIRED_PARAMETER, 'callId is required'));
@@ -49528,7 +49771,8 @@ var Circuit = (function (circuit) {
                 }
                 var data = {
                     rtcSessionId: callId,
-                    userId: userId || undefined
+                    userId: userId || undefined,
+                    preserveBackground: preserveBackground || undefined
                 };
                 _clientApiHandler.clearWhiteboard(data, function (err) {
                     if (apiError(err, reject)) { return; }
@@ -49555,7 +49799,7 @@ var Circuit = (function (circuit) {
             });
         }
 
-        function setWhiteboardBackground(callId, file, convId) {
+        function setWhiteboardBackground(callId, file) {
             return new Promise(function (resolve, reject) {
                 if (!callId) {
                     reject(new Circuit.Error(Constants.ReturnCode.MISSING_REQUIRED_PARAMETER, 'callId is required'));
@@ -49570,7 +49814,7 @@ var Circuit = (function (circuit) {
                     // Must scope FileUpload with circuit to allow node SDK to inject it's implementation
                     var fileUpload = new circuit.FileUpload(_config);
 
-                    fileUpload.uploadWhiteboardFile(file, callId, convId)
+                    fileUpload.uploadWhiteboardFile(file, callId)
                     .then(function (result) {
                         var data = {
                             rtcSessionId: callId,
@@ -52232,6 +52476,7 @@ var Circuit = (function (circuit) {
          * @method clearWhiteboard
          * @param {String} callId Call ID of the call.
          * @param {String} [userId] If set only elements of the given user are removed.
+         * @param {Boolean} [preserveBackground] If true the background will be preserved
          * @returns {Promise} A promise that is resolved when the action has completed.
          * @scope `CALLS` or `FULL`
          * @example
@@ -52257,7 +52502,6 @@ var Circuit = (function (circuit) {
          * @method setWhiteboardBackground
          * @param {String} callId Call ID of the call.
          * @param {File} file File object for background image.
-         * @param {String} convId Conversation ID.
          * @returns {Promise} A promise without data.
          * @scope `CALLS` or `FULL`
          * @example
