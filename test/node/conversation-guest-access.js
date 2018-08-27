@@ -10,7 +10,7 @@ Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
 let client;
 let user;
 let conversation;
-describe('Guest Access Tests', () => {
+describe('Conversation Guest Access Tests', () => {
     before(async () => {
         client = new Circuit.Client(config.bot1);
         user = await client.logon();
