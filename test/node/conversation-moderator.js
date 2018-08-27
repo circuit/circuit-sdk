@@ -12,7 +12,7 @@ let user;
 let client2;
 let user2;
 let conversation;
-describe('Moderator Tests', () => {
+describe('Conversation Moderator', () => {
     before(async () => {
         client = new Circuit.Client(config.bot1);
         user = await client.logon();

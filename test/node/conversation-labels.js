@@ -11,7 +11,7 @@ let client;
 let addedLabelsHT = {};
 let conversation;
 let LABEL_SUPPORTED;
-describe('Labels', () => {
+describe('Conversation Labels', () => {
     before(async () => {
         client = new Circuit.Client(config.bot1);
         await client.logon();
