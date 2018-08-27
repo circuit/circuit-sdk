@@ -41,7 +41,7 @@ describe('Conversation Topic Tests', () => {
         await client.logout();
     });
 
-    it('should retreive the specified number of topics', async () => {
+    it('should retrieve the specified number of topics', async () => {
         if (!client.getConversationTopics) {
             console.log('API not yet supported');
             assert(true);
@@ -51,7 +51,7 @@ describe('Conversation Topic Tests', () => {
         assert(res && res.length === 2);
     });
 
-    it('should NOT retreive the conversation topic', async () => {
+    it('should NOT retrieve the conversation topic using timestamp', async () => {
         if (!client.getConversationTopics) {
             console.log('API not yet supported');
             assert(true);
@@ -61,7 +61,7 @@ describe('Conversation Topic Tests', () => {
         assert(res && !res.some(topic => topic.parentItem.itemId === topic3.itemId) && res.some(topic => topic.parentItem.itemId === topic2.itemId) && res.some(topic => topic.parentItem.itemId === topic1.itemId));
     });
 
-    it('should retreive the conversation topic', async () => {
+    it('should retrieve the conversation topic using timestamp', async () => {
         if (!client.getConversationTopics) {
             console.log('API not yet supported');
             assert(true);
@@ -71,13 +71,13 @@ describe('Conversation Topic Tests', () => {
         assert(res && res.some(topic => topic.parentItem.itemId === topic3.itemId) && res.some(topic => topic.parentItem.itemId === topic2.itemId) && res.some(topic => topic.parentItem.itemId === topic1.itemId));
     });
 
-    it('should retreive the conversation topic', async () => {
+    it('should retrieve the conversation topics using no options', async () => {
         if (!client.getConversationTopics) {
             console.log('API not yet supported');
             assert(true);
             return;
         }
         const res = await client.getConversationTopics(conversation.convId);
-        assert(res && res.some(topic => topic.parentItem.itemId === topic1.itemId && topic.parentItem.text.subject === topic1.text.subject) && res.some(topic => (topic.parentItem.itemId === topic2.itemId && topic.parentItem.text.subject === topic2.text.subject) && (topic.lastItem.itemId === topic2Item.itemId && topic.lastItem.text.content === topic2Item.text.content)) && res.some(topic => topic.parentItem.itemId === topic3.itemId && topic.parentItem.text.subject === topic3.text.subject));
+        assert(res && res.some(topic => topic.parentItem.itemId === topic1.itemId) && res.some(topic => topic.parentItem.itemId === topic2.itemId && topic.lastItem.itemId === topic2Item.itemId) && res.some(topic => topic.parentItem.itemId === topic3.itemId));
     });
 });
