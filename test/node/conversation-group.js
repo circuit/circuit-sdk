@@ -11,7 +11,7 @@ let user;
 let client2;
 let user2;
 let conversation;
-describe('Group Conversation', () => {
+describe('Conversation Group', () => {
     before(async () => {
         client = new Circuit.Client(config.bot1);
         user = await client.logon();

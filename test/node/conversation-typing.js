@@ -13,7 +13,7 @@ let client2;
 let user2;
 let conversation;
 let item;
-describe('Subscribe to Typing Indicator', () => {
+describe('Conversation Subscribe to Typing Indicator', () => {
     before(async () => {
         client = new Circuit.Client(config.bot1);
         user = await client.logon();
