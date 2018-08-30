@@ -48,7 +48,7 @@ describe('Conversation Topic Tests', () => {
             return;
         }
         const res = await client.getConversationTopics(conversation.convId, {maxNumberOfTopics: 2});
-        assert(res && res.length === 2);
+        assert(res && res.conversationTopics.length === 2 && res.hasOlderTopics);
     });
 
     it('should NOT retrieve the conversation topic using timestamp', async () => {
@@ -58,7 +58,8 @@ describe('Conversation Topic Tests', () => {
             return;
         }
         const res = await client.getConversationTopics(conversation.convId, {timestamp: topic3.creationTime - 1});
-        assert(res && !res.some(topic => topic.parentItem.itemId === topic3.itemId) && res.some(topic => topic.parentItem.itemId === topic2.itemId) && res.some(topic => topic.parentItem.itemId === topic1.itemId));
+        const topics = res.conversationTopics;
+        assert(topics && !topics.some(topic => topic.parentItem.itemId === topic3.itemId) && topics.some(topic => topic.parentItem.itemId === topic2.itemId) && topics.some(topic => topic.parentItem.itemId === topic1.itemId));
     });
 
     it('should retrieve the conversation topic using timestamp', async () => {
@@ -68,7 +69,8 @@ describe('Conversation Topic Tests', () => {
             return;
         }
         const res = await client.getConversationTopics(conversation.convId, {timestamp: topic3.creationTime + 1});
-        assert(res && res.some(topic => topic.parentItem.itemId === topic3.itemId) && res.some(topic => topic.parentItem.itemId === topic2.itemId) && res.some(topic => topic.parentItem.itemId === topic1.itemId));
+        const topics = res.conversationTopics;
+        assert(topics && topics.some(topic => topic.parentItem.itemId === topic3.itemId) && topics.some(topic => topic.parentItem.itemId === topic2.itemId) && topics.some(topic => topic.parentItem.itemId === topic1.itemId));
     });
 
     it('should retrieve the conversation topics using no options', async () => {
@@ -78,6 +80,7 @@ describe('Conversation Topic Tests', () => {
             return;
         }
         const res = await client.getConversationTopics(conversation.convId);
-        assert(res && res.some(topic => topic.parentItem.itemId === topic1.itemId) && res.some(topic => topic.parentItem.itemId === topic2.itemId && topic.lastItem.itemId === topic2Item.itemId) && res.some(topic => topic.parentItem.itemId === topic3.itemId));
+        const topics = res.conversationTopics;
+        assert(topics && topics.some(topic => topic.parentItem.itemId === topic1.itemId) && topics.some(topic => topic.parentItem.itemId === topic2.itemId && topic.lastItem.itemId === topic2Item.itemId) && topics.some(topic => topic.parentItem.itemId === topic3.itemId));
     });
 });
