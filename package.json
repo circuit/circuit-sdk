@@ -1,6 +1,6 @@
 {
   "name": "circuit-sdk",
-  "version": "1.2.3704",
+  "version": "1.2.4101",
   "description": "Circuit SDK",
   "main": "circuit-node.js",
   "scripts": {
