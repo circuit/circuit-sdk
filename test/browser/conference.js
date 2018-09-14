@@ -5,13 +5,11 @@ import { expectEvents, updateRemoteVideos, sleep, logEvents } from '../helper.js
 import config from './config.js'
 
 const assert = chai.assert;
-
+let client;
+let peerUser1, peerUser2;
+let call;
 describe('Create group conversation and start conference call', async function() {
-    this.timeout(5000);
-
-    let client;
-    let peerUser1, peerUser2;
-    let call;
+    this.timeout(60000);
 
     before(async function() {
         Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
@@ -32,8 +30,8 @@ describe('Create group conversation and start conference call', async function()
     it('should create group conversation, start conference and get callStatus with callStateChanged:Initiated and callStateChanged:Waiting', async () => {
         const conversation = await client.createGroupConversation([peerUser1.userId, peerUser2.userId], 'SDK Test: Conference Call');
         assert(!!conversation, 'createGroupConversation not successful');
-        call = await client.startConference(conversation.convId, {audio: true, video: true});
-        await expectEvents(client, [{
+        call = await client.startConference(conversation.convId, {audio: false, video: false});
+        const res = await expectEvents(client, [{
             type: 'callStatus',
             predicate: evt => evt.call.state === Circuit.Enums.CallStateName.Initiated
         }, {
@@ -45,11 +43,11 @@ describe('Create group conversation and start conference call', async function()
     });
 
     it('should get callStatus event for remoteStreamUpdated and callStateChanged:Active upon users joining', async () => {
-        await sleep(500); // wait to make sure the call is ready to be joined
+        await sleep(5000); // wait to make sure the call is ready to be joined
         updateRemoteVideos(client);
-        await Promise.all([
-            peerUser1.exec('joinConference', call.callId, {audio: true, video: true}),
-            peerUser2.exec('joinConference', call.callId, {audio: true, video: false}),
+        const res = await Promise.all([
+            peerUser1.exec('joinConference', call.callId, {audio: false, video: false}),
+            peerUser2.exec('joinConference', call.callId, {audio: false, video: false}),
             expectEvents(client, [{
                 type: 'callStatus',
                 predicate: evt => evt.reason === 'callStateChanged' && evt.call.state === Circuit.Enums.CallStateName.Active
@@ -58,11 +56,13 @@ describe('Create group conversation and start conference call', async function()
                 predicate: evt => evt.reason === 'participantJoined'
             }])
         ]);
+        assert(res[2].call.callId === call.callId);
     });
 
     it('should end conference and get callEnded event', async () => {
         updateRemoteVideos(client);
-        await Promise.all([client.endConference(call.callId), expectEvents(client, ['callEnded'])]);
+        const res = await Promise.all([client.endConference(call.callId), expectEvents(client, ['callEnded'])]);
         document.querySelector('#localVideo').src = '';
+        assert(res[1].call.callId === call.callId);
     });
 });
