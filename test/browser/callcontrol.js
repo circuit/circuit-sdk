@@ -9,10 +9,10 @@ let client;
 let peerUser1, peerUser2;
 let call;
 describe('Call control tests', async function() {
-    this.timeout(600000);
+    this.timeout(300000);
 
     before(async function() {
-        await sleep(35000);
+        await sleep(25000);
         Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
         client = new Circuit.Client(config.config);
         const res = await Promise.all([PeerUser.create(), PeerUser.create(), client.logon(config.credentials)]);
@@ -43,7 +43,6 @@ describe('Call control tests', async function() {
     });
 
     after(async function() {
-        await client.endCall(call.callId);
         await Promise.all([peerUser1.destroy(), peerUser2.destroy(), client.logout()]);
     });
 
@@ -63,13 +62,17 @@ describe('Call control tests', async function() {
         assert(res.participants.some(user => user.userId === peerUser1.userId));
     });
 
+    it('should get all calls and verify it contains the active call', async () => {
+        const res = await peerUser1.exec('getCalls');
+        assert(res && res.some(c => c.callId === call.callId));
+    });
     // list of apis to test.
-    // leaveConference, , muteRtcSession, setAudioVideoStream,setMediaDevices
+    // , , muteRtcSession, setAudioVideoStream,setMediaDevices
     //toggleRemoteAudio callStatus
     // toggleRemoteVideo callStatus
     //toggleScreenShare
     // toggleVideo
-    // unmute . mute
+    //  . mute
     // addParticipantToCall . addParticipantToRtcSession . 
     // changeHDVideo
     // endCall .  .  . getActiveRemoteCalls
@@ -89,7 +92,6 @@ describe('Call control tests', async function() {
         // await peerUser1.exec('muteParticipant', call.callId, peerUser2.userId);
         // const res = await peerUser1.exec('findCall', call.callId);
         const res = await client.findCall(call.callId);
-        console.log('re', res);
         assert(res.participants.find(user => user.userId === peerUser2.userId).muted);
     });
 
@@ -102,29 +104,19 @@ describe('Call control tests', async function() {
     //     assert(res.participants && res.participants.every(user => user.muted));
     // });
 
-    it('should unmute the call', async () => {
-        // await peerUser1.exec('mute', call.callId);
+    it('should mute the call', async () => {
+        await peerUser1.exec('mute', call.callId);
         await sleep(6000);
-        const res = await client.findCall(call.callId);
-        console.log('reeeeee', res);
+        const res = await peerUser1.exec('findCall', call.callId);
         assert(res.locallyMuted);
     });
 
-    // it('should unmute the call', async () => {
-    //     await peerUser1.exec('unmute', call.callId);
-    //     await sleep(6000);
-    //     const res = await client.findCall(call.callId);
-    //     assert(!res.locallyMuted);
-    // });
-
-    // it('should mute the call', async () => {
-    //     console.log('begin');
-    //     await peerUser1.exec('mute', call.callId);
-    //     await sleep(6000);
-    //     const res = await client.findCall(call.callId);
-    //     console.log('asd', res);
-    //     assert(res.locallyMuted);
-    // });
+    it('should unmute the call', async () => {
+        await peerUser1.exec('unmute', call.callId);
+        await sleep(6000);
+        const res = await peerUser1.exec('findCall', call.callId);
+        assert(!res.locallyMuted);
+    });
 
     // it('should get the active remote call', async () => {
     //     const res = await peerUser1.exec('endCall', call.callId);
@@ -135,15 +127,38 @@ describe('Call control tests', async function() {
     //     assert(z.some(c => c.callId === call.callId));
     // });
 
-    it('should remove user 2 from call', async () => {
+    it('should drop user from call', async () => {
         await client.dropParticipant(call.callId, peerUser1.userId);
         await sleep(6000);
         const res = await client.findCall(call.callId);
         assert(!res.participants.some(user => user.userId === peerUser1.userId));
     });
 
+    it('should allow user to leave conference', async () => {
+        await peerUser2.exec('leaveConference', call.callId);
+        await sleep(6000);
+        const res = await client.findCall(call.callId);
+        assert(!res.participants.some(user => user.userId === peerUser2.userId));
+    });
 
-
+    // it('should add user to call with userId then leave conference', async () => {
+    //     await client.addParticipantToCall(call.callId, { userId: peerUser1.userId });
+    //     await sleep(6000);
+    //     const joins = await client.findCall(call.callId);
+    //     await peerUser2.exec('leaveConference', call.callId);
+    //     await sleep(6000);
+    //     const leaves = await client.findCall(call.callId);
+    //     console.log('joins', joins);
+    //     console.log('leaves', leaves);
+    // });
+    
+    it('should end call', async () => {
+        await client.endCall(call.callId);
+        await sleep(6000);
+        const res = await client.getCalls();
+        console.log('p', res);
+        assert(!res.some(c => c.callId === call.callId));
+    });
     // it('should mute the call', async () => {
     //     await peerUser1.exec('mute', call.callId);
     //     await sleep(6000);
