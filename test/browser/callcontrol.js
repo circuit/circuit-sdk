@@ -84,8 +84,11 @@ describe('Call control tests', async function() {
     });
 
     it('should mute participant', async () => {
-        await peerUser1.exec('muteParticipant', call.callId, peerUser2.userId);
-        const res = await peerUser1.exec('findCall', call.callId);
+        await client.muteParticipant(call.callId, peerUser2.userId);
+        await sleep(6000);
+        // await peerUser1.exec('muteParticipant', call.callId, peerUser2.userId);
+        // const res = await peerUser1.exec('findCall', call.callId);
+        const res = await client.findCall(call.callId);
         console.log('re', res);
         assert(res.participants.find(user => user.userId === peerUser2.userId).muted);
     });
@@ -100,7 +103,7 @@ describe('Call control tests', async function() {
     // });
 
     it('should unmute the call', async () => {
-        await peerUser1.exec('mute', call.callId);
+        // await peerUser1.exec('mute', call.callId);
         await sleep(6000);
         const res = await client.findCall(call.callId);
         console.log('reeeeee', res);
