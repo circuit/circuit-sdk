@@ -71,22 +71,22 @@ describe('Call control tests', async function() {
         assert(res && res.some(c => c.callId === call.callId));
     });
     
-    it('should record call and delete recording', async () => {
-        console.log('12345 go!');
-        await client.startRecording(call.callId);
-        await sleep(5000);
-        await client.stopRecording(call.callId);
-        await sleep(5000);
-        let items = await client.getConversationItems(call.convId);
-        items = items.reverse();
-        console.log('----', items);
-        const item = items.find(i => i.type === 'SYSTEM');
-        console.log('item', item);
-        await client.deleteRecording(item.itemId);
-        const res = await client.getConversationItems(call.convId);
-        console.log('rrrrrr', res);
-        assert(item && !res.some(i => i.itemId === item.itemId));
-    });
+    // it('should record call and delete recording', async () => {
+    //     console.log('12345 go!');
+    //     await client.startRecording(call.callId);
+    //     await sleep(5000);
+    //     await client.stopRecording(call.callId);
+    //     await sleep(5000);
+    //     let items = await client.getConversationItems(call.convId);
+    //     items = items.reverse();
+    //     console.log('----', items);
+    //     const item = items.find(i => i.type === 'SYSTEM');
+    //     console.log('item', item);
+    //     await client.deleteRecording(item.itemId);
+    //     const res = await client.getConversationItems(call.convId);
+    //     console.log('rrrrrr', res);
+    //     assert(item && !res.some(i => i.itemId === item.itemId));
+    // });
     // needs extention:
     // toggleScreenShare, getLocalScreenshareStream, setScreenshareStream
 
