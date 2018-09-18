@@ -16,7 +16,7 @@ describe('Video Sharing', async function() {
         client = new Circuit.Client(config.config);
         const res = await Promise.all([PeerUser.create(), client.logon(config.credentials)]);
         peerUser = res[0];
-        const conversation = await client.createGroupConversation([peerUser.userId, 'c2e5d330-5ea2-4f85-aba1-2c00dac2991a'], 'SDK Test: Conference Call');
+        const conversation = await client.createGroupConversation([peerUser.userId], 'SDK Test: Conference Call');
         call = await client.startConference(conversation.convId, {audio: true, video: false});
         await expectEvents(client, [{
             type: 'callStatus',
