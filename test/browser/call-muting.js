@@ -49,41 +49,31 @@ describe('Call Muting', async function() {
         client.removeAllListeners();
     });
 
-    it('should getLocalAudioVideoStream', async () => {
-        const r = await peerUser1.exec('getLocalAudioVideoStream');
-        console.log('r', r);
-        const res = await client.getLocalAudioVideoStream();
-        console.log('res', res);
-    });
-
     it('should mute participant', async () => {
-        await peerUser1.exec('muteParticipant', call.callId, peerUser2.userId);
-        await sleep(3000);
-        const res = await peerUser1.exec('findCall', call.callId);
-        console.log('---', res);
-        assert(res.participants.find(user => user.userId === peerUser2.userId).muted);
+        await client.muteParticipant(call.callId, peerUser2.userId);
+        await sleep(10000);
+        call = await client.findCall(call.callId);
+        assert(call.participants.find(user => user.userId === peerUser2.userId).muted);
     });
 
     it('should mute the call', async () => {
         await peerUser1.exec('mute', call.callId);
-        await sleep(3000);
+        await sleep(5000);
         const res = await peerUser1.exec('findCall', call.callId);
         assert(res.locallyMuted);
     });
 
     it('should unmute the call', async () => {
         await peerUser1.exec('unmute', call.callId);
-        await sleep(3000);
+        await sleep(5000);
         const res = await peerUser1.exec('findCall', call.callId);
         assert(!res.locallyMuted);
     });
 
     it('should mute the rtc session', async () => {
         await client.muteRtcSession(call.callId);
-        await sleep(3000);
-        const res = await client.findCall(call.callId);
-        console.log(res);
-        const user = await client.getLoggedOnUser();
-        assert(res.participants.find(u => u.userId === user.userId).muted);
+        await sleep(5000);
+        call = await client.findCall(call.callId);
+        assert(call.participants.every(user => user.muted));
     });
 });
