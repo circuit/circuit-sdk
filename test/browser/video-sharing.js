@@ -8,7 +8,7 @@ const assert = chai.assert;
 let client;
 let peerUser;
 let call;
-describe('Video sharing tests', async function() {
+describe('Video Sharing', async function() {
     this.timeout(300000);
 
     before(async function() {
