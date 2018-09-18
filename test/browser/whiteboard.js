@@ -12,7 +12,7 @@ let whiteboard;
 let condition = 'width="562.25537109375" x="356.74554443359375" y="170.75135803222656"'; // used to define element and verify in getWhiteboard
 let element = `<rect  circuit:creatorId="1" circuit:orderId="1" fill="#000000" fill-opacity="0" height="311.0114288330078" stroke="#000000" stroke-width="2" ${condition}/>`;
 describe('Whiteboard tests', async function() {
-    this.timeout(60000);
+    this.timeout(300000);
 
     before(async function() {
         Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
