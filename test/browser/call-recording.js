@@ -10,7 +10,7 @@ let peerUser;
 let call;
 let recording;
 describe('Call Recording', async function() {
-    this.timeout(60000);
+    this.timeout(300000);
 
     before(async function() {
         Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
