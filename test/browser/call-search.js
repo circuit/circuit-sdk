@@ -14,7 +14,7 @@ describe('Call Search', async function() {
     before(async function() {
         Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
         client = new Circuit.Client(config.config);
-        const res = await Promise.all([PeerUser.create(), PeerUser.create(), client.logon(config.credentials)]);
+        const res = await Promise.all([PeerUser.create(), client.logon(config.credentials)]);
         peerUser = res[0];
         const conversation = await client.createGroupConversation([peerUser.userId], 'SDK Test: Conference Call');
         call = await client.startConference(conversation.convId, {audio: true, video: false});
