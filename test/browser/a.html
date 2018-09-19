@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Mocha Tests</title>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="/node_modules/mocha/mocha.css">
+    <script src="/node_modules/mocha/mocha.js"></script>
+    <script src="/circuit.js"></script>
+    <style>
+      video { width: 400px }
+      #mocha { margin: 0; }
+    </style>
+  </head>
+  <body>
+    <div id="mocha"></div>
+    <script type="module">mocha.setup('bdd')</script>
+    <script type="module" src="/node_modules/chai/chai.js"></script>
+    <script type="module" src="/test/browser/a.js"></script>
+    <script type="module">mocha.run()</script>
+
+    <video id="localVideo" autoplay></video>
+    <video id="peerVideo0" autoplay></video>
+    <video id="peerVideo1" autoplay></video>
+    <audio autoplay></audio>
+  </body>
+</html>
