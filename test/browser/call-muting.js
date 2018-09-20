@@ -50,7 +50,7 @@ describe('Call Muting', async function() {
         client.removeAllListeners();
     });
 
-    it('should mute participant', async () => {
+    it('should mute participant and raise a callStatus event with reason: participantUpdated', async () => {
         await Promise.all([
             client.muteParticipant(call.callId, peerUser2.userId),
             expectEvents(client, [{
@@ -63,7 +63,7 @@ describe('Call Muting', async function() {
         assert(call.participants.find(user => user.userId === peerUser2.userId).muted);
     });
 
-    it('should mute the call', async () => {
+    it('should mute the call and raise a callStatus event with reason: activeSpeakerChanged', async () => {
         await Promise.all([
             peerUser1.exec('mute', call.callId),
             expectEvents(client, [{
@@ -76,7 +76,7 @@ describe('Call Muting', async function() {
         assert(res.locallyMuted);
     });
 
-    it('should unmute the call', async () => {
+    it('should unmute the call and raise a callStatus event with reason: activeSpeakerChanged', async () => {
         await Promise.all([
             peerUser1.exec('unmute', call.callId),
             expectEvents(client, [{
@@ -89,7 +89,7 @@ describe('Call Muting', async function() {
         assert(!res.locallyMuted);
     });
 
-    it('should mute the rtc session', async () => {
+    it('should mute the rtc session and raise a callStatus event with reason: participantUpdated', async () => {
         const res = await Promise.all([
             client.muteRtcSession(call.callId),
             expectEvents(client, [{
