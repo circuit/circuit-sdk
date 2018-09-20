@@ -47,10 +47,23 @@ describe('Call Recording', async function() {
         client.removeAllListeners();
     });
 
-    it('should start recording then end recording', async () => {
-        await client.startRecording(call.callId);
+    it('should start recording then end recording and reaise a callStatus event with reason: callRecording', async () => {
+        const r = await Promise.all([
+            client.startRecording(call.callId),
+            expectEvents(client, [{
+                type: 'callStatus',
+                predicate: evt => evt.reason === 'callRecording' && evt.call.recording.state === Circuit.Enums.RecordingInfoState.STARTED
+
+            }])
+        ]);
         await sleep(3000);
-        await client.stopRecording(call.callId);
+        const t = await Promise.all([
+            client.stopRecording(call.callId),
+            expectEvents(client, [{
+                type: 'callStatus',
+                predicate: evt => evt.reason === 'callRecording' && evt.call.recording.state === Circuit.Enums.RecordingInfoState.STOPPED
+            }])
+        ]);
         await Promise.all([
             client.leaveConference(call.callId),
             peerUser.exec('leaveConference', call.callId),
