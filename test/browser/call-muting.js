@@ -39,6 +39,7 @@ describe('Call Muting', async function() {
             }])
         ]);
         call = await client.findCall(call.callId);
+        await sleep(5000);
     });
 
     after(async function() {
@@ -50,28 +51,52 @@ describe('Call Muting', async function() {
     });
 
     it('should mute participant', async () => {
-        await client.muteParticipant(call.callId, peerUser2.userId);
-        await sleep(10000);
+        await Promise.all([
+            client.muteParticipant(call.callId, peerUser2.userId),
+            expectEvents(client, [{
+                type: 'callStatus',
+                predicate: evt => evt.reason === 'participantUpdated' && evt.participant.muted
+            }])
+        ]);
+        await sleep(5000);
         call = await client.findCall(call.callId);
         assert(call.participants.find(user => user.userId === peerUser2.userId).muted);
     });
 
     it('should mute the call', async () => {
-        await peerUser1.exec('mute', call.callId);
+        await Promise.all([
+            peerUser1.exec('mute', call.callId),
+            expectEvents(client, [{
+                type: 'callStatus',
+                predicate: evt => evt.reason === 'activeSpeakerChanged'
+            }])
+        ]);
         await sleep(5000);
         const res = await peerUser1.exec('findCall', call.callId);
         assert(res.locallyMuted);
     });
 
     it('should unmute the call', async () => {
-        await peerUser1.exec('unmute', call.callId);
+        await Promise.all([
+            peerUser1.exec('unmute', call.callId),
+            expectEvents(client, [{
+                type: 'callStatus',
+                predicate: evt => evt.reason === 'activeSpeakerChanged'
+            }])
+        ]);
         await sleep(5000);
         const res = await peerUser1.exec('findCall', call.callId);
         assert(!res.locallyMuted);
     });
 
     it('should mute the rtc session', async () => {
-        await client.muteRtcSession(call.callId);
+        const res = await Promise.all([
+            client.muteRtcSession(call.callId),
+            expectEvents(client, [{
+                type: 'callStatus',
+                predicate: evt => evt.reason === 'participantUpdated' && evt.participant.muted
+            }])
+        ]);
         await sleep(5000);
         call = await client.findCall(call.callId);
         assert(call.participants.every(user => user.muted));
