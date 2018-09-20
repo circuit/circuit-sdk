@@ -17,7 +17,7 @@ describe('Call Joining', async function() {
         const res = await Promise.all([PeerUser.create(), PeerUser.create(), client.logon(config.credentials)]);
         peerUser1 = res[0];
         peerUser2 = res[1];
-        const conversation = await client.createGroupConversation([peerUser1.userId, peerUser2.userId], 'SDK Test: Conference Call');
+        const conversation = await client.createGroupConversation([peerUser2.userId], 'SDK Test: Conference Call');
         call = await client.startConference(conversation.convId, {audio: true, video: false});
         await expectEvents(client, [{
             type: 'callStatus',
@@ -27,17 +27,6 @@ describe('Call Joining', async function() {
             predicate: evt => evt.call.state === Circuit.Enums.CallStateName.Waiting
         }]);
         await sleep(5000); // wait to make sure the call is ready to be joined
-        await Promise.all([
-            peerUser2.exec('joinConference', call.callId, {audio: true, video: false}),
-            expectEvents(client, [{
-                type: 'callStatus',
-                predicate: evt => evt.reason === 'callStateChanged' && evt.call.state === Circuit.Enums.CallStateName.Active
-            }, {
-                type: 'callStatus',
-                predicate: evt => evt.reason === 'participantJoined'
-            }])
-        ]);
-        call = await client.findCall(call.callId);
     });
 
     after(async function() {
@@ -48,11 +37,38 @@ describe('Call Joining', async function() {
         client.removeAllListeners();
     });
 
-    it('should get the call then add the other user', async () => {
-        await peerUser1.exec('joinConference', call.callId, {audio: true, video: false});
+    it('should add participant to call with addParticipantToCall and check they are a guest', async () => {
+        await client.addParticipantToCall(call.callId, { userId: peerUser1.userId });
+        await sleep(5000);
+        await Promise.all([
+            peerUser1.exec('answerCall', call.callId, {audio: false, video: false}),
+            expectEvents(client, [{
+                type: 'callStatus',
+                predicate: evt => evt.reason === 'callStateChanged' && evt.call.state === Circuit.Enums.CallStateName.Active
+            }, {
+                type: 'callStatus',
+                predicate: evt => evt.reason === 'participantJoined'
+            }])
+        ]);
         await sleep(5000);
         call = await client.findCall(call.callId);
-        assert(call.participants.some(user => user.userId === peerUser1.userId));
+        assert(call.participants.some(user => user.userId === peerUser1.userId && user.isMeetingGuest));
+    });
+
+    it('should allow other user to join the conference', async () => {
+        await Promise.all([
+            peerUser2.exec('joinConference', call.callId, {audio: true, video: false}),
+            expectEvents(client, [{
+                type: 'callStatus',
+                predicate: evt => evt.reason === 'callStateChanged' && evt.call.state === Circuit.Enums.CallStateName.Active
+            }, {
+                type: 'callStatus',
+                predicate: evt => evt.reason === 'participantJoined'
+            }])
+        ]);
+        await sleep(5000);
+        call = await client.findCall(call.callId);
+        assert(call.participants.some(user => user.userId === peerUser2.userId));
     });
 
     it('should get all calls and verify it contains the active call', async () => {
@@ -60,20 +76,63 @@ describe('Call Joining', async function() {
         assert(res && res.some(c => c.callId === call.callId));
     });
 
-    it('should drop user from call', async () => {
-        await client.dropParticipant(call.callId, peerUser1.userId);
-        await sleep(5000);
+    it('should drop user from call and raise a callStatus event with reason: participantRemoved', async () => {
+        await Promise.all([
+            client.dropParticipant(call.callId, peerUser1.userId),
+            expectEvents(client, [{
+                type: 'callStatus',
+                predicate: evt => evt.reason === 'participantRemoved'
+            }])
+        ]);
+        await sleep(3000);
         call = await client.findCall(call.callId);
         assert(!call.participants.some(user => user.userId === peerUser1.userId));
     });
 
-    it('should allow user to leave conference', async () => {
-        await peerUser2.exec('leaveConference', call.callId);
-        await sleep(5000);
+    it('should allow user to leave conference and raise a callStatus event with reason: participantRemoved', async () => {
+        await Promise.all([
+            peerUser2.exec('leaveConference', call.callId),
+            expectEvents(client, [{
+                type: 'callStatus',
+                predicate: evt => evt.reason === 'participantRemoved'
+            }])
+        ]);
+        await sleep(3000);
         call = await client.findCall(call.callId);
         assert(!call.participants.some(user => user.userId === peerUser2.userId));
     });
     
+    it('should add participant to call with addParticipant and check that they are NOT a guest', async () => {
+        await client.addParticipant(call.convId, [peerUser1.userId], true);
+        await sleep(5000);
+        await Promise.all([
+            peerUser1.exec('answerCall', call.callId, {audio: false, video: false}),
+            expectEvents(client, [{
+                type: 'callStatus',
+                predicate: evt => evt.reason === 'callStateChanged' && evt.call.state === Circuit.Enums.CallStateName.Active
+            }, {
+                type: 'callStatus',
+                predicate: evt => evt.reason === 'participantJoined'
+            }])
+        ]);
+        await sleep(5000);
+        call = await client.findCall(call.callId);
+        assert(call.participants.some(user => user.userId === peerUser1.userId && !user.isMeetingGuest));
+    });
+
+    it('should allow user to leave conference and raise a callStatus event with reason: participantRemoved', async () => {
+        await Promise.all([
+            peerUser1.exec('leaveConference', call.callId),
+            expectEvents(client, [{
+                type: 'callStatus',
+                predicate: evt => evt.reason === 'participantRemoved'
+            }])
+        ]);
+        await sleep(3000);
+        call = await client.findCall(call.callId);
+        assert(!call.participants.some(user => user.userId === peerUser1.userId));
+    });
+
     it('should end call', async () => {
         await client.endCall(call.callId);
         await sleep(6000);
