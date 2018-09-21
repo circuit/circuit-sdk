@@ -37,6 +37,11 @@ describe('Call Joining', async function() {
         client.removeAllListeners();
     });
 
+    it('should get started calls', async () => {
+        const res = await peerUser2.exec('getStartedCalls');
+        assert(res.some(c => c.callId === call.callId));
+    })
+
     it('should add participant to call with addParticipantToCall and check they are a guest', async () => {
         await client.addParticipantToCall(call.callId, { userId: peerUser1.userId });
         await sleep(5000);
