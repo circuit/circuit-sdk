@@ -8,11 +8,9 @@ const assert = chai.assert;
 let client;
 let peerUser;
 let call;
-let audioInputDevice;
-let audioOutputDevice;
-let videoInputDevice;
 let user;
-describe('Video Sharing', async function() {
+let stream;
+describe('Call Devices', async function() {
     this.timeout(300000);
 
     before(async function() {
@@ -49,31 +47,19 @@ describe('Video Sharing', async function() {
         client.removeAllListeners();
     });
 
-    it('should get media devices', async () => {
-        let mediaDevices = await navigator.mediaDevices.enumerateDevices();
-        videoInputDevice = mediaDevices.find(d => d.kind === 'videoinput');
-        audioInputDevice = mediaDevices.find(d => d.kind === 'audioinput');
-        audioOutputDevice = mediaDevices.find(d => d.kind === 'audiooutput');
-        assert(videoInputDevice && audioInputDevice && audioOutputDevice);
+    it('should check if browser is compatible', async () => {
+        const res = await Circuit.isCompatible();
+        assert(res);
     });
 
-    it('should mute mic', async () => {
-        if (!audioInputDevice) {
-            console.log('No audio input device found.');
-            assert(true);
-            return;
-        } 
-    });
-
-    it('should mute speaker', async () => {
-        if (!audioOutputDevice) {
-            console.log('No audio output device found.');
-            assert(true);
-            return;
-        } 
+    it('should get supported features', async () => {
+        const res = await Circuit.supportedFeatures();
+        assert(res.text && res.rtc);
     });
 
     it('should get max video resolution', async () => {
+        const mediaDevices = await navigator.mediaDevices.enumerateDevices();
+        const videoInputDevice = mediaDevices.find(d => d.kind === 'videoinput');
         if (!videoInputDevice) {
             console.log('No video input device found.');
             assert(true);
@@ -90,13 +76,91 @@ describe('Video Sharing', async function() {
 
     it('should get audio and video stats', async () => {
         const res = await client.getAudioVideoStats();
-        console.log('audio/vid', res.kind);
         assert(res);
     });    
     
     it('should get local audio and video stream', async () => {
-        const res = await client.getLocalAudioVideoStream();
-        console.log('stream', res.kind);
+        stream = await client.getLocalAudioVideoStream();
+        assert(stream);
+    });    
+    it('should get local audio and video stream', async () => {
+        await client.setAudioVideoStream(call.callId, stream);
+    });
+
+    it('should toggle remote audio OFF', async () => {
+        await sleep(5000);
+        await Promise.all([
+            client.toggleRemoteAudio(call.callId),
+            expectEvents(client, [{
+                type: 'callStatus',
+                predicate: evt => evt.reason === 'remoteStreamUpdated' && evt.call.remoteAudioDisabled
+            }])
+        ]);
+        call = await client.findCall(call.callId);
+        assert(call.remoteAudioDisabled);
+    });
+
+    it('should toggle remote audio ON', async () => {
+        await sleep(5000);
+        await Promise.all([
+            client.toggleRemoteAudio(call.callId),
+            expectEvents(client, [{
+                type: 'callStatus',
+                predicate: evt => evt.reason === 'remoteStreamUpdated' && !evt.call.remoteAudioDisabled
+            }])
+        ]);
+        call = await client.findCall(call.callId);
+        assert(!call.remoteAudioDisabled);
+    });
+
+    it('should get remote streams', async () => {
+        const res = await client.getRemoteStreams(call.callId);
         assert(res);
+    });
+
+    it('should toggle remote video OFF', async () => {
+        await sleep(5000);
+        await Promise.all([
+            client.toggleRemoteVideo(call.callId),
+            expectEvents(client, [{
+                type: 'callStatus',
+                predicate: evt => evt.reason === 'sdpConnected' && evt.call.remoteVideoDisabled
+            }])
+        ]);
+        call = await client.findCall(call.callId);
+        assert(call.remoteVideoDisabled);
+    });
+
+    it('should toggle remote video ON', async () => {
+        await sleep(5000);
+        await Promise.all([
+            client.toggleRemoteVideo(call.callId),
+            expectEvents(client, [{
+                type: 'callStatus',
+                predicate: evt => evt.reason === 'sdpConnected' && !evt.call.remoteVideoDisabled
+            }])
+        ]);
+        call = await client.findCall(call.callId);
+        assert(!call.remoteVideoDisabled);
+    });
+
+    it('should set media devices', async () => {
+        const  mediaDevices = await navigator.mediaDevices.enumerateDevices();
+        const videoInputDevice = mediaDevices.find(d => d.kind === 'videoinput');
+        const audioInputDevice = mediaDevices.find(d => d.kind === 'audioinput');
+        const audioOutputDevice = mediaDevices.find(d => d.kind === 'audiooutput');
+        let devices = {
+            recording: audioInputDevice.deviceId,
+            playback: audioOutputDevice.deviceId,
+            video: videoInputDevice.deviceId,
+            ringiing: audioOutputDevice.deviceId
+        }
+        await Promise.all([
+            client.setMediaDevices(devices),
+            expectEvents(client, [{
+                type: 'callStatus',
+                predicate: evt => evt.reason === 'callStateChanged'
+            }])
+        ]);
     });
 });
