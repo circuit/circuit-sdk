@@ -11,6 +11,7 @@ let call;
 let whiteboard;
 let condition = 'width="562.25537109375" x="356.74554443359375" y="170.75135803222656"'; // used to define element and verify in getWhiteboard
 let element = `<rect  circuit:creatorId="1" circuit:orderId="1" fill="#000000" fill-opacity="0" height="311.0114288330078" stroke="#000000" stroke-width="2" ${condition}/>`;
+let elementId;
 describe('Whiteboard tests', async function() {
     this.timeout(300000);
 
@@ -20,7 +21,7 @@ describe('Whiteboard tests', async function() {
         const res = await Promise.all([PeerUser.create(), PeerUser.create(), client.logon(config.credentials)]);
         peerUser1 = res[0];
         peerUser2 = res[1];
-        const conversation = await client.createGroupConversation([peerUser1.userId, peerUser2.userId], 'SDK Test: Conference Call');
+        const conversation = await client.createGroupConversation([peerUser1.userId, peerUser2.userId, 'c2e5d330-5ea2-4f85-aba1-2c00dac2991a'], 'SDK Test: Conference Call');
         call = await client.startConference(conversation.convId, {audio: true, video: true});
         await sleep(5000);
     });
@@ -52,6 +53,8 @@ describe('Whiteboard tests', async function() {
     });
 
     it('should add a whiteboard element', async () => {
+        // first element is for testing clearWhiteboard
+        await client.addWhiteboardElement(call.callId, `<rect  circuit:creatorId="1" circuit:orderId="1" fill="#000000" fill-opacity="0" height="1" stroke="#000000" stroke-width="2" width="1" x="1" y="1"/>`); 
         const res = await Promise.all([
             client.addWhiteboardElement(call.callId, element),
             expectEvents(client, [{
@@ -59,12 +62,70 @@ describe('Whiteboard tests', async function() {
                 predicate: evt => evt.action === 'added' && evt.element.xmlElement.includes(condition)
             }])
         ]);
+        elementId = res[1].element && res[1].element.elementId;
         assert(res[1].action === 'added' && res[1].element.xmlElement.includes(condition));
     });
 
     it('should get whiteboard with element', async () => {
         whiteboard = await client.getWhiteboard(call.callId);
-        assert(whiteboard.callId === call.callId && whiteboard.elements && whiteboard.elements.some(elm => elm.xmlElement.includes(condition)));
+        assert(whiteboard.elements && whiteboard.elements.some(elm => elm.elementId.xmlId === elementId.xmlId));
+    });
+
+    it('should remove whiteboard element', async () => {
+        await Promise.all([
+            client.removeWhiteboardElement(call.callId, elementId.xmlId),
+            expectEvents(client, [{
+                type: 'whiteboardElement',
+                predicate: evt => evt.action === 'removed' && evt.elementId.xmlId === elementId.xmlId
+            }])
+        ]);
+        whiteboard = await client.getWhiteboard(call.callId);
+        assert(!whiteboard.elements.some(elm => elm.elementId.xmlId === elementId.xmlId));
+    });
+
+    it('should undo the removed element', async () => {
+        const res = await Promise.all([
+            client.undoWhiteboard(call.callId, 1),
+            expectEvents(client, [{
+                type: 'whiteboardElement',
+                predicate: evt => evt.action === 'added' && evt.element.elementId.xmlId === elementId.xmlId
+            }])
+        ]);
+        whiteboard = await client.getWhiteboard(call.callId);
+        assert(whiteboard.elements.some(elm => elm.elementId.xmlId === elementId.xmlId));
+    });
+
+    it('should toggle whiteboard overlay ON', async () => {
+        const res = await Promise.all([
+            client.toggleWhiteboardOverlay(call.callId),
+            expectEvents(client, [{
+                type: 'whiteboardOverlayToggled'
+            }])
+        ]);
+        whiteboard = await client.getWhiteboard(call.callId);
+        assert(whiteboard.overlay);
+    });
+
+    it('should toggle whiteboard overlay OFF', async () => {
+        const res = await Promise.all([
+            client.toggleWhiteboardOverlay(call.callId),
+            expectEvents(client, [{
+                type: 'whiteboardOverlayToggled'
+            }])
+        ]);
+        whiteboard = await client.getWhiteboard(call.callId);
+        assert(!whiteboard.overlay);
+    });
+
+    it('should clear the whiteboard and raise a whiteboardCleared event', async () => {
+        await Promise.all([
+            client.clearWhiteboard(call.callId),
+            expectEvents(client, [{
+                type: 'whiteboardCleared'
+            }])
+        ]);
+        whiteboard = await client.getWhiteboard(call.callId);
+        assert(!whiteboard.elements);
     });
 
     it('should disable whiteboard', async () => {
