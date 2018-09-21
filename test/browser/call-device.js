@@ -6,17 +6,21 @@ import config from './config.js'
 
 const assert = chai.assert;
 let client;
-let peerUser;
+let peerUser, peerUser2;
 let call;
+let device;
+let user;
 describe('Video Sharing', async function() {
     this.timeout(300000);
 
     before(async function() {
         Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
         client = new Circuit.Client(config.config);
-        const res = await Promise.all([PeerUser.create(), client.logon(config.credentials)]);
+        const res = await Promise.all([PeerUser.create(), PeerUser.create(), client.logon(config.credentials)]);
         peerUser = res[0];
-        const conversation = await client.createGroupConversation([peerUser.userId], 'SDK Test: Conference Call');
+        peerUser2 = res[1];
+        user = res[2];
+        const conversation = await client.createGroupConversation([peerUser.userId, peerUser2.userId], 'SDK Test: Conference Call');
         call = await client.startConference(conversation.convId, {audio: true, video: false});
         await expectEvents(client, [{
             type: 'callStatus',
@@ -39,39 +43,32 @@ describe('Video Sharing', async function() {
     after(async function() {
         await peerUser.exec('endCall', call.callId);
         await client.endCall(call.callId);
-        await Promise.all([peerUser.destroy(), client.logout()]);
+        await Promise.all([peerUser.destroy(), peerUser2.destroy(), client.logout()]);
     });
 
     afterEach(async function() {
         client.removeAllListeners();
     });
 
+    it('should get started calls', async () => {
+        const res = await peerUser2.exec('getStartedCalls');
+        assert(res.some(c => c.callId === call.callId));
+    })
 
-    it('should toggle video on', async () => {
-        await client.toggleVideo(call.callId);
-        await sleep(3000);
-        call = await client.findCall(call.callId);
-        assert(call.localVideoUrl);
-    });
+    it('should get media devices and confirm the correct client', async () => {
+        const res = await client.getDevices();
+        assert(res.some(dev => dev.clientId === user.clientId));
+    })
 
-    it('should change hd video on', async () => {
-        await client.changeHDVideo(call.callId, true);
-        await sleep(3000);
-        call = await client.findCall(call.callId);
-        assert(call.localMediaType.hdVideo);
-    });
-
-    it('should change hd video off', async () => {
-        await client.changeHDVideo(call.callId, false);
-        await sleep(3000);
-        call = await client.findCall(call.callId);
-        assert(!call.localMediaType.hdVideo);
-    });
-
-    it('should toggle video off', async () => {
-        await client.toggleVideo(call.callId);
-        await sleep(3000);
-        call = await client.findCall(call.callId);
-        assert(!call.localVideoUrl);
+    it('should get audio and video stats', async () => {
+        const res = await client.getAudioVideoStats();
+        console.log('audio/vid', res.type);
+        assert(res);
+    });    
+    
+    it('should get local audio and video stream', async () => {
+        const res = await client.getLocalAudioVideoStream();
+        console.log('stats/vid', res.type);
+        assert(res);
     });
 });
