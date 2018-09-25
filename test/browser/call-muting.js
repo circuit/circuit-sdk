@@ -60,30 +60,24 @@ describe('Call Muting', async function() {
         ]);
     });
 
-    it('should mute the call and raise a callStatus event with reason: activeSpeakerChanged', async () => {
-        await Promise.all([
-            peerUser1.exec('mute', call.callId),
+    it('should mute the call and raise a callStatus event with reason: localUserSelfMuted', async () => {
+        const r = await Promise.all([
+            client.mute(call.callId),
             expectEvents(client, [{
                 type: 'callStatus',
-                predicate: evt => evt.reason === 'activeSpeakerChanged'
+                predicate: evt => evt.reason === 'localUserSelfMuted' && evt.call.callId === call.callId && evt.call.locallyMuted
             }])
         ]);
-        await sleep(3000);
-        const res = await peerUser1.exec('findCall', call.callId);
-        assert(res.locallyMuted);
     });
 
-    it('should unmute the call and raise a callStatus event with reason: activeSpeakerChanged', async () => {
-        await Promise.all([
-            peerUser1.exec('unmute', call.callId),
+    it('should unmute the call and raise a callStatus event with reason: localUserSelfUnmuted', async () => {
+        const r = await Promise.all([
+            client.unmute(call.callId),
             expectEvents(client, [{
                 type: 'callStatus',
-                predicate: evt => evt.reason === 'activeSpeakerChanged'
+                predicate: evt => evt.reason === 'localUserSelfUnmuted' && evt.call.callId === call.callId && !evt.call.locallyMuted
             }])
         ]);
-        await sleep(3000);
-        const res = await peerUser1.exec('findCall', call.callId);
-        assert(!res.locallyMuted);
     });
 
     it('should mute the rtc session and raise a callStatus event with reason: participantUpdated', async () => {
@@ -91,7 +85,7 @@ describe('Call Muting', async function() {
             client.muteRtcSession(call.callId),
             expectEvents(client, [{
                 type: 'callStatus',
-                predicate: evt => evt.reason === 'participantUpdated' && evt.participant.muted
+                predicate: evt => evt.reason === 'participantUpdated' && evt.call.callId === call.callId && evt.participant.muted
             }])
         ]);
         await sleep(3000);
