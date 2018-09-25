@@ -48,30 +48,42 @@ describe('Video Sharing', async function() {
 
 
     it('should toggle video on', async () => {
-        await client.toggleVideo(call.callId);
-        await sleep(3000);
-        call = await client.findCall(call.callId);
-        assert(call.localVideoUrl);
+        await Promise.all([
+            client.toggleVideo(call.callId),
+            expectEvents(client, [{
+                type: 'callStatus',
+                predicate: evt => evt.reason === 'callStateChanged' && evt.call.localVideoUrl.length
+            }])
+        ]);
     });
 
     it('should change hd video on', async () => {
-        await client.changeHDVideo(call.callId, true);
-        await sleep(3000);
-        call = await client.findCall(call.callId);
-        assert(call.localMediaType.hdVideo);
+        const res = await Promise.all([
+            client.changeHDVideo(call.callId, true),
+            expectEvents(client, [{
+                type: 'callStatus',
+                predicate: evt => evt.reason === 'sdpConnected' && evt.call.localMediaType.hdVideo
+            }])
+        ]);
     });
 
     it('should change hd video off', async () => {
-        await client.changeHDVideo(call.callId, false);
-        await sleep(3000);
-        call = await client.findCall(call.callId);
-        assert(!call.localMediaType.hdVideo);
+        const res = await Promise.all([
+            client.changeHDVideo(call.callId, false),
+            expectEvents(client, [{
+                type: 'callStatus',
+                predicate: evt => evt.reason === 'sdpConnected' && !evt.call.localMediaType.hdVideo
+            }])
+        ]);
     });
 
     it('should toggle video off', async () => {
-        await client.toggleVideo(call.callId);
-        await sleep(3000);
-        call = await client.findCall(call.callId);
-        assert(!call.localVideoUrl);
+        const res = await Promise.all([
+            client.toggleVideo(call.callId),
+            expectEvents(client, [{
+                type: 'callStatus',
+                predicate: evt => evt.reason === 'callStateChanged' && !evt.call.localVideoUrl.length
+            }])
+        ]);
     });
 });
