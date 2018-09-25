@@ -61,7 +61,7 @@ describe('Call Muting', async function() {
     });
 
     it('should mute the call and raise a callStatus event with reason: localUserSelfMuted', async () => {
-        const r = await Promise.all([
+        await Promise.all([
             client.mute(call.callId),
             expectEvents(client, [{
                 type: 'callStatus',
@@ -71,7 +71,7 @@ describe('Call Muting', async function() {
     });
 
     it('should unmute the call and raise a callStatus event with reason: localUserSelfUnmuted', async () => {
-        const r = await Promise.all([
+        await Promise.all([
             client.unmute(call.callId),
             expectEvents(client, [{
                 type: 'callStatus',
