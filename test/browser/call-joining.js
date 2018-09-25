@@ -118,9 +118,12 @@ describe('Call Joining', async function() {
     });
 
     it('should end call', async () => {
-        await client.endCall(call.callId);
-        await sleep(3000);
-        const res = await client.getCalls();
-        assert(!res.some(c => c.callId === call.callId));
+        await Promise.all([
+            client.endCall(call.callId),
+            expectEvents(client, [{
+                type: 'callStatus',
+                predicate: evt => evt.reason === 'callStateChanged' && evt.call.callId === call.callId && evt.call.state === 'Terminated'
+            }])
+        ]);
     });
 });
