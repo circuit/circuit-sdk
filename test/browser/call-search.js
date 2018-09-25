@@ -25,7 +25,7 @@ describe('Call Search', async function() {
             type: 'callStatus',
             predicate: evt => evt.call.state === Circuit.Enums.CallStateName.Waiting
         }]);
-        await sleep(5000); // wait to make sure the call is ready to be joined
+        await sleep(3000); // wait to make sure the call is ready to be joined
         await Promise.all([
             peerUser.exec('joinConference', call.callId, {audio: true, video: false}),
             expectEvents(client, [{
@@ -57,9 +57,9 @@ describe('Call Search', async function() {
         assert(res && res.some(c => c.callId === call.callId));
     });
 
-    it('should get the call containing the user', async () => {
+    it('find a call by its id', async () => {
         const res = await client.findCall(call.callId);
-        assert(res.participants.some(user => user.userId === peerUser.userId));
+        assert(res.callId === call.callId);
     });
 
     it('should get last rtp stats', async () => {
