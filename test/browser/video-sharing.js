@@ -58,7 +58,7 @@ describe('Video Sharing', async function() {
     });
 
     it('should change hd video on', async () => {
-        const res = await Promise.all([
+        await Promise.all([
             client.changeHDVideo(call.callId, true),
             expectEvents(client, [{
                 type: 'callStatus',
@@ -68,7 +68,7 @@ describe('Video Sharing', async function() {
     });
 
     it('should change hd video off', async () => {
-        const res = await Promise.all([
+        await Promise.all([
             client.changeHDVideo(call.callId, false),
             expectEvents(client, [{
                 type: 'callStatus',
@@ -78,7 +78,7 @@ describe('Video Sharing', async function() {
     });
 
     it('should toggle video off', async () => {
-        const res = await Promise.all([
+        await Promise.all([
             client.toggleVideo(call.callId),
             expectEvents(client, [{
                 type: 'callStatus',
