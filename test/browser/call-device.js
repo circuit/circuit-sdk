@@ -88,29 +88,23 @@ describe('Call Devices', async function() {
     });
 
     it('should toggle remote audio OFF', async () => {
-        await sleep(5000);
         await Promise.all([
             client.toggleRemoteAudio(call.callId),
             expectEvents(client, [{
                 type: 'callStatus',
-                predicate: evt => evt.reason === 'remoteStreamUpdated' && evt.call.remoteAudioDisabled
+                predicate: evt => evt.reason === 'remoteStreamUpdated' && evt.call.callId === call.callId && evt.call.remoteAudioDisabled
             }])
         ]);
-        call = await client.findCall(call.callId);
-        assert(call.remoteAudioDisabled);
     });
 
     it('should toggle remote audio ON', async () => {
-        await sleep(5000);
         await Promise.all([
             client.toggleRemoteAudio(call.callId),
             expectEvents(client, [{
                 type: 'callStatus',
-                predicate: evt => evt.reason === 'remoteStreamUpdated' && !evt.call.remoteAudioDisabled
+                predicate: evt => evt.reason === 'remoteStreamUpdated' && evt.call.callId === call.callId && !evt.call.remoteAudioDisabled
             }])
         ]);
-        call = await client.findCall(call.callId);
-        assert(!call.remoteAudioDisabled);
     });
 
     it('should get remote streams', async () => {
@@ -119,29 +113,23 @@ describe('Call Devices', async function() {
     });
 
     it('should toggle remote video OFF', async () => {
-        await sleep(5000);
         await Promise.all([
             client.toggleRemoteVideo(call.callId),
             expectEvents(client, [{
                 type: 'callStatus',
-                predicate: evt => evt.reason === 'sdpConnected' && evt.call.remoteVideoDisabled
+                predicate: evt => evt.reason === 'sdpConnected' && evt.call.callId === call.callId && evt.call.remoteVideoDisabled
             }])
         ]);
-        call = await client.findCall(call.callId);
-        assert(call.remoteVideoDisabled);
     });
 
     it('should toggle remote video ON', async () => {
-        await sleep(5000);
         await Promise.all([
             client.toggleRemoteVideo(call.callId),
             expectEvents(client, [{
                 type: 'callStatus',
-                predicate: evt => evt.reason === 'sdpConnected' && !evt.call.remoteVideoDisabled
+                predicate: evt => evt.reason === 'sdpConnected' && evt.call.callId === call.callId && !evt.call.remoteVideoDisabled
             }])
         ]);
-        call = await client.findCall(call.callId);
-        assert(!call.remoteVideoDisabled);
     });
 
     it('should set media devices', async () => {
@@ -155,11 +143,11 @@ describe('Call Devices', async function() {
             video: videoInputDevice.deviceId,
             ringiing: audioOutputDevice.deviceId
         }
-        await Promise.all([
+        const r = await Promise.all([
             client.setMediaDevices(devices),
             expectEvents(client, [{
                 type: 'callStatus',
-                predicate: evt => evt.reason === 'callStateChanged'
+                predicate: evt => evt.reason === 'callStateChanged' && evt.call.callId === call.callId
             }])
         ]);
     });
