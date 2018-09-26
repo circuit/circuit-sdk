@@ -1,7 +1,7 @@
 'use strict';
 
 import { PeerUser } from '../peer-user.js';
-import { expectEvents, updateRemoteVideos, sleep, logEvents } from '../helper.js';
+import { expectEvents, sleep } from '../helper.js';
 import config from './config.js'
 
 const assert = chai.assert;
@@ -37,8 +37,6 @@ describe('Video Sharing', async function() {
     });
 
     after(async function() {
-        await peerUser.exec('endCall', call.callId);
-        await client.endCall(call.callId);
         await Promise.all([peerUser.destroy(), client.logout()]);
     });
 
