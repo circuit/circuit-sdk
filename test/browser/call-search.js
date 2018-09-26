@@ -63,7 +63,7 @@ describe('Call Search', async function() {
     });
 
     it('should get last rtp stats', async () => {
-        await sleep(6000); // add pause to allow time for last stat collection interval
+        await sleep(6000); // add pause to allow time for last stat collection interval of 5 seconds
         const res = await client.getLastRtpStats(call.callId);
         assert(res.some(stat => stat.pcType === 'AUDIO/VIDEO'));
     });
