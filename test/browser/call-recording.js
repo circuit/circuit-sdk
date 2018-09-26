@@ -48,7 +48,7 @@ describe('Call Recording', async function() {
     });
 
     it('should start recording then end recording and reaise a callStatus event with reason: callRecording', async () => {
-        const r = await Promise.all([
+        await Promise.all([
             client.startRecording(call.callId),
             expectEvents(client, [{
                 type: 'callStatus',
@@ -56,14 +56,15 @@ describe('Call Recording', async function() {
 
             }])
         ]);
-        await sleep(3000);
-        const t = await Promise.all([
+        await sleep(3000); // allow 3 seconds for the recording time
+        await Promise.all([
             client.stopRecording(call.callId),
             expectEvents(client, [{
                 type: 'callStatus',
                 predicate: evt => evt.reason === 'callRecording' && evt.call.recording.state === Circuit.Enums.RecordingInfoState.STOPPED
             }])
         ]);
+        // user must end call before the recording appears
         await Promise.all([
             client.leaveConference(call.callId),
             peerUser.exec('leaveConference', call.callId),
@@ -79,11 +80,8 @@ describe('Call Recording', async function() {
             client.deleteRecording(recording.itemId),
             expectEvents(client, [{
                 type: 'itemUpdated',
-                predicate: evt => evt.item.itemId === recording.itemId && evt.item.rtc
+                predicate: evt => evt.item.itemId === recording.itemId && evt.item.rtc.type === Circuit.Enums.RTCItemType.ENDED
             }]) 
         ]);
-        await sleep(3000);
-        const res = await client.getConversationItems(call.convId);
-        assert(res.find(item  => item.itemId === recording.itemId).rtc.type === Circuit.Enums.RTCItemType.ENDED);
     });
 });
