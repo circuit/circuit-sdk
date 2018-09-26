@@ -84,19 +84,17 @@ describe('Whiteboard tests', async function() {
     });
 
     it('should undo the removed element', async () => {
-        const res = await Promise.all([
+        await Promise.all([
             client.undoWhiteboard(call.callId, 1),
             expectEvents(client, [{
                 type: 'whiteboardElement',
                 predicate: evt => evt.action === 'added' && evt.element.elementId.xmlId === elementId.xmlId
             }])
         ]);
-        whiteboard = await client.getWhiteboard(call.callId);
-        assert(whiteboard.elements.some(elm => elm.elementId.xmlId === elementId.xmlId));
     });
 
     it('should toggle whiteboard overlay ON', async () => {
-        const res = await Promise.all([
+        await Promise.all([
             client.toggleWhiteboardOverlay(call.callId),
             expectEvents(client, [{
                 type: 'whiteboardOverlayToggled'
@@ -107,7 +105,7 @@ describe('Whiteboard tests', async function() {
     });
 
     it('should toggle whiteboard overlay OFF', async () => {
-        const res = await Promise.all([
+        await Promise.all([
             client.toggleWhiteboardOverlay(call.callId),
             expectEvents(client, [{
                 type: 'whiteboardOverlayToggled'
@@ -129,13 +127,12 @@ describe('Whiteboard tests', async function() {
     });
 
     it('should disable whiteboard', async () => {
-        const res = await Promise.all([
+        await Promise.all([
             client.disableWhiteboard(call.callId),
             expectEvents(client, [{
                 type: 'whiteboardEnabled',
                 predicate: evt => !evt.enabled
             }])
         ]);
-        assert(!res[1].enabled);
     });
 });
