@@ -50,7 +50,7 @@ describe('Call Joining', async function() {
                 predicate: evt => evt.reason === 'participantAdded' && evt.call.callId === call.callId && evt.participant.userId === peerUser1.userId
             }])
         ]);
-        await sleep(3000);
+        await sleep(3000); // wait to allow time so the participant can answer the call
         await Promise.all([
             peerUser1.exec('answerCall', call.callId, {audio: false, video: false}),
             expectEvents(client, [{
@@ -97,7 +97,7 @@ describe('Call Joining', async function() {
     
     it('should add participant to call with addParticipant and check that they are NOT a guest', async () => {
         await client.addParticipant(call.convId, [peerUser1.userId], true);
-        await sleep(3000);
+        await sleep(3000); // wait to allow time so the participant can answer the call
         await Promise.all([
             peerUser1.exec('answerCall', call.callId, {audio: false, video: false}),
             expectEvents(client, [{
