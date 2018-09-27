@@ -47,7 +47,7 @@ describe('Call Recording', async function() {
         client.removeAllListeners();
     });
 
-    it('should start recording then end recording and reaise a callStatus event with reason: callRecording', async () => {
+    it('functions: [startRecording, stopRecording], raises event: callStatus with reason: callRecording', async () => {
         await Promise.all([
             client.startRecording(call.callId),
             expectEvents(client, [{
@@ -75,7 +75,7 @@ describe('Call Recording', async function() {
         assert(recording);
     });
 
-    it('should delete the recording', async () => {
+    it('function: deleteRecording, raises event: itemUpdated', async () => {
         await Promise.all([
             client.deleteRecording(recording.itemId),
             expectEvents(client, [{
