@@ -17,7 +17,7 @@ describe('Call Muting', async function() {
         const res = await Promise.all([PeerUser.create(), PeerUser.create(), client.logon(config.credentials)]);
         peerUser1 = res[0];
         peerUser2 = res[1];
-        const conversation = await client.createGroupConversation([peerUser1.userId, peerUser2.userId], 'SDK Test: Conference Call');
+        const conversation = await client.createGroupConversation([peerUser1.userId, peerUser2.userId], 'SDK Test: Call Muting');
         call = await client.startConference(conversation.convId, {audio: true, video: false});
         await expectEvents(client, [{
             type: 'callStatus',
@@ -50,7 +50,7 @@ describe('Call Muting', async function() {
         client.removeAllListeners();
     });
 
-    it('should mute participant and raise a callStatus event with reason: participantUpdated', async () => {
+    it('function: muteParticipant, raises event: callStatus with reason: participantUpdated', async () => {
         await Promise.all([
             client.muteParticipant(call.callId, peerUser2.userId),
             expectEvents(client, [{
@@ -60,7 +60,7 @@ describe('Call Muting', async function() {
         ]);
     });
 
-    it('should mute the call and raise a callStatus event with reason: localUserSelfMuted', async () => {
+    it('function: mute, raises event: callStatus with reason: localUserSelfMuted', async () => {
         await Promise.all([
             client.mute(call.callId),
             expectEvents(client, [{
@@ -70,7 +70,7 @@ describe('Call Muting', async function() {
         ]);
     });
 
-    it('should unmute the call and raise a callStatus event with reason: localUserSelfUnmuted', async () => {
+    it('function: unmute, raises event: callStatus with reason: localUserSelfUnmuted', async () => {
         await Promise.all([
             client.unmute(call.callId),
             expectEvents(client, [{
@@ -80,7 +80,7 @@ describe('Call Muting', async function() {
         ]);
     });
 
-    it('should mute the rtc session and raise a callStatus event with reason: participantUpdated', async () => {
+    it('function: muteRtcSession, raises event: callStatus with reason: participantUpdated', async () => {
         await Promise.all([
             client.muteRtcSession(call.callId),
             expectEvents(client, [{
@@ -88,7 +88,7 @@ describe('Call Muting', async function() {
                 predicate: evt => evt.reason === 'participantUpdated' && evt.call.callId === call.callId && evt.participant.muted
             }])
         ]);
-        await sleep(3000);
+        await sleep(3000); // wait 3 seconds to allow the other users to be muted
         call = await client.findCall(call.callId);
         assert(call.participants.every(user => user.muted));
     });
