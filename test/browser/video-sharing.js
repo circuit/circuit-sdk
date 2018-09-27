@@ -16,7 +16,7 @@ describe('Video Sharing', async function() {
         client = new Circuit.Client(config.config);
         const res = await Promise.all([PeerUser.create(), client.logon(config.credentials)]);
         peerUser = res[0];
-        const conversation = await client.createGroupConversation([peerUser.userId], 'SDK Test: Conference Call');
+        const conversation = await client.createGroupConversation([peerUser.userId], 'SDK Test: Video Sharing');
         call = await client.startConference(conversation.convId, {audio: true, video: false});
         await expectEvents(client, [{
             type: 'callStatus',
@@ -45,7 +45,7 @@ describe('Video Sharing', async function() {
     });
 
 
-    it('should toggle video on', async () => {
+    it('function: toggleVideo [ON], raises event: callStatus with reason: callStateChanged', async () => {
         await Promise.all([
             client.toggleVideo(call.callId),
             expectEvents(client, [{
@@ -55,7 +55,7 @@ describe('Video Sharing', async function() {
         ]);
     });
 
-    it('should change hd video on', async () => {
+    it('function: changeHDVideo [ON], raises event: callStatus with reason: sdpConnected', async () => {
         await Promise.all([
             client.changeHDVideo(call.callId, true),
             expectEvents(client, [{
@@ -65,7 +65,7 @@ describe('Video Sharing', async function() {
         ]);
     });
 
-    it('should change hd video off', async () => {
+    it('function: changeHDVideo [OFF], raises event: callStatus with reason: sdpConnected', async () => {
         await Promise.all([
             client.changeHDVideo(call.callId, false),
             expectEvents(client, [{
@@ -75,7 +75,7 @@ describe('Video Sharing', async function() {
         ]);
     });
 
-    it('should toggle video off', async () => {
+    it('function: toggleVideo [OFF], raises event: callStatus with reason: callStateChanged', async () => {
         await Promise.all([
             client.toggleVideo(call.callId),
             expectEvents(client, [{
