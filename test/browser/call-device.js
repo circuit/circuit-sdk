@@ -19,7 +19,7 @@ describe('Call Devices', async function() {
         const res = await Promise.all([PeerUser.create(), client.logon(config.credentials)]);
         peerUser = res[0];
         user = res[1];
-        const conversation = await client.createGroupConversation([peerUser.userId], 'SDK Test: Conference Call');
+        const conversation = await client.createGroupConversation([peerUser.userId], 'SDK Test: Call Devices');
         call = await client.startConference(conversation.convId, {audio: true, video: false});
         await expectEvents(client, [{
             type: 'callStatus',
@@ -143,7 +143,7 @@ describe('Call Devices', async function() {
             video: videoInputDevice.deviceId,
             ringiing: audioOutputDevice.deviceId
         }
-        const r = await Promise.all([
+        await Promise.all([
             client.setMediaDevices(devices),
             expectEvents(client, [{
                 type: 'callStatus',
