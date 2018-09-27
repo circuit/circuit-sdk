@@ -17,7 +17,7 @@ describe('Call Joining', async function() {
         const res = await Promise.all([PeerUser.create(), PeerUser.create(), client.logon(config.credentials)]);
         peerUser1 = res[0];
         peerUser2 = res[1];
-        const conversation = await client.createGroupConversation([peerUser2.userId], 'SDK Test: Conference Call');
+        const conversation = await client.createGroupConversation([peerUser2.userId], 'SDK Test: Call Joining');
         call = await client.startConference(conversation.convId, {audio: true, video: false});
         await expectEvents(client, [{
             type: 'callStatus',
@@ -37,12 +37,12 @@ describe('Call Joining', async function() {
         client.removeAllListeners();
     });
 
-    it('should get started calls', async () => {
+    it('function: getStartedCalls', async () => {
         const res = await peerUser2.exec('getStartedCalls');
         assert(res.some(c => c.callId === call.callId));
     })
 
-    it('should add participant to call with addParticipantToCall and check they are a guest', async () => {
+    it('function: addParticipantToCall, raises event: callStatus with reason: participantAdded', async () => {
         await Promise.all([
             client.addParticipantToCall(call.callId, { userId: peerUser1.userId }),
             expectEvents(client, [{
@@ -60,7 +60,7 @@ describe('Call Joining', async function() {
         ]);
     });
 
-    it('should allow other user to join the conference', async () => {
+    it('function: joinConference, raises event: callStatus with reason: participantJoined', async () => {
         await Promise.all([
             peerUser2.exec('joinConference', call.callId, {audio: true, video: false}),
             expectEvents(client, [{
@@ -70,12 +70,12 @@ describe('Call Joining', async function() {
         ]);
     });
 
-    it('should get all calls and verify it contains the active call', async () => {
+    it('function: getCalls', async () => {
         const res = await peerUser1.exec('getCalls');
         assert(res && res.some(c => c.callId === call.callId));
     });
 
-    it('should drop user from call and raise a callStatus event with reason: participantRemoved', async () => {
+    it('function: dropParticipant, raises event: callStatus with reason: participantRemoved', async () => {
         await Promise.all([
             client.dropParticipant(call.callId, peerUser1.userId),
             expectEvents(client, [{
@@ -85,7 +85,7 @@ describe('Call Joining', async function() {
         ]);
     });
 
-    it('should allow user to leave conference and raise a callStatus event with reason: participantRemoved', async () => {
+    it('function: leaveConference, raises event: callStatus with reason: participantRemoved', async () => {
         await Promise.all([
             peerUser2.exec('leaveConference', call.callId),
             expectEvents(client, [{
@@ -95,7 +95,7 @@ describe('Call Joining', async function() {
         ]);
     });
     
-    it('should add participant to call with addParticipant and check that they are NOT a guest', async () => {
+    it('function: addParticipant, raises event: callStatus with reason: participantJoined', async () => {
         await client.addParticipant(call.convId, [peerUser1.userId], true);
         await sleep(3000); // wait to allow time so the participant can answer the call
         await Promise.all([
@@ -107,7 +107,7 @@ describe('Call Joining', async function() {
         ]);
     });
 
-    it('should allow user to leave conference and raise a callStatus event with reason: participantRemoved', async () => {
+    it('function: leaveConference, raises event: callStatus with reason: participantRemoved', async () => {
         await Promise.all([
             peerUser1.exec('leaveConference', call.callId),
             expectEvents(client, [{
@@ -117,7 +117,7 @@ describe('Call Joining', async function() {
         ]);
     });
 
-    it('should end call', async () => {
+    it('function: endCall, raises event: callStatus with reason: callStateChanged', async () => {
         await Promise.all([
             client.endCall(call.callId),
             expectEvents(client, [{
