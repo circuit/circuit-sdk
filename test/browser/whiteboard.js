@@ -35,7 +35,7 @@ describe('Whiteboard tests', async function() {
         client.removeAllListeners();
     });
 
-    it('should enable whiteboard element', async () => {
+    it('function: enableWhiteboard, raises event: whiteboardEnabled', async () => {
         const res = await Promise.all([
             client.enableWhiteboard(call.callId, {width: 800, height: 400}),
             expectEvents(client, [{
@@ -47,12 +47,12 @@ describe('Whiteboard tests', async function() {
         assert(whiteboard && res[1].enabled);
     });
 
-    it('should get whiteboard', async () => {
+    it('function: getWhiteboard', async () => {
         whiteboard = await client.getWhiteboard(call.callId);
         assert(whiteboard.callId === call.callId && whiteboard.viewbox.width === 800 && whiteboard.viewbox.height === 400 && !whiteboard.background && !whiteboard.background);
     });
 
-    it('should add a whiteboard element', async () => {
+    it('function: addWhiteboardElement, raises event: whiteboardElement', async () => {
         // first element is for testing clearWhiteboard
         await client.addWhiteboardElement(call.callId, `<rect  circuit:creatorId="1" circuit:orderId="1" fill="#000000" fill-opacity="0" height="1" stroke="#000000" stroke-width="2" width="1" x="1" y="1"/>`); 
         const res = await Promise.all([
@@ -66,12 +66,12 @@ describe('Whiteboard tests', async function() {
         assert(res[1].action === 'added' && res[1].element.xmlElement.includes(condition));
     });
 
-    it('should get whiteboard with element', async () => {
+    it('function: getWhiteboard, verifies element', async () => {
         whiteboard = await client.getWhiteboard(call.callId);
         assert(whiteboard.elements && whiteboard.elements.some(elm => elm.elementId.xmlId === elementId.xmlId));
     });
 
-    it('should remove whiteboard element', async () => {
+    it('function: removeWhiteboardElement, raises event: whiteboardElement', async () => {
         await Promise.all([
             client.removeWhiteboardElement(call.callId, elementId.xmlId),
             expectEvents(client, [{
@@ -83,7 +83,7 @@ describe('Whiteboard tests', async function() {
         assert(!whiteboard.elements.some(elm => elm.elementId.xmlId === elementId.xmlId));
     });
 
-    it('should undo the removed element', async () => {
+    it('function: undoWhiteboard, raises event: whiteboardElement', async () => {
         await Promise.all([
             client.undoWhiteboard(call.callId, 1),
             expectEvents(client, [{
@@ -93,7 +93,7 @@ describe('Whiteboard tests', async function() {
         ]);
     });
 
-    it('should toggle whiteboard overlay ON', async () => {
+    it('function: toggleWhiteboardOverlay [ON], raises event: whiteboardOverlayToggled', async () => {
         await Promise.all([
             client.toggleWhiteboardOverlay(call.callId),
             expectEvents(client, [{
@@ -104,7 +104,7 @@ describe('Whiteboard tests', async function() {
         assert(whiteboard.overlay);
     });
 
-    it('should toggle whiteboard overlay OFF', async () => {
+    it('function: toggleWhiteboardOverlay [OFF], raises event: whiteboardOverlayToggled', async () => {
         await Promise.all([
             client.toggleWhiteboardOverlay(call.callId),
             expectEvents(client, [{
@@ -115,7 +115,7 @@ describe('Whiteboard tests', async function() {
         assert(!whiteboard.overlay);
     });
 
-    it('should clear the whiteboard and raise a whiteboardCleared event', async () => {
+    it('function: clearWhiteboard, raises event: whiteboardCleared', async () => {
         await Promise.all([
             client.clearWhiteboard(call.callId),
             expectEvents(client, [{
@@ -126,7 +126,7 @@ describe('Whiteboard tests', async function() {
         assert(!whiteboard.elements);
     });
 
-    it('should disable whiteboard', async () => {
+    it('function: disableWhiteboard, raises event: whiteboardEnabled', async () => {
         await Promise.all([
             client.disableWhiteboard(call.callId),
             expectEvents(client, [{
