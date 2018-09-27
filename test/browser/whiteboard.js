@@ -21,7 +21,7 @@ describe('Whiteboard tests', async function() {
         const res = await Promise.all([PeerUser.create(), PeerUser.create(), client.logon(config.credentials)]);
         peerUser1 = res[0];
         peerUser2 = res[1];
-        const conversation = await client.createGroupConversation([peerUser1.userId, peerUser2.userId], 'SDK Test: Conference Call');
+        const conversation = await client.createGroupConversation([peerUser1.userId, peerUser2.userId], 'SDK Test: Whiteboard');
         call = await client.startConference(conversation.convId, {audio: true, video: true});
         await sleep(5000);
     });
@@ -35,7 +35,7 @@ describe('Whiteboard tests', async function() {
         client.removeAllListeners();
     });
 
-    it('Should enable whiteboard element', async () => {
+    it('should enable whiteboard element', async () => {
         const res = await Promise.all([
             client.enableWhiteboard(call.callId, {width: 800, height: 400}),
             expectEvents(client, [{
