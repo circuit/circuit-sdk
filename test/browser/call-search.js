@@ -16,7 +16,7 @@ describe('Call Search', async function() {
         client = new Circuit.Client(config.config);
         const res = await Promise.all([PeerUser.create(), client.logon(config.credentials)]);
         peerUser = res[0];
-        const conversation = await client.createGroupConversation([peerUser.userId], 'SDK Test: Conference Call');
+        const conversation = await client.createGroupConversation([peerUser.userId], 'SDK Test: Call Search');
         call = await client.startConference(conversation.convId, {audio: true, video: false});
         await expectEvents(client, [{
             type: 'callStatus',
@@ -47,22 +47,22 @@ describe('Call Search', async function() {
         client.removeAllListeners();
     });
 
-    it('should get the active call', async () => {
+    it('function: getActiveCall', async () => {
         const res = await client.getActiveCall();
         assert(res.callId === call.callId);
     });
 
-    it('should get all calls and verify it contains the active call', async () => {
+    it('function: getCalls', async () => {
         const res = await client.getCalls();
         assert(res && res.some(c => c.callId === call.callId));
     });
 
-    it('find a call by its id', async () => {
+    it('function: findCall', async () => {
         const res = await client.findCall(call.callId);
         assert(res.callId === call.callId);
     });
 
-    it('should get last rtp stats', async () => {
+    it('function: getLastRtpStats', async () => {
         await sleep(6000); // add pause to allow time for last stat collection interval of 5 seconds
         const res = await client.getLastRtpStats(call.callId);
         assert(res.some(stat => stat.pcType === 'AUDIO/VIDEO'));
