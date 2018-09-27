@@ -17,7 +17,7 @@ describe('Call Recording', async function() {
         client = new Circuit.Client(config.config);
         const res = await Promise.all([PeerUser.create(), client.logon(config.credentials)]);
         peerUser = res[0];
-        const conversation = await client.createGroupConversation([peerUser.userId], 'SDK Test: Conference Call');
+        const conversation = await client.createGroupConversation([peerUser.userId], 'SDK Test: Call Recording');
         call = await client.startConference(conversation.convId, {audio: false, video: false});
         await expectEvents(client, [{
             type: 'callStatus',
