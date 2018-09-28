@@ -75,8 +75,10 @@ describe('Call Devices', async function() {
     });
 
     it('function: getAudioVideoStats', async () => {
+        let flag = false; // flag used to check if one of the audio/video stats is a stream
         const res = await client.getAudioVideoStats();
-        assert(res.some(stat => stat.type === 'codec'));
+        res.forEach(stat => stat.type === 'stream' ? flag = true : false);
+        assert(flag);
     });    
     
     it('function: getLocalAudioVideoStream', async () => {
