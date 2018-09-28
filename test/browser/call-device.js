@@ -76,7 +76,7 @@ describe('Call Devices', async function() {
 
     it('function: getAudioVideoStats', async () => {
         const res = await client.getAudioVideoStats();
-        assert(res);
+        assert(res.some(stat => stat.type === 'codec'));
     });    
     
     it('function: getLocalAudioVideoStream', async () => {
