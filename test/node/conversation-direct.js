@@ -2,8 +2,7 @@
 
 const assert = require('assert');
 const Circuit = require('../../circuit-node');
-const config = require('./config.json');
-const helper = require('./helper');
+const prep = require('../preparation');
 Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
 
 let client;
@@ -13,29 +12,24 @@ let user2;
 let conversation;
 describe('Conversation Direct', () => {
     before(async () => {
-        client = new Circuit.Client(config.bot1);
-        user = await client.logon();
-        client2 = new Circuit.Client(config.bot2);
-        user2 = await client2.logon();
+        client = prep.client;
+        user = client.loggedOnUser;
+        client2 = prep.client2;
+        user2 = client2.loggedOnUser;
     });
 
-    after(async () => {
-        await client.logout();
-        await client2.logout();
-    });
-
-    it('should create a direct conversation', async () => {
+    it('function: createDirectConversation', async () => {
         const res = await client.createDirectConversation(user2.userId);
         conversation = res.conversation;
         assert(conversation.participants.includes(user.userId) && conversation.participants.includes(user2.userId));
     });
 
-    it('should get the direct conversation by its email', async () => {
+    it('function: getDirectConversationWithUser', async () => {
         const res = await client.getDirectConversationWithUser(user2.emailAddress);
         assert(res && res.convId === conversation.convId && res.participants.includes(user.userId) && res.participants.includes(user2.userId));
     });
 
-    it('should get the details of the conversation', async () => {
+    it('function: getConversationDetails', async () => {
         const res = await client.getConversationDetails(conversation.convId);
         assert(res.conversationCreatorId === user.userId || res.conversationCreatorId === user2.userId);
     });
