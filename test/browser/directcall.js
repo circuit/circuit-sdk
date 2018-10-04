@@ -28,7 +28,7 @@ describe('Outgoing direct call', async function() {
         client.removeAllListeners();
     });
 
-    it('should initiate direct call and get callStatus Initiated and Delivered', async () => {
+    it('function: makeCall, with event: callStatus with states: [Initiated, Delivered]', async () => {
         const res = await Promise.all([
             client.makeCall(peerUser.userId, {audio: true, video: true}, true),
             expectEvents(client, [{
@@ -44,7 +44,7 @@ describe('Outgoing direct call', async function() {
         document.querySelector('#localVideo').src = call.localVideoUrl;
     }).timeout(60000);
 
-    it('should get callStatus event for remoteStreamUpdated and state Active upon peer answering', async () => {
+    it('function: answerCall, with event: callStatus with reasons: [remoteStreamUpdated, callStateChanged]', async () => {
         updateRemoteVideos(client);
         await Promise.all([
             peerUser.exec('answerCall', call.callId, {audio: true, video: true}),
@@ -58,7 +58,7 @@ describe('Outgoing direct call', async function() {
         ]);
     });
 
-    it('should end call and get callEnded event', async () => {
+    it('function: endCall, with event: callEnded', async () => {
         updateRemoteVideos(client);
         await Promise.all([client.endCall(call.callId), expectEvents(client, ['callEnded'])]);
         document.querySelector('#localVideo').src = '';

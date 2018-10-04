@@ -27,6 +27,8 @@ if (!exports.conversation) {
                 userId: user3.userId,
                 phoneNumbers: [module.exports.phoneNumber]
             });
+            await client.logout();
+            await client2.logout();
             await client3.logout();
         } catch (e) {
             console.error('Error running preparation:', e);
