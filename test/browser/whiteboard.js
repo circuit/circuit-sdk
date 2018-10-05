@@ -1,35 +1,58 @@
 'use strict';
 
 import { PeerUser } from '../peer-user.js';
-import { expectEvents, updateRemoteVideos, sleep, logEvents } from '../helper.js';
+import { expectEvents, sleep } from '../helper.js';
 import config from './config.js'
 
 const assert = chai.assert;
 let client;
-let peerUser1, peerUser2;
+let peerUser1;
 let call;
 let whiteboard;
 let condition = 'width="562.25537109375" x="356.74554443359375" y="170.75135803222656"'; // used to define element and verify in getWhiteboard
 let element = `<rect  circuit:creatorId="1" circuit:orderId="1" fill="#000000" fill-opacity="0" height="311.0114288330078" stroke="#000000" stroke-width="2" ${condition}/>`;
 let elementId;
+let URL = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQsAKQEnejZV5fSgujJwnAWdPHLytN3MxOSDqbzCPxwoSXufvLOlg';
+function loadXHR(url) {
+    return new Promise(function(resolve, reject) {
+        try {
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", url);
+            xhr.responseType = "blob";
+            xhr.onerror = function() {reject("Network error.")};
+            xhr.onload = function() {
+                if (xhr.status === 200) {resolve(xhr.response)}
+                else {reject("Loading error:" + xhr.statusText)}
+            };
+            xhr.send();
+        }
+        catch(err) {reject(err.message)}
+    });
+}
 describe('Whiteboard tests', async function() {
     this.timeout(300000);
 
     before(async function() {
         Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
         client = new Circuit.Client(config.config);
-        const res = await Promise.all([PeerUser.create(), PeerUser.create(), client.logon(config.credentials)]);
+        const res = await Promise.all([PeerUser.create(), client.logon(config.credentials)]);
         peerUser1 = res[0];
-        peerUser2 = res[1];
-        const conversation = await client.createGroupConversation([peerUser1.userId, peerUser2.userId], 'SDK Test: Whiteboard');
+        const conversation = await client.createGroupConversation([peerUser1.userId], 'SDK Test: Whiteboard');
         call = await client.startConference(conversation.convId, {audio: true, video: true});
-        await sleep(5000);
+        await expectEvents(client, [{
+            type: 'callStatus',
+            predicate: evt => evt.call.state === Circuit.Enums.CallStateName.Initiated
+        }, {
+            type: 'callStatus',
+            predicate: evt => evt.call.state === Circuit.Enums.CallStateName.Waiting
+        }]);
     });
 
     after(async function() {
         await client.endCall(call.callId);
-        await Promise.all([peerUser1.destroy(), peerUser2.destroy(), client.logout()]);
+        await Promise.all([peerUser1.destroy(), client.logout()]);
     });
+    
 
     afterEach(async function() {
         client.removeAllListeners();
@@ -50,6 +73,21 @@ describe('Whiteboard tests', async function() {
     it('function: getWhiteboard', async () => {
         whiteboard = await client.getWhiteboard(call.callId);
         assert(whiteboard.callId === call.callId && whiteboard.viewbox.width === 800 && whiteboard.viewbox.height === 400 && !whiteboard.background && !whiteboard.background);
+    });
+
+    it('functions: [setWhiteboardBackground, getWhiteboard]', async () => {
+        const img = await loadXHR(URL);
+        await client.setWhiteboardBackground(call.callId, img);
+        await sleep(3000); // must wait for whiteboard background to be set because no event to listen to
+        whiteboard = await client.getWhiteboard(call.callId);
+        assert(whiteboard.background);
+    });
+
+    it('functions: [clearWhiteboardBackground, getWhiteboard]', async () => {
+        await client.clearWhiteboardBackground(call.callId);
+        await sleep(3000); // must wait for whiteboard background to be cleared because no event to listen to
+        whiteboard = await client.getWhiteboard(call.callId);
+        assert(!whiteboard.background);
     });
 
     it('function: addWhiteboardElement, raises event: whiteboardElement', async () => {

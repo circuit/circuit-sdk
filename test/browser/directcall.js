@@ -9,7 +9,7 @@ let client;
 let peerUser;
 let call;
 describe('Outgoing direct call', async function() {
-    this.timeout(60000);
+    this.timeout(300000);
     
     before(async function() {
         await sleep(15000);
