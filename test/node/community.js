@@ -2,23 +2,18 @@
 
 const assert = require('assert');
 const Circuit = require('../../circuit-node');
-const config = require('./config.json');
-const helper = require('./helper');
+const prep = require('../preparation');
 Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
 
 let client;
 let user
 describe('Community', () => {
     before(async () => {
-        client = new Circuit.Client(config.bot1);
-        user = await client.logon();
+        client = prep.client;
+        user = client.loggedOnUser;
     });
 
-    after(async () => {
-        await client.logout();
-    });
-
-    it('should create a community', async () => {
+    it('function: createCommunity', async () => {
         const topic = `${Date.now()}a`;
         const description = `${Date.now()}b`;
         const res = await client.createCommunity(null, topic, description);

@@ -2,8 +2,6 @@
 
 const assert = require('assert');
 const Circuit = require('../../circuit-node');
-const config = require('./config.json');
-const helper = require('./helper');
 const prep = require('../preparation');
 Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
 
@@ -14,36 +12,32 @@ let user2;
 let conversation;
 describe('Conversation Moderator', () => {
     before(async () => {
-        client = new Circuit.Client(config.bot1);
-        user = await client.logon();
-        client2 = new Circuit.Client(config.bot2);
-        user2 = await client2.logon();
         conversation = prep.conversation;
+        client = prep.client;
+        user = client.loggedOnUser;
+        client2 = prep.client2;
+        user2 = client2.loggedOnUser;
     });
 
-    after(async () => {
-        await client.logout();
-    });
-
-    it('should enable moderation on a conversation', async () => {
+    it('functions: [moderateConversation, getConversationById]', async () => {
         await client.moderateConversation(conversation.convId);
         conversation = await client.getConversationById(conversation.convId);
         assert(conversation.isModerated && conversation.moderators.includes(user.userId));
     });
 
-    it('should grant moderator rights to a user', async () => {
+    it('functions: [grantModeratorRights, getConversationById]', async () => {
         await client.grantModeratorRights(conversation.convId, user2.userId);
         conversation = await client.getConversationById(conversation.convId);
         assert(conversation.moderators.includes(user2.userId));
     });
 
-    it('should remove moderator rights for a user', async () => {
+    it('functions: [dropModeratorRights, getConversationById]', async () => {
         await client.dropModeratorRights(conversation.convId, user2.userId);
         conversation = await client.getConversationById(conversation.convId);
         assert(!conversation.moderators || !conversation.moderators.includes(user2.userId));
     });
 
-    it('should disable moderation on a conversation', async () => {
+    it('functions: [unmoderateConversation, getConversationById]', async () => {
         await client.unmoderateConversation(conversation.convId);
         conversation = await client.getConversationById(conversation.convId);
         assert(!conversation.isModerated);

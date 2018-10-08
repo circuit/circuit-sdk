@@ -2,31 +2,25 @@
 
 const assert = require('assert');
 const Circuit = require('../../circuit-node');
-const config = require('./config.json');
-const helper = require('./helper');
+const prep = require('../preparation');
 Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
 
 let client;
 describe('Miscellaneous Tests', () => {
     before(async () => {
-        client = new Circuit.Client(config.bot1);
-        await client.logon();
+        client = prep.client;
     });
 
-    after(async () => {
-        await client.logout();
-    });
-
-    it('should retrieve support conversation Id', async () => {
+    it('function: getSupportConversationId', async () => {
         await client.getSupportConversationId();
     });
 
-    it('should retrieve telephony conversation Id', async () => {
+    it('function: getTelephonyConversationId', async () => {
         const res = await client.getTelephonyConversationId();
         assert(res);
     });
 
-    it('should get telephony data', async () => {
+    it('function: getTelephonyData', async () => {
         const res = await client.getTelephonyData();
         assert(res);
     });

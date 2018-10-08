@@ -2,13 +2,10 @@
 
 const assert = require('assert');
 const Circuit = require('../../circuit-node');
-const config = require('./config.json');
-const helper = require('./helper');
 const prep = require('../preparation');
 Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
 
 let client;
-let user;
 let conversation;
 let topic1;
 let topic2;
@@ -16,9 +13,8 @@ let topic2Item;
 let topic3;
 describe('Conversation Topic Tests', () => {
     before(async () => {
-        client = new Circuit.Client(config.bot1);
-        user = await client.logon();
         conversation = prep.conversation;
+        client = prep.client;
         topic1 = await client.addTextItem(conversation.convId, {
             subject: `${Date.now()}1`,
             content: `${Date.now()}a`
@@ -37,11 +33,7 @@ describe('Conversation Topic Tests', () => {
         });
     });
 
-    after(async () => {
-        await client.logout();
-    });
-
-    it('should retrieve the specified number of topics', async () => {
+    it('function: getConversationTopics', async () => {
         if (!client.getConversationTopics) {
             console.log('API not yet supported');
             assert(true);
@@ -51,7 +43,7 @@ describe('Conversation Topic Tests', () => {
         assert(res && res.conversationTopics.length === 2 && res.hasOlderTopics);
     });
 
-    it('should NOT retrieve the conversation topic using timestamp', async () => {
+    it('function: getConversationTopics, with {timestamp:topic3.creationTime - 1}', async () => {
         if (!client.getConversationTopics) {
             console.log('API not yet supported');
             assert(true);
@@ -62,7 +54,7 @@ describe('Conversation Topic Tests', () => {
         assert(topics && !topics.some(topic => topic.parentItem.itemId === topic3.itemId) && topics.some(topic => topic.parentItem.itemId === topic2.itemId) && topics.some(topic => topic.parentItem.itemId === topic1.itemId));
     });
 
-    it('should retrieve the conversation topic using timestamp', async () => {
+    it('function: getConversationTopics, with {timestamp:topic3.creationTime + 1}', async () => {
         if (!client.getConversationTopics) {
             console.log('API not yet supported');
             assert(true);
@@ -73,7 +65,7 @@ describe('Conversation Topic Tests', () => {
         assert(topics && topics.some(topic => topic.parentItem.itemId === topic3.itemId) && topics.some(topic => topic.parentItem.itemId === topic2.itemId) && topics.some(topic => topic.parentItem.itemId === topic1.itemId));
     });
 
-    it('should retrieve the conversation topics using no options', async () => {
+    it('function: getConversationTopics', async () => {
         if (!client.getConversationTopics) {
             console.log('API not yet supported');
             assert(true);
