@@ -9,7 +9,7 @@ let client;
 let peerUser1, peerUser2;
 let call;
 describe('Create group conversation and start conference call', async function() {
-    this.timeout(30000);
+    this.timeout(300000);
 
     before(async function() {
         Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
