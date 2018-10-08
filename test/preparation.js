@@ -11,6 +11,11 @@ if (!exports.conversation) {
             const user2 = await client2.logon();
             const user3 = await client3.logon(config.sdktester1.credentials);
             module.exports.conversation = await client.createGroupConversation([user2.userId], `globalTestConversation${Date.now()}`);
+            const existingConversations = await client.getConversations({ numberOfConversations: 10 });
+            // Ensure there are at least 10 conversations present
+            for (let i = 0; i < 10 - existingConversations.length; i++) {
+                await client.createConferenceBridge(`newConversation${i + 1}`);
+            }
             module.exports.phoneNumber = {
                 phoneNumber: `+1561${Math.random().toString().substring(2,9)}`,
                 type: `WORK`,

@@ -17,12 +17,12 @@ function loadXHR(url) {
     return new Promise(function(resolve, reject) {
         try {
             var xhr = new XMLHttpRequest();
-            xhr.open("GET", url);
-            xhr.responseType = "blob";
-            xhr.onerror = function() {reject("Network error.")};
+            xhr.open('GET', url);
+            xhr.responseType = 'blob';
+            xhr.onerror = function() {reject('Network error.')};
             xhr.onload = function() {
                 if (xhr.status === 200) {resolve(xhr.response)}
-                else {reject("Loading error:" + xhr.statusText)}
+                else {reject('Loading error:' + xhr.statusText)}
             };
             xhr.send();
         }
@@ -50,6 +50,7 @@ describe('Whiteboard tests', async function() {
 
     after(async function() {
         await client.endCall(call.callId);
+        await peerUser1.exec('logout');
         await Promise.all([peerUser1.destroy(), client.logout()]);
     });
     

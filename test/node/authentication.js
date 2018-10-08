@@ -33,6 +33,11 @@ describe('Authentication', () => {
         assert(!!user);
     });
 
+    it('should get client cookie', async () => {
+        const cookie = client.getCookie();
+        assert(!!cookie);
+    });
+    
     it('should read domain property', async () => {
         assert(client.domain === 'circuitsandbox.net');
     });

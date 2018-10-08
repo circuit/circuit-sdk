@@ -1,11 +1,11 @@
 {
   "name": "circuit-sdk",
-  "version": "1.2.3900",
+  "version": "1.2.4200",
   "description": "Circuit SDK",
   "main": "circuit-node.js",
   "scripts": {
     "test:browser": "node test/index",
-    "test:node": "mocha ./test/node/* --recursive --timeout=15000 --exit",
+    "test:node": "mocha ./test/node/* --recursive --timeout=5000 --exit",
     "test": "npm run test:node && npm run test:browser"
   },
   "author": "Unify Inc.",
