@@ -38,19 +38,29 @@ describe('Whiteboard tests', async function() {
         const res = await Promise.all([PeerUser.create(), client.logon(config.credentials)]);
         peerUser1 = res[0];
         const conversation = await client.createGroupConversation([peerUser1.userId], 'SDK Test: Whiteboard');
-        call = await client.startConference(conversation.convId, {audio: true, video: true});
-        await expectEvents(client, [{
-            type: 'callStatus',
-            predicate: evt => evt.call.state === Circuit.Enums.CallStateName.Initiated
-        }, {
-            type: 'callStatus',
-            predicate: evt => evt.call.state === Circuit.Enums.CallStateName.Waiting
-        }]);
+        // call = await client.startConference(conversation.convId, {audio: true, video: true});
+        // await expectEvents(client, [{
+        //     type: 'callStatus',
+        //     predicate: evt => evt.call.state === Circuit.Enums.CallStateName.Initiated
+        // }, {
+        //     type: 'callStatus',
+        //     predicate: evt => evt.call.state === Circuit.Enums.CallStateName.Waiting
+        // }]);
+        const result = await Promise.all([
+            client.startConference(conversation.convId, {audio: true, video: false}),
+            expectEvents(client, [{
+                type: 'callStatus',
+                predicate: evt => evt.call.state === Circuit.Enums.CallStateName.Initiated
+            }, {
+                type: 'callStatus',
+                predicate: evt => evt.call.state === Circuit.Enums.CallStateName.Waiting
+            }])
+        ]);
+        call = result[0];
     });
 
     after(async function() {
         await client.endCall(call.callId);
-        await peerUser1.exec('logout');
         await Promise.all([peerUser1.destroy(), client.logout()]);
     });
     
