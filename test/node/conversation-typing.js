@@ -20,20 +20,16 @@ describe('Conversation Subscribe to Typing Indicator', () => {
         client2 = new Circuit.Client(config.bot2);
         user2 = await client2.logon();
         conversation = prep.conversation;
-    });
-
-    after(async () => {
-        await client.logout();
-        await client2.logout();
-    });
-    
-    it('should add a simple text item', async () => {
         const content = {
             subject: `${Date.now()}a`,
             content: `${Date.now()}b`
         }
         item = await client.addTextItem(conversation.convId, content);
-        assert(item.convId === conversation.convId && item.text.content === content.content);
+    });
+
+    after(async () => {
+        await client.logout();
+        await client2.logout();
     });
 
     it('should subscribe to typing indicator for converation', async () => {
