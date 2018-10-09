@@ -45,7 +45,7 @@ describe('Create group conversation and start conference call', async function()
     });
 
     it('function: joinConference, with event: callStatus with reaons: [callStateChanged, participantJoined]', async () => {
-        await sleep(500); // wait to make sure the call is ready to be joined
+        await sleep(5000); // wait to make sure the call is ready to be joined
         updateRemoteVideos(client);
         await Promise.all([
             peerUser1.exec('joinConference', call.callId, {audio: true, video: true}),
