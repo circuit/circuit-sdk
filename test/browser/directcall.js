@@ -5,14 +5,12 @@ import { expectEvents, updateRemoteVideos, sleep, logEvents } from '../helper.js
 import config from './config.js'
 
 const assert = chai.assert;
-
+let client;
+let peerUser;
+let call;
 describe('Outgoing direct call', async function() {
-    this.timeout(15000);
-
-    let client;
-    let peerUser;
-    let call;
-
+    this.timeout(300000);
+    
     before(async function() {
         Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
         client = new Circuit.Client(config.config);
@@ -42,11 +40,12 @@ describe('Outgoing direct call', async function() {
         call = res[0];
         assert(call.callId);
         document.querySelector('#localVideo').src = call.localVideoUrl;
-    }).timeout(60000);
+    });
 
     it('function: answerCall, with event: callStatus with reasons: [remoteStreamUpdated, callStateChanged]', async () => {
+        await sleep(5000);
         updateRemoteVideos(client);
-        await Promise.all([
+        const res = await Promise.all([
             peerUser.exec('answerCall', call.callId, {audio: true, video: true}),
             expectEvents(client, [{
                 type: 'callStatus',
@@ -56,11 +55,13 @@ describe('Outgoing direct call', async function() {
                 predicate: evt => evt.reason === 'callStateChanged' && evt.call.state === Circuit.Enums.CallStateName.Active
             }])
         ]);
+        assert(res[1].call.callId === call.callId && res[1].call.state === Circuit.Enums.CallStateName.Active);
     });
 
     it('function: endCall, with event: callEnded', async () => {
         updateRemoteVideos(client);
-        await Promise.all([client.endCall(call.callId), expectEvents(client, ['callEnded'])]);
+        const res = await Promise.all([client.endCall(call.callId), expectEvents(client, ['callEnded'])]);
         document.querySelector('#localVideo').src = '';
+        assert(res[1].call.callId === call.callId);
     });
 });
