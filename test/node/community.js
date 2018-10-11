@@ -2,26 +2,34 @@
 
 const assert = require('assert');
 const Circuit = require('../../circuit-node');
-const config = require('./config.json');
-const helper = require('./helper');
+const prep = require('../preparation');
 Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
 
 let client;
-let user
+let client2;
+let user2;
+let community;
 describe('Community', () => {
     before(async () => {
-        client = new Circuit.Client(config.bot1);
-        user = await client.logon();
+        client = prep.client;
+        client2 = prep.client2;
+        user2 = client2.loggedOnUser;
     });
 
-    after(async () => {
-        await client.logout();
-    });
-
-    it('should create a community', async () => {
+    it('function: createCommunity', async () => {
         const topic = `${Date.now()}a`;
         const description = `${Date.now()}b`;
-        const res = await client.createCommunity(null, topic, description);
-        assert(res && res.type === Circuit.Enums.ConversationType.COMMUNITY && res.topic === topic && res.description === description);
+        community = await client.createCommunity(null, topic, description);
+        assert(community && community.type === Circuit.Enums.ConversationType.COMMUNITY && community.topic === topic && community.description === description);
+    });
+
+    it('function: joinCommunity', async () => {
+        if (!client2.joinCommunity) {
+            console.log('API not yet supported');
+            assert(true);
+            return;
+        }
+        const res = await client2.joinCommunity(community.convId);
+        assert(res && res.participants.some(participant => participant.userId === user2.userId));
     });
 });
