@@ -1,7 +1,7 @@
 'use strict';
 
 import { PeerUser } from '../peer-user.js';
-import { expectEvents, updateRemoteVideos, sleep, logEvents } from '../helper.js';
+import { expectEvents, updateRemoteVideos } from '../helper.js';
 import config from './config.js'
 
 const assert = chai.assert;
@@ -12,7 +12,6 @@ describe('Outgoing direct call', async function() {
     this.timeout(300000);
     
     before(async function() {
-        await sleep(15000);
         Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
         client = new Circuit.Client(config.config);
         const res = await Promise.all([PeerUser.create(), client.logon(config.credentials)]);
