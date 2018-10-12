@@ -2,29 +2,23 @@
 
 const assert = require('assert');
 const Circuit = require('../../circuit-node');
-const config = require('./config.json');
 const helper = require('./helper');
+const prep = require('../preparation');
 Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
 
 let client;
-let user;
 let settings;
 describe('User Settings', () => {
     before(async () => {
-        client = new Circuit.Client(config.bot1);
-        user = await client.logon();
+        client = prep.client;
     });
 
-    after(async () => {
-        await client.logout();
-    });
-
-    it('should get user settings', async () => {
+    it('function: getUserSettings', async () => {
         settings = await client.getUserSettings();
         assert(settings);
     });
 
-    it('should set user settings and raise userSettingsChanged event', async () => {    
+    it('functions: [setUserSettings, getUserSettings], with event: userSettingsChanged', async () => {    
         const shareLocation = !!!settings.shareLocation;
         const newSettings = {
             shareLocation: shareLocation

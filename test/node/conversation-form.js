@@ -8,26 +8,17 @@ const prep = require('../preparation');
 Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
 
 let client;
-let user;
 let client2;
-let user2;
 let conversation;
 let item;
 describe('Conversation Form', () => {
     before(async () => {
-        client = new Circuit.Client(config.bot1);
-        user = await client.logon();
-        client2 = new Circuit.Client(config.bot2);
-        user2 = await client2.logon();
         conversation = prep.conversation;
+        client = prep.client;
+        client2 = prep.client2;
     });
 
-    after(async () => {
-        await client.logout();
-        await client2.logout();
-    });
-
-    it('should create a new form', async () => {
+    it('function: addTextItem, with form', async () => {
         const form = {
             title: `${Date.now()}title`, // optional
             id: `${Date.now()}id`,
@@ -103,7 +94,7 @@ describe('Conversation Form', () => {
         assert(item.text.formMetaData && item.text.formMetaData.id === form.id && item.text.formMetaData.title === form.title && item.text.formMetaData.controls.length === form.controls.length);
     });
 
-    it('should submit a form and raise a formSubmission event', async () => {
+    it('function: submitForm, with event: formSubmission', async () => {
         let dataValues = {}
         const submitFormData = {
             id: item.text.formMetaData.id,
