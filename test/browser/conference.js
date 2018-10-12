@@ -1,7 +1,7 @@
 'use strict';
 
 import { PeerUser } from '../peer-user.js';
-import { expectEvents, updateRemoteVideos, sleep, logEvents } from '../helper.js';
+import { expectEvents, updateRemoteVideos, sleep } from '../helper.js';
 import config from './config.js'
 
 const assert = chai.assert;
@@ -27,7 +27,7 @@ describe('Create group conversation and start conference call', async function()
         client.removeAllListeners();
     });
 
-    it('should create group conversation, start conference and get callStatus with callStateChanged:Initiated and callStateChanged:Waiting', async () => {
+    it('functions: [createGroupConversation, startConference], with event: callStatus with states: [Initiated, Waiting]', async () => {
         const conversation = await client.createGroupConversation([peerUser1.userId, peerUser2.userId], 'SDK Test: Conference Call');
         assert(!!conversation, 'createGroupConversation not successful');
         call = await client.startConference(conversation.convId, {audio: false, video: false});
@@ -42,7 +42,7 @@ describe('Create group conversation and start conference call', async function()
         document.querySelector('#localVideo').src = call.localVideoUrl;
     });
 
-    it('should get callStatus event for remoteStreamUpdated and callStateChanged:Active upon users joining', async () => {
+    it('function: joinConference, with event: callStatus with reaons: [callStateChanged, participantJoined]', async () => {
         await sleep(5000); // wait to make sure the call is ready to be joined
         updateRemoteVideos(client);
         const res = await Promise.all([
@@ -59,7 +59,7 @@ describe('Create group conversation and start conference call', async function()
         assert(res[2].call.callId === call.callId);
     });
 
-    it('should end conference and get callEnded event', async () => {
+    it('function: endConference, with event: callEnded', async () => {
         updateRemoteVideos(client);
         const res = await Promise.all([client.endConference(call.callId), expectEvents(client, ['callEnded'])]);
         document.querySelector('#localVideo').src = '';
