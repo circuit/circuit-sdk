@@ -2,7 +2,6 @@
 
 const assert = require('assert');
 const Circuit = require('../../circuit-node');
-const config = require('./config.json');
 const helper = require('./helper');
 const prep = require('../preparation');
 Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
@@ -15,20 +14,14 @@ let item = {};
 let conversation;
 describe('Conversation Items', () => {
     before(async () => {
-        client = new Circuit.Client(config.bot1);
-        user = await client.logon();
-        client2 = new Circuit.Client(config.bot2);
-        user2 = await client2.logon();
         conversation = prep.conversation;
+        client = prep.client;
+        user = client.loggedOnUser;
+        client2 = prep.client2;
+        user2 = client2.loggedOnUser;
     });
 
-    after(async () => {
-        await client.logout();
-        await client2.logout();
-    });
-
-
-    it('should add a simple text item and raise an itemAdded event', async () => {
+    it('function: addTextItem, with event: itemAdded', async () => {
         const textValue = `${Date.now()}a`;
         const res  = await Promise.all([
             client.addTextItem(conversation.convId, textValue),
@@ -41,7 +34,7 @@ describe('Conversation Items', () => {
         assert(item.convId === conversation.convId && item.text.content === textValue);
     });
     
-    it('should update a complex text item and raise an itemUpdated event', async () => {
+    it('function: updateTextItem, with event: itemUpdated', async () => {
         const textValue = `${Date.now()}b`;
         const subject = `${Date.now()}c`;
         const content = {
@@ -60,12 +53,12 @@ describe('Conversation Items', () => {
         assert(item.itemId === content.itemId && item.text.content === textValue && item.text.subject === subject);
     });
 
-    it('should get conversation feed', async () => {
+    it('function: getConversationFeed', async () => {
         const res  = await client.getConversationFeed(conversation.convId);
         assert(res && res.threads.some(thread => thread.parentItem.convId === conversation.convId && thread.parentItem.itemid === item.itemid));
     });
 
-    it('should get conversation items', async () => {
+    it('function: getConversationItems,  with {direction: AFTER}', async () => {
         const options = {   
             creationDate: item.creationTime - 1,
             direction: 'AFTER'
@@ -74,7 +67,7 @@ describe('Conversation Items', () => {
         assert(res.some(conversationItem => conversationItem.itemId === item.itemId));
     }); 
 
-    it('should flag item and get flagged item', async () => {
+    it('functions: [flagItem, getFlaggedItems], with event: itemFlagged', async () => {
         if (!Circuit.supportedEvents.includes('itemFlagged')) {
             console.log('Event not supported.');
             assert(true);
@@ -91,7 +84,7 @@ describe('Conversation Items', () => {
         assert(res && res.some(conv => conv.conversationId === conversation.convId && conv.conversationItemData.some(i => i.itemId === item.itemId)));
     });
     
-    it('should unflag item', async () => {
+    it('functions: [unflagItem, getFlaggedItems], with event: itemUnflagged', async () => {
         if (!Circuit.supportedEvents.includes('itemUnflagged')) {
             console.log('Event not supported.');
             assert(true);
@@ -108,7 +101,7 @@ describe('Conversation Items', () => {
         assert(res && !res.some(conv => conv.conversationId === conversation.convId && conv.conversationItemData.some(i => i.itemId === item.itemId)));
     });
 
-    it('should like item and raise an itemUpdated event', async () => {
+    it('functions: [likeItem, getItemById], with event: itemUpdated', async () => {
         await Promise.all([
             client.likeItem(item.itemId),
             helper.expectEvents(client, [{
@@ -120,7 +113,7 @@ describe('Conversation Items', () => {
         assert(res.text.likedByUsers.includes(user.userId));
     });
 
-    it('should unlike item and raise an itemUpdated event', async () => {
+    it('functions: [unlikeItem, getItemById], with event: itemUpdated', async () => {
         await Promise.all([
             client.unlikeItem(item.itemId),
             helper.expectEvents(client, [{
@@ -132,7 +125,7 @@ describe('Conversation Items', () => {
         assert(!res.text.likedByUsers || !res.text.likedByUsers.includes(user.userId));
     });
 
-    it('should mark items as read and raise a conversationReadItems event', async () => {
+    it('function: markItemsAsRead, with event: conversationReadItems', async () => {
         const res = await Promise.all([
             client.markItemsAsRead(conversation.convId),
             helper.expectEvents(client, [{
@@ -143,7 +136,7 @@ describe('Conversation Items', () => {
         assert(res[1].data.convId === conversation.convId);
     });
 
-    it('should mention the user and raise a mention event', async () => {
+    it('functions: [updateUser, addTextItem], with event: mention', async () => {
         await client2.updateUser({
             userId: user2.userId,
             firstName: 'John',

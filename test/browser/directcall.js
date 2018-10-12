@@ -1,7 +1,7 @@
 'use strict';
 
 import { PeerUser } from '../peer-user.js';
-import { expectEvents, updateRemoteVideos, sleep, logEvents } from '../helper.js';
+import { expectEvents, updateRemoteVideos } from '../helper.js';
 import config from './config.js'
 
 const assert = chai.assert;
@@ -12,7 +12,6 @@ describe('Outgoing direct call', async function() {
     this.timeout(300000);
     
     before(async function() {
-        await sleep(15000);
         Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
         client = new Circuit.Client(config.config);
         const res = await Promise.all([PeerUser.create(), client.logon(config.credentials)]);
@@ -27,7 +26,7 @@ describe('Outgoing direct call', async function() {
         client.removeAllListeners();
     });
 
-    it('should initiate direct call and get callStatus Initiated and Delivered', async () => {
+    it('function: makeCall, with event: callStatus with states: [Initiated, Delivered]', async () => {
         const res = await Promise.all([
             client.makeCall(peerUser.userId, {audio: true, video: true}, true),
             expectEvents(client, [{
@@ -43,8 +42,7 @@ describe('Outgoing direct call', async function() {
         document.querySelector('#localVideo').src = call.localVideoUrl;
     });
 
-    it('should get callStatus event for remoteStreamUpdated and state Active upon peer answering', async () => {
-        await sleep(5000);
+    it('function: answerCall, with event: callStatus with reasons: [remoteStreamUpdated, callStateChanged]', async () => {
         updateRemoteVideos(client);
         const res = await Promise.all([
             peerUser.exec('answerCall', call.callId, {audio: true, video: true}),
@@ -59,7 +57,7 @@ describe('Outgoing direct call', async function() {
         assert(res[1].call.callId === call.callId && res[1].call.state === Circuit.Enums.CallStateName.Active);
     });
 
-    it('should end call and get callEnded event', async () => {
+    it('function: endCall, with event: callEnded', async () => {
         updateRemoteVideos(client);
         const res = await Promise.all([client.endCall(call.callId), expectEvents(client, ['callEnded'])]);
         document.querySelector('#localVideo').src = '';

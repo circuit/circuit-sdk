@@ -2,7 +2,6 @@
 
 const assert = require('assert');
 const Circuit = require('../../circuit-node');
-const config = require('./config.json');
 const helper = require('./helper');
 const prep = require('../preparation');
 Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
@@ -13,17 +12,12 @@ let conversation;
 let LABEL_SUPPORTED;
 describe('Conversation Labels', () => {
     before(async () => {
-        client = new Circuit.Client(config.bot1);
-        await client.logon();
         conversation = prep.conversation;
+        client = prep.client;
         LABEL_SUPPORTED = client.addLabels && Circuit.supportedEvents.includes('labelsAdded') && client.editLabel && Circuit.supportedEvents.includes('labelEdited') && client.assignLabels && client.unassignLabels && client.removeLabels && Circuit.supportedEvents.includes('labelsRemoved');
     });
 
-    after(async () => {
-        await client.logout();
-    });
-
-    it('should add two labels', async () => {
+    it('functions: [addLabels, getAllLabels], with event: labelsAdded', async () => {
         if (!LABEL_SUPPORTED) {
             console.log('API not yet supported');
             assert(true);
@@ -50,7 +44,7 @@ describe('Conversation Labels', () => {
         });
     });
 
-    it('should edit one of the added labels', async () => {
+    it('functions: [editLabel, getAllLabels], with event: labelEdited', async () => {
         if (!LABEL_SUPPORTED) {
             console.log('API not yet supported');
             assert(true);
@@ -79,7 +73,7 @@ describe('Conversation Labels', () => {
         assert(returnedLabel.value === addedLabelsHT[labelIdToEdit].value && returnedLabel.labelId === addedLabelsHT[labelIdToEdit].labelId);
     });
 
-    it('should assign labels', async () => {
+    it('functions: [assignLabels, getConversationById], with event: conversationUserDataChanged', async () => {
         if (!LABEL_SUPPORTED) {
             console.log('API not yet supported');
             assert(true);
@@ -107,7 +101,7 @@ describe('Conversation Labels', () => {
         });
     });
 
-    it('should get the conversations having the specified label', async () => {
+    it('function: getConversationsByFilter', async () => {
         if (!LABEL_SUPPORTED) {
             console.log('API not yet supported');
             assert(true);
@@ -130,7 +124,7 @@ describe('Conversation Labels', () => {
 
     });
 
-    it('should get conversations by the added label using getConversationsByLabel', async () => {
+    it('function: getConversationsByLabel', async () => {
         if (!LABEL_SUPPORTED) {
             console.log('API not yet supported');
             assert(true);
@@ -142,7 +136,7 @@ describe('Conversation Labels', () => {
         assert(res.some(conv => conv.convId === conversation.convId));
     });
 
-    it('should unassign labels', async () => {
+    it('functions: [unassignLabels, getConversationById], with event: conversationUserDataChanged', async () => {
         if (!LABEL_SUPPORTED) {
             console.log('API not yet supported');
             assert(true);
@@ -172,7 +166,7 @@ describe('Conversation Labels', () => {
         }
     });
 
-    it('should remove the two added labels', async () => {
+    it('functions: [removeLabels, getAllLabels], with event: labelsRemoved', async () => {
         if (!LABEL_SUPPORTED) {
             console.log('API not yet supported');
             assert(true);

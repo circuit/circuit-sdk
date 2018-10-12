@@ -2,24 +2,21 @@
 
 const assert = require('assert');
 const Circuit = require('../../circuit-node');
-const config = require('./config.json');
 const helper = require('./helper');
 const prep = require('../preparation');
 Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
 
 let client;
-let user;
 let client2;
 let user2;
 let conversation;
 let item;
 describe('Conversation Subscribe to Typing Indicator', () => {
     before(async () => {
-        client = new Circuit.Client(config.bot1);
-        user = await client.logon();
-        client2 = new Circuit.Client(config.bot2);
-        user2 = await client2.logon();
         conversation = prep.conversation;
+        client = prep.client;
+        client2 = prep.client2;
+        user2 = client2.loggedOnUser;
         const content = {
             subject: `${Date.now()}a`,
             content: `${Date.now()}b`
@@ -27,12 +24,7 @@ describe('Conversation Subscribe to Typing Indicator', () => {
         item = await client.addTextItem(conversation.convId, content);
     });
 
-    after(async () => {
-        await client.logout();
-        await client2.logout();
-    });
-
-    it('should subscribe to typing indicator for converation', async () => {
+    it('function: subscribeTypingIndicator', async () => {
         if (!client.subscribeTypingIndicator) {
             console.log('API not yet supported');
             assert(true);
@@ -41,7 +33,7 @@ describe('Conversation Subscribe to Typing Indicator', () => {
         await client.subscribeTypingIndicator(conversation.convId);
     });
 
-    it('should call typing and raise a typing event', async () => {
+    it('function: typing, with event: typing', async () => {
         if (!client.typing) {
             console.log('API not yet supported');
             assert(true);
@@ -56,7 +48,7 @@ describe('Conversation Subscribe to Typing Indicator', () => {
         ]);
     });
 
-    it('should unsubscribe to typing indicator for converation', async () => {
+    it('function: unsubscribeTypingIndicator', async () => {
         if (!client.unsubscribeTypingIndicator) {
             console.log('API not yet supported');
             assert(true);
