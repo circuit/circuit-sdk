@@ -8,20 +8,14 @@ const prep = require('../preparation');
 Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
 
 let client;
-let user;
 let conversation;
 describe('Conversation Archived', () => {
     before(async () => {
-        client = new Circuit.Client(config.bot1);
-        user = await client.logon();
         conversation = prep.conversation;
+        client = prep.client;
     });
 
-    after(async () => {
-        await client.logout();
-    });
-
-    it('should archive the conversation and raise a conversationArchived event', async () => {
+    it('functions: [archiveConversation, getArchivedConversations], with event: conversationArchived', async () => {
         await Promise.all([
             client.archiveConversation(conversation.convId),
             helper.expectEvents(client, [{
@@ -34,7 +28,7 @@ describe('Conversation Archived', () => {
         assert(res && res.some(conv => conv.convId === conversation.convId));
     });
 
-    it('should unarchive the conversation and raise a conversationUnarchived event', async () => {
+    it('functions: [unarchiveConversation, getArchivedConversations], with event: conversationUnarchived', async () => {
         await Promise.all([
             client.unarchiveConversation(conversation.convId),
             helper.expectEvents(client, [{

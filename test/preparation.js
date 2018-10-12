@@ -5,7 +5,9 @@ if (!exports.conversation) {
             const Circuit = require('../circuit-node');
             const config = require('./node/config.json');
             const client = new Circuit.Client(config.bot1);
+            module.exports.client = client;
             const client2 = new Circuit.Client(config.bot2);
+            module.exports.client2 = client2;
             const client3 = new Circuit.Client(config.sdktester1.config);
             await client.logon();
             const user2 = await client2.logon();
