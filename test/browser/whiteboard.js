@@ -14,13 +14,13 @@ let element = `<rect  circuit:creatorId="1" circuit:orderId="1" fill="#000000" f
 let elementId;
 let URL = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQsAKQEnejZV5fSgujJwnAWdPHLytN3MxOSDqbzCPxwoSXufvLOlg';
 function loadXHR(url) {
-    return new Promise(function(resolve, reject) {
+    return new Promise((resolve, reject) => {
         try {
             var xhr = new XMLHttpRequest();
             xhr.open('GET', url);
             xhr.responseType = 'blob';
-            xhr.onerror = function() {reject('Network error.')};
-            xhr.onload = function() {
+            xhr.onerror = () => {reject('Network error.')};
+            xhr.onload = () => {
                 if (xhr.status === 200) {resolve(xhr.response)}
                 else {reject('Loading error:' + xhr.statusText)}
             };
@@ -165,6 +165,16 @@ describe('Whiteboard tests', async function() {
         ]);
         whiteboard = await client.getWhiteboard(call.callId);
         assert(!whiteboard.elements);
+    });
+
+    it('function: undoWhiteboard, raises event: whiteboardSync', async () => {
+        await Promise.all([
+            client.undoWhiteboard(call.callId, 1),
+            expectEvents(client, [{
+                type: 'whiteboardSync',
+                predicate: evt => evt.whiteboard.elements.some(elm => elm.elementId.xmlId === elementId.xmlId)
+            }])
+        ]);
     });
 
     it('function: disableWhiteboard, raises event: whiteboardEnabled', async () => {
