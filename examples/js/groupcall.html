@@ -60,6 +60,7 @@
         <li>display call state, media state, conv and call ID</li>
       </ul>
     </div>
+    <p>Note that the SDK only supports up to 3 participant videos. And if one participant shares the screen, then in addition to the screenshare only one participant video is streamed, and this video is from the active speaker.</p>
     <div id="mainWrapper" style="display: none">
       <section id="connectSection">
         <button id="logon" onclick="logon()" style="">Logon</button>
@@ -90,17 +91,24 @@
         <div>Conversation ID: <span id="convId"></span></div>
         <div>Call ID: <span id="callId"></span></div>
         <div>Active Speaker: <span id="activeSpeaker"></span></div>
-        <div>
+
+        <div style="display:grid;grid-template-columns: auto auto auto;margin-top:10px">
+          <div id="localName"></div>
+          <div id="remoteName1"></div>
+          <div id="remoteName2"></div>
           <video id="localVideo" width="200px" autoplay="true"></video>
           <video id="remoteVideo1" width="200px" autoplay="true"></video>
           <video id="remoteVideo2" width="200px" autoplay="true"></video>
+          <video id="localDesktop" width="200px" autoplay="true"></video>
+          <video id="remoteDesktop1" width="200px" autoplay="true"></video>
+          <video id="remoteDesktop2" width="200px" autoplay="true"></video>
         </div>
       </section>
     </div>
     <span id="errorMessage" style="display: none"></span>
     <audio id="remoteAudio" autoplay="autoplay"></audio>
 
-    <script src="//unpkg.com/circuit-sdk@beta/circuit.js"></script>
+    <script src="//unpkg.com/circuit-sdk/circuit.js"></script>
 
     <script>
       var _client;
@@ -112,9 +120,15 @@
       var $logoutButton = document.getElementById('logout');
       var $logonState = document.getElementById('logonState');
       var $mediaType = document.getElementById('mediaType');
+      var $localName = document.getElementById('localName');
+      var $remoteName1 = document.getElementById('remoteName1');
+      var $remoteName2 = document.getElementById('remoteName2');
       var $localVideo = document.getElementById('localVideo');
       var $remoteVideo1 = document.getElementById('remoteVideo1');
       var $remoteVideo2 = document.getElementById('remoteVideo2');
+      var $localDesktop = document.getElementById('localDesktop');
+      var $remoteDesktop1 = document.getElementById('remoteDesktop1');
+      var $remoteDesktop2 = document.getElementById('remoteDesktop2');
       var $remoteAudio = document.getElementById('remoteAudio');
       var $enableVideo = document.getElementById('enableVideo');
       var $enableScreenShare = document.getElementById('enableScreenShare');
@@ -164,6 +178,9 @@
         $localVideo.srcObject = null;
         $remoteVideo1.srcObject = null;
         $remoteVideo2.srcObject = null;
+        $localDesktop.srcObject = null;
+        $remoteDesktop1.srcObject = null;
+        $remoteDesktop2.srcObject = null;
         $remoteAudio.srcObject = null;
         $enableVideo.checked = false;
         $enableVideo.disabled = true;
@@ -192,23 +209,35 @@
         $enableScreenShare.disabled = !(!call.isRemote && call.isEstablished);
         $enableRecording.disabled = !(!call.isRemote && call.isEstablished);
 
-        // Set local video stream
+        // Set local video and desktop streams
         $localVideo.srcObject = call.localVideoStream;
+        // or $localVideo.srcObject = call.localStreams.video;
+        $localDesktop.srcObject = call.localStreams && call.localStreams.desktop;
 
         // Enable video checkbox
         if (call.isEstablished) {
+          $localName.textContent = _localUser.firstName + ' (you)';
           $remoteAudio.srcObject = call.remoteAudioStream;
-          // Set remote video streams (up to two in this example)
+          // Set remote video and desktop streams (up to two in this example)
           if (call.participants && call.participants.length > 0) {
-            $remoteVideo1.srcObject = call.participants[0].videoStream;
+            $remoteName1.textContent = call.participants[0].firstName;
+            $remoteVideo1.srcObject = call.participants[0].streams.video;
+            $remoteDesktop1.srcObject = call.participants[0].streams && call.participants[0].streams.desktop;
           }
           if (call.participants && call.participants.length > 1) {
-            $remoteVideo2.srcObject = call.participants[1].videoStream;
+            $remoteName2.textContent = call.participants[1].firstName;
+            $remoteVideo2.srcObject = call.participants[1].streams.video;
+            $remoteDesktop2.srcObject = call.participants[1].streams && call.participants[1].streams.desktop;
           }
         } else {
+          $localName.textContent = '';
           $remoteAudio.srcObject = null;
+          $remoteName1.textContent = '';
+          $remoteName2.textContent = '';
           $remoteVideo1.srcObject = null;
           $remoteVideo2.srcObject = null;
+          $remoteDesktop1.srcObject = null;
+          $remoteDesktop2.srcObject = null;
         }
 
         // Set active speaker
