@@ -5,8 +5,9 @@
   "main": "circuit-node.js",
   "scripts": {
     "test:browser": "node test/index",
-    "test:node": "mocha ./test/node/* --recursive --timeout=5000 --exit",
-    "test": "npm run test:node && npm run test:browser"
+    "test:node": "mocha ./test/node/* --recursive --timeout=10000 --exit",
+    "test": "npm run test:node && npm run test:browser",
+    "test:file": "mocha ./test/{preparation,node/authentication,node/$FILE}.js --recursive --timeout=10000 --exit"
   },
   "author": "Unify Inc.",
   "contributors": [

@@ -22,6 +22,21 @@
     {
       "type": "node",
       "request": "launch",
+      "name": "Node SDK Test file",
+      "program": "${workspaceFolder}/node_modules/mocha/bin/_mocha",
+      "args": [
+        "-u",
+        "tdd",
+        "--timeout",
+        "999999",
+        "--colors",
+        "${workspaceFolder}/test/{preparation,node/authentication,node/user-presence}.js"
+      ],
+      "internalConsoleOptions": "openOnSessionStart"
+    },
+    {
+      "type": "node",
+      "request": "launch",
       "name": "Browser SDK Tests",
       "program": "${workspaceFolder}/test/index.js",
       "args": [
