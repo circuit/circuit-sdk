@@ -42,19 +42,19 @@ describe('User Presence', () => {
     });
 
     it('functions: [setPresence, getPresence], with event: userPresenceChanged', async () => {
-        let newState;    
-        if (presence.state === Circuit.Enums.PresenceState.AVAILABLE) {
-            newState = Circuit.Enums.PresenceState.OFFLINE;
-        } else {
-            newState = Circuit.Enums.PresenceState.AVAILABLE;
-        }
+        const newState = Circuit.Enums.PresenceState.DND;
+
         await Promise.all([
-            await client2.setPresence({state: newState}),
+            client2.setPresence({
+                state: newState,
+                dndUntil: Date.now() + 5000
+            }),
             helper.expectEvents(client, [{
                 type: 'userPresenceChanged',
                 predicate: evt => evt.presenceState.userId === user2.userId && evt.presenceState.state === newState
             }])
         ]);
+
         const res = await client.getPresence([user2.userId]);
         presence = res[0];
         assert(presence && presence.userId === user2.userId && presence.state === newState);
@@ -62,5 +62,5 @@ describe('User Presence', () => {
 
     it('function: unsubscribePresence', async () => {
         await client.unsubscribePresence([user2.userId]);
-    });    
+    });
 });
