@@ -20,7 +20,6 @@ describe('Video Sharing', async function() {
         peerUser2 = res[1];
         const conversation = await client.createGroupConversation([peerUser1.userId, peerUser2.userId], 'SDK Test: Video Sharing');
         call = await client.startConference(conversation.convId, {audio: true, video: false});
-        console.log(call);
         await expectEvents(client, [{
             type: 'callStatus',
             predicate: evt => evt.call.state === Circuit.Enums.CallStateName.Initiated
@@ -60,7 +59,7 @@ describe('Video Sharing', async function() {
     });
 
     it('function: findCall, verifies stream objects of users', async () => {
-        await sleep(3000);
+        await sleep(5000); // wait for all user's video streams to update
         const res = await Promise.all([
             client.findCall(call.callId),
             peerUser1.exec('findCall', call.callId),
