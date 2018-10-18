@@ -34,9 +34,11 @@ describe('Video Sharing', async function() {
             }])
         ]);
         call = await client.findCall(call.callId);
+        document.querySelector('#localVideo').srcObject = call.localStreams.video;
     });
 
     after(async function() {
+        document.querySelector('#localVideo').srcObject = null;
         await Promise.all([peerUser1.destroy(), client.logout()]);
     });
 

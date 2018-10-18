@@ -8,7 +8,7 @@ const assert = chai.assert;
 let client;
 let peerUser1, peerUser2;
 let call;
-describe('Create group conversation and start conference call', async function() {
+describe('Conference Call', async function() {
     this.timeout(300000);
 
     before(async function() {
@@ -20,6 +20,7 @@ describe('Create group conversation and start conference call', async function()
     });
 
     after(async function() {
+        document.querySelector('#localVideo').srcObject = null;
         await Promise.all([peerUser1.destroy(), peerUser2.destroy(), client.logout()]);
     });
 
@@ -31,7 +32,7 @@ describe('Create group conversation and start conference call', async function()
         const conversation = await client.createGroupConversation([peerUser1.userId, peerUser2.userId], 'SDK Test: Conference Call');
         assert(!!conversation, 'createGroupConversation not successful');
         call = await client.startConference(conversation.convId, {audio: false, video: false});
-        const res = await expectEvents(client, [{
+        await expectEvents(client, [{
             type: 'callStatus',
             predicate: evt => evt.call.state === Circuit.Enums.CallStateName.Initiated
         }, {
@@ -39,7 +40,7 @@ describe('Create group conversation and start conference call', async function()
             predicate: evt => evt.call.state === Circuit.Enums.CallStateName.Waiting
         }]);
         assert(call.callId);
-        document.querySelector('#localVideo').src = call.localVideoUrl;
+        document.querySelector('#localVideo').srcObject = call.localStreams.video;
     });
 
     it('function: joinConference, with event: callStatus with reaons: [callStateChanged, participantJoined]', async () => {
@@ -62,7 +63,6 @@ describe('Create group conversation and start conference call', async function()
     it('function: endConference, with event: callEnded', async () => {
         updateRemoteVideos(client);
         const res = await Promise.all([client.endConference(call.callId), expectEvents(client, ['callEnded'])]);
-        document.querySelector('#localVideo').src = '';
         assert(res[1].call.callId === call.callId);
     });
 });
