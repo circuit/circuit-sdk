@@ -20,17 +20,21 @@ export function sleep(ms) {
  */
 export function expectEvents(client, events) {
   return new Promise((resolve, reject) => {
-    events = events.map(e =>
+    const evts = events.map(e =>
       typeof e === 'string' ? { type: e, predicate: () => { return true; } } : e
     )
-    events.forEach(event => client.addEventListener(event.type, evt => {
-      const matchingEvents = events.filter(e => e.type === evt.type);
+    const fn = evt => {
+      const matchingEvents = evts.filter(e => e.type === evt.type);
       if (matchingEvents.length) {
         const resolvedEvents = matchingEvents.filter(me => !me.predicate || me.predicate(evt));
-        resolvedEvents.forEach(re => remove(events, re));
-        !events.length && resolve(evt);
+        resolvedEvents.forEach(re => remove(evts, re));
+        if (!evts.length) {
+          events.forEach(event => client.removeEventListener(event.type, fn))
+          resolve(evt);
+        }
       }
-    }));
+    }
+    evts.forEach(event => client.addEventListener(event.type, fn));
   });
 }
 
