@@ -39,8 +39,8 @@ describe('Conference Call', async function() {
             type: 'callStatus',
             predicate: evt => evt.call.state === Circuit.Enums.CallStateName.Waiting
         }]);
-        assert(call.callId);
         document.querySelector('#localVideo').srcObject = call.localStreams.video;
+        assert(call.callId);
     });
 
     it('function: joinConference, with event: callStatus with reaons: [callStateChanged, participantJoined]', async () => {
