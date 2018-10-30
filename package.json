@@ -1,0 +1,54 @@
+{
+  "name": "circuit-sdk",
+  "version": "1.2.4502",
+  "description": "Circuit SDK",
+  "main": "circuit-node.js",
+  "scripts": {
+    "test:browser": "node test/index",
+    "test:node": "mocha ./test/node/* --recursive --timeout=5000 --exit",
+    "test": "npm run test:node && npm run test:browser"
+  },
+  "author": "Unify Inc.",
+  "contributors": [
+    "Roger Urscheler <roger.urscheler@unify.com>",
+    "Rodrigo Pastro <rodrigo.pastro@unify.com>",
+    "Johannes Ruetschi <johannes.ruetschi@unify.com>"
+  ],
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/circuit/circuit-sdk",
+  "engines": {
+    "node": ">= 4.5.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/circuit/circuit-sdk"
+  },
+  "bugs": {
+    "url": "http://github.com/circuit/circuit-sdk/issues",
+    "mail": ""
+  },
+  "keywords": [
+    "api",
+    "webrtc",
+    "circuit",
+    "collaboration",
+    "sdk"
+  ],
+  "browser": {
+    "electron": false,
+    "./circuit-node.js": "./circuit.js"
+  },
+  "unpkg": "circuit.min.js",
+  "dependencies": {
+    "ws": "~3.3.3"
+  },
+  "devDependencies": {
+    "chai": "^4.1.2",
+    "express": "^4.16.2",
+    "globby": "^8.0.1",
+    "minimist": "^1.2.0",
+    "mocha": "^5.0.1",
+    "puppeteer": "^1.1.1",
+    "serve-static": "^1.13.2"
+  }
+}
