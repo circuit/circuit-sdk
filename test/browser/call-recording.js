@@ -37,9 +37,12 @@ describe('Call Recording', async function() {
                 predicate: evt => evt.reason === 'participantJoined'
             }])
         ]);
+        call = await client.findCall(call.callId);
+        document.querySelector('#localVideo').srcObject = call.localStreams.video;
     });
 
     after(async function() {
+        document.querySelector('#localVideo').srcObject = null;
         await Promise.all([peerUser.destroy(), client.logout()]);
     });
 

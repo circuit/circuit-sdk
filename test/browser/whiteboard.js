@@ -49,9 +49,11 @@ describe('Whiteboard tests', async function() {
             }])
         ]);
         call = result[0];
+        document.querySelector('#localVideo').srcObject = call.localStreams.video;
     });
 
     after(async function() {
+        document.querySelector('#localVideo').srcObject = null;
         await client.endCall(call.callId);
         await Promise.all([peerUser1.destroy(), client.logout()]);
     });

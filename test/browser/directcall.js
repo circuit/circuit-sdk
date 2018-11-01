@@ -8,7 +8,7 @@ const assert = chai.assert;
 let client;
 let peerUser;
 let call;
-describe('Outgoing direct call', async function() {
+describe('Direct Call', async function() {
     this.timeout(300000);
     
     before(async function() {
@@ -19,6 +19,7 @@ describe('Outgoing direct call', async function() {
     });
 
     after(async function() {
+        document.querySelector('#localVideo').srcObject  = null;
         await Promise.all([peerUser.destroy(), client.logout()]);
     });
 
@@ -39,7 +40,7 @@ describe('Outgoing direct call', async function() {
         ]);
         call = res[0];
         assert(call.callId);
-        document.querySelector('#localVideo').src = call.localVideoUrl;
+        document.querySelector('#localVideo').srcObject = call.localStreams.video;
     });
 
     it('function: answerCall, with event: callStatus with reasons: [remoteStreamUpdated, callStateChanged]', async () => {
@@ -60,7 +61,6 @@ describe('Outgoing direct call', async function() {
     it('function: endCall, with event: callEnded', async () => {
         updateRemoteVideos(client);
         const res = await Promise.all([client.endCall(call.callId), expectEvents(client, ['callEnded'])]);
-        document.querySelector('#localVideo').src = '';
         assert(res[1].call.callId === call.callId);
     });
 });
