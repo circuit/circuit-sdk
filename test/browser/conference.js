@@ -1,17 +1,15 @@
 'use strict';
 
 import { PeerUser } from '../peer-user.js';
-import { expectEvents, updateRemoteVideos, sleep, logEvents } from '../helper.js';
+import { expectEvents, updateRemoteVideos, sleep } from '../helper.js';
 import config from './config.js'
 
 const assert = chai.assert;
-
-describe('Create group conversation and start conference call', async function() {
-    this.timeout(5000);
-
-    let client;
-    let peerUser1, peerUser2;
-    let call;
+let client;
+let peerUser1, peerUser2;
+let call;
+describe('Conference Call', async function() {
+    this.timeout(300000);
 
     before(async function() {
         Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
@@ -22,6 +20,7 @@ describe('Create group conversation and start conference call', async function()
     });
 
     after(async function() {
+        document.querySelector('#localVideo').srcObject = null;
         await Promise.all([peerUser1.destroy(), peerUser2.destroy(), client.logout()]);
     });
 
@@ -29,10 +28,10 @@ describe('Create group conversation and start conference call', async function()
         client.removeAllListeners();
     });
 
-    it('should create group conversation, start conference and get callStatus with callStateChanged:Initiated and callStateChanged:Waiting', async () => {
+    it('functions: [createGroupConversation, startConference], with event: callStatus with states: [Initiated, Waiting]', async () => {
         const conversation = await client.createGroupConversation([peerUser1.userId, peerUser2.userId], 'SDK Test: Conference Call');
         assert(!!conversation, 'createGroupConversation not successful');
-        call = await client.startConference(conversation.convId, {audio: true, video: true});
+        call = await client.startConference(conversation.convId, {audio: false, video: false});
         await expectEvents(client, [{
             type: 'callStatus',
             predicate: evt => evt.call.state === Circuit.Enums.CallStateName.Initiated
@@ -40,16 +39,16 @@ describe('Create group conversation and start conference call', async function()
             type: 'callStatus',
             predicate: evt => evt.call.state === Circuit.Enums.CallStateName.Waiting
         }]);
+        document.querySelector('#localVideo').srcObject = call.localStreams.video;
         assert(call.callId);
-        document.querySelector('#localVideo').src = call.localVideoUrl;
     });
 
-    it('should get callStatus event for remoteStreamUpdated and callStateChanged:Active upon users joining', async () => {
-        await sleep(500); // wait to make sure the call is ready to be joined
+    it('function: joinConference, with event: callStatus with reaons: [callStateChanged, participantJoined]', async () => {
+        await sleep(5000); // wait to make sure the call is ready to be joined
         updateRemoteVideos(client);
-        await Promise.all([
-            peerUser1.exec('joinConference', call.callId, {audio: true, video: true}),
-            peerUser2.exec('joinConference', call.callId, {audio: true, video: false}),
+        const res = await Promise.all([
+            peerUser1.exec('joinConference', call.callId, {audio: false, video: false}),
+            peerUser2.exec('joinConference', call.callId, {audio: false, video: false}),
             expectEvents(client, [{
                 type: 'callStatus',
                 predicate: evt => evt.reason === 'callStateChanged' && evt.call.state === Circuit.Enums.CallStateName.Active
@@ -58,11 +57,12 @@ describe('Create group conversation and start conference call', async function()
                 predicate: evt => evt.reason === 'participantJoined'
             }])
         ]);
+        assert(res[2].call.callId === call.callId);
     });
 
-    it('should end conference and get callEnded event', async () => {
+    it('function: endConference, with event: callEnded', async () => {
         updateRemoteVideos(client);
-        await Promise.all([client.endConference(call.callId), expectEvents(client, ['callEnded'])]);
-        document.querySelector('#localVideo').src = '';
+        const res = await Promise.all([client.endConference(call.callId), expectEvents(client, ['callEnded'])]);
+        assert(res[1].call.callId === call.callId);
     });
 });
