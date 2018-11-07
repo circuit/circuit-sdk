@@ -84,7 +84,8 @@ describe('Call Devices', async function() {
     it('function: getLocalAudioVideoStream', async () => {
         stream = await client.getLocalAudioVideoStream();
         assert(stream);
-    });    
+    });
+    
     it('function: setAudioVideoStream', async () => {
         await client.setAudioVideoStream(call.callId, stream);
     });

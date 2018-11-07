@@ -25,8 +25,9 @@ function loadXHR(url) {
                 else {reject('Loading error:' + xhr.statusText)}
             };
             xhr.send();
+        } catch(err) { 
+            reject(err.message);
         }
-        catch(err) {reject(err.message)}
     });
 }
 describe('Whiteboard tests', async function() {
@@ -49,11 +50,12 @@ describe('Whiteboard tests', async function() {
             }])
         ]);
         call = result[0];
-        document.querySelector('#localVideo').srcObject = call.localVideoStream;
+        console.log(call);
+        // document.querySelector('#localVideo').srcObject = call.localVideoStream;
     });
 
     after(async function() {
-        document.querySelector('#localVideo').srcObject = null;
+        // document.querySelector('#localVideo').srcObject = null;
         await client.endCall(call.callId);
         await Promise.all([peerUser1.destroy(), client.logout()]);
     });

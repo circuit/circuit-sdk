@@ -39,7 +39,7 @@ describe('Conference Call', async function() {
             type: 'callStatus',
             predicate: evt => evt.call.state === Circuit.Enums.CallStateName.Waiting
         }]);
-        document.querySelector('#localVideo').srcObject = call.localStreams.video;
+        document.querySelector('#localVideo').srcObject = call.localVideoStream;
         assert(call.callId);
     });
 

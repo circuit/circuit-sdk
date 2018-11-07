@@ -26,7 +26,7 @@ describe('Call Muting', async function() {
             type: 'callStatus',
             predicate: evt => evt.call.state === Circuit.Enums.CallStateName.Waiting
         }]);
-        await sleep(3000); // wait to make sure the call is ready to be joined
+        await sleep(5000); // wait to make sure the call is ready to be joined
         await Promise.all([
             peerUser1.exec('joinConference', call.callId, {audio: true, video: false}),
             peerUser2.exec('joinConference', call.callId, {audio: true, video: false}),
@@ -51,11 +51,11 @@ describe('Call Muting', async function() {
     });
 
     it('function: muteParticipant, raises event: callStatus with reason: participantUpdated', async () => {
-        await Promise.all([
+        const res = await Promise.all([
             client.muteParticipant(call.callId, peerUser2.userId),
             expectEvents(client, [{
                 type: 'callStatus',
-                predicate: evt => evt.reason === 'participantUpdated' && evt.call.callId === call.callId && evt.participant.muted
+                predicate: evt => evt.reason === 'participantUpdated' && evt.participant.muted
             }])
         ]);
     });
