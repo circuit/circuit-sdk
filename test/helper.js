@@ -53,8 +53,8 @@ export function updateRemoteVideos(client) {
   client.addEventListener('callStatus', evt => {
     evt.call.participants.forEach((p, i) => {
       const el = document.querySelector(`#peerVideo${i}`);
-      if (el && el.src !== evt.call.participants[i].videoUrl) {
-        el.src = evt.call.participants[i].videoUrl || '';
+      if (el && el.srcObject !== evt.call.participants[i].videoStream) {
+        el.srcObject = evt.call.participants[i].videoStream || null;
       }
     });
   });

@@ -49,7 +49,7 @@ describe('Whiteboard tests', async function() {
             }])
         ]);
         call = result[0];
-        document.querySelector('#localVideo').srcObject = call.localStreams.video;
+        document.querySelector('#localVideo').srcObject = call.localVideoStream;
     });
 
     after(async function() {

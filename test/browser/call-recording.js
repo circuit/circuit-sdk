@@ -38,7 +38,7 @@ describe('Call Recording', async function() {
             }])
         ]);
         call = await client.findCall(call.callId);
-        document.querySelector('#localVideo').srcObject = call.localStreams.video;
+        document.querySelector('#localVideo').srcObject = call.localVideoStream;
     });
 
     after(async function() {

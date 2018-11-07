@@ -34,7 +34,7 @@ describe('Video Sharing', async function() {
             }])
         ]);
         call = await client.findCall(call.callId);
-        document.querySelector('#localVideo').srcObject = call.localStreams.video;
+        document.querySelector('#localVideo').srcObject = call.localVideoStream;
     });
 
     after(async function() {
@@ -48,7 +48,7 @@ describe('Video Sharing', async function() {
 
 
     it('function: toggleVideo [ON], raises event: callStatus with reason: callStateChanged', async () => {
-        const res = await Promise.all([
+        await Promise.all([
             client.toggleVideo(call.callId),
             expectEvents(client, [{
                 type: 'callStatus',
@@ -84,7 +84,7 @@ describe('Video Sharing', async function() {
     });
 
     it('function: toggleVideo [OFF], raises event: callStatus with reason: callStateChanged', async () => {
-        const res = await Promise.all([
+        await Promise.all([
             client.toggleVideo(call.callId),
             expectEvents(client, [{
                 type: 'callStatus',
