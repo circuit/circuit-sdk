@@ -37,9 +37,7 @@ describe('User Presence', () => {
             }])
         ]);
         const res = await client2.getStatusMessage();
-        console.log('RES', res);
-        console.log('MES', message);
-        assert(res === message);
+        assert(res.stringValue === message);
     });
 
     it('functions: [setPresence, getPresence], with event: userPresenceChanged', async () => {
