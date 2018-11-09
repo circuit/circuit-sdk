@@ -50,12 +50,12 @@ describe('Whiteboard tests', async function() {
             }])
         ]);
         call = result[0];
-        console.log(call);
-        // document.querySelector('#localVideo').srcObject = call.localVideoStream;
+        document.querySelector('#localVideo').srcObject = call.localVideoStream;
+        await sleep(5000);
     });
 
     after(async function() {
-        // document.querySelector('#localVideo').srcObject = null;
+        document.querySelector('#localVideo').srcObject = null;
         await client.endCall(call.callId);
         await Promise.all([peerUser1.destroy(), client.logout()]);
     });

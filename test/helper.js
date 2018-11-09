@@ -61,7 +61,7 @@ export function updateRemoteVideos(client) {
   client.addEventListener('callEnded', evt => {
     evt.call.participants.forEach((p, i) => {
       const el = document.querySelector(`#peerVideo${i}`);
-      el && (el.Object = null);
+      el && (el.srcObject = null);
     });
   });
 }

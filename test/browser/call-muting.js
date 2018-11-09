@@ -51,11 +51,11 @@ describe('Call Muting', async function() {
     });
 
     it('function: muteParticipant, raises event: callStatus with reason: participantUpdated', async () => {
-        const res = await Promise.all([
+        await Promise.all([
             client.muteParticipant(call.callId, peerUser2.userId),
             expectEvents(client, [{
                 type: 'callStatus',
-                predicate: evt => evt.reason === 'participantUpdated' && evt.participant.muted
+                predicate: evt => evt.reason === 'participantUpdated' && evt.call.callId === call.callId && evt.participant.muted
             }])
         ]);
     });
