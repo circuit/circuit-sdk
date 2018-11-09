@@ -108,7 +108,7 @@
     <span id="errorMessage" style="display: none"></span>
     <audio id="remoteAudio" autoplay="autoplay"></audio>
 
-    <script src="//unpkg.com/circuit-sdk/circuit.js"></script>
+    <script src="//unpkg.com/circuit-sdk@beta/circuit.js"></script>
 
     <script>
       var _client;
@@ -210,8 +210,8 @@
         $enableRecording.disabled = !(!call.isRemote && call.isEstablished);
 
         // Set local video and desktop streams
-        $localVideo.srcObject = call.localVideoStream;
-        // or $localVideo.srcObject = call.localStreams.video;
+        // pre v1.2.4700 $localVideo.srcObject = call.localVideoStream;
+        $localVideo.srcObject = call.localStreams.video;
         $localDesktop.srcObject = call.localStreams && call.localStreams.desktop;
 
         // Enable video checkbox
