@@ -26,7 +26,7 @@ describe('Call Muting', async function() {
             type: 'callStatus',
             predicate: evt => evt.call.state === Circuit.Enums.CallStateName.Waiting
         }]);
-        await sleep(3000); // wait to make sure the call is ready to be joined
+        await sleep(5000); // wait to make sure the call is ready to be joined
         await Promise.all([
             peerUser1.exec('joinConference', call.callId, {audio: true, video: false}),
             peerUser2.exec('joinConference', call.callId, {audio: true, video: false}),

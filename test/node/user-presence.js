@@ -2,7 +2,6 @@
 
 const assert = require('assert');
 const Circuit = require('../../circuit-node');
-const config = require('./config.json');
 const helper = require('./helper');
 const prep = require('../preparation');
 Circuit.logger.setLevel(Circuit.Enums.LogLevel.Error);
@@ -38,7 +37,7 @@ describe('User Presence', () => {
             }])
         ]);
         const res = await client2.getStatusMessage();
-        assert(res === message);
+        assert(res.stringValue === message);
     });
 
     it('functions: [setPresence, getPresence], with event: userPresenceChanged', async () => {

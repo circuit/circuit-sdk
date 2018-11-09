@@ -53,21 +53,21 @@ export function updateRemoteVideos(client) {
   client.addEventListener('callStatus', evt => {
     evt.call.participants.forEach((p, i) => {
       const el = document.querySelector(`#peerVideo${i}`);
-      if (el && el.src !== evt.call.participants[i].videoUrl) {
-        el.src = evt.call.participants[i].videoUrl || '';
+      if (el && el.srcObject !== evt.call.participants[i].videoStream) {
+        el.srcObject = evt.call.participants[i].videoStream || null;
       }
     });
   });
   client.addEventListener('callEnded', evt => {
     evt.call.participants.forEach((p, i) => {
       const el = document.querySelector(`#peerVideo${i}`);
-      el && (el.src = '');
+      el && (el.srcObject = null);
     });
   });
 }
 
 export function clearAllVideos() {
   for (let node of document.querySelectorAll('video')) {
-    node.src = '';
+    node.srcObject = null;
   }
 }
