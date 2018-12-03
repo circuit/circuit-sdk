@@ -5,6 +5,9 @@ coverage
 #examples
 examples
 
+#docs
+docs
+
 #build tools
 .travis.yml
 .jenkins.yml
