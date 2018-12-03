@@ -30,10 +30,10 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- *  @version: 1.2.4700
+ *  @version: 1.2.4800
  */
 
-var Circuit = {}; Object.defineProperty(Circuit, 'version', { value: '1.2.4700'});
+var Circuit = {}; Object.defineProperty(Circuit, 'version', { value: '1.2.4800'});
 
 // Define external globals for JSHint
 /*global Buffer, clearInterval, clearTimeout, process, require, setInterval, setTimeout*/
@@ -3355,7 +3355,8 @@ var Circuit = (function (circuit) {
         ClientCapability: {  // This is a bitwise enum for client capabilities. Used between client and access.
             GUEST_EXPERIENCE: 0x01,
             SYSTEM_MESSAGES: 0x02,
-            TC_START_REASSIGNMENT: 0x04
+            TC_START_REASSIGNMENT: 0x04,
+            MUTABLE_APN: 0X08
         },
 
         ///////////////////////////////////////////////////////////////////////////
@@ -3462,7 +3463,8 @@ var Circuit = (function (circuit) {
             CONVERSATION_MARKED: 'CONVERSATION_MARKED',
             CONVERSATION_UNMARKED: 'CONVERSATION_UNMARKED',
             FAVORITE_POSITION_CHANGED: 'FAVORITE_POSITION_CHANGED',
-            USER_DATA_CHANGED: 'USER_DATA_CHANGED'
+            USER_DATA_CHANGED: 'USER_DATA_CHANGED',
+            JOURNAL_ENTRY_DELETED: 'JOURNAL_ENTRY_DELETED'
         },
 
         ///////////////////////////////////////////////////////////////////////////
@@ -5213,7 +5215,8 @@ var Circuit = (function (circuit) {
             ILLEGAL_ACCOUNT_TEMPLATE_ASSIGNMENT: 'ILLEGAL_ACCOUNT_TEMPLATE_ASSIGNMENT',
             MAXIMUM_ACCOUNTS_REACHED: 'MAXIMUM_ACCOUNTS_REACHED',
             ERROR: 'ERROR',
-            OK: 'OK'
+            OK: 'OK',
+            OK_NO_CHANGES: 'OK_NO_CHANGES'
         },
 
         ///////////////////////////////////////////////////////////////////////////
@@ -5274,6 +5277,7 @@ var Circuit = (function (circuit) {
             BRAZILIAN_PORTUGUESE: 'BRAZILIAN_PORTUGUESE',
             COLOR_CONTRAST: 'COLOR_CONTRAST',
             CONFERENCE_POLL: 'CONFERENCE_POLL',
+            DELETE_CALL_JOURNAL: 'DELETE_CALL_JOURNAL',
             DEVELOPER_CONSOLE_EDIT: 'DEVELOPER_CONSOLE_EDIT',
             DIRECT_TO_CONF_UPGRADE: 'DIRECT_TO_CONF_UPGRADE',
             DISPLAY_MULTIPLE_VIDEO_STREAMS: 'DISPLAY_MULTIPLE_VIDEO_STREAMS',
@@ -5287,12 +5291,13 @@ var Circuit = (function (circuit) {
             IN_CALL_SIDEBAR: 'IN_CALL_SIDEBAR',
             IN_CONTEXT_SIDEBAR: 'IN_CONTEXT_SIDEBAR',
             IN_CONTEXT_SIDEBAR_PARTICIPANTS: 'IN_CONTEXT_SIDEBAR_PARTICIPANTS',
+            INCOMING_WEBHOOKS: 'INCOMING_WEBHOOKS',
             IP_HANDLING_POLICY: 'IP_HANDLING_POLICY',
             JABRA_NODE_MODULE_SDK: 'JABRA_NODE_MODULE_SDK',
             LANDSCAPE_MODE: 'LANDSCAPE_MODE',
             LEAK_CANARY: 'LEAK_CANARY',
             LOCK_SCREEN_CALL_CONTROL: 'LOCK_SCREEN_CALL_CONTROL',
-            NATIVE_NOTIFICATIONS: 'NATIVE_NOTIFICATIONS',
+            MUTABLE_APN: 'MUTABLE_APN',
             OLD_VOTING: 'OLD_VOTING',
             OPEN_XCHANGE: 'OPEN_XCHANGE',
             ORGANISE_CONTENT: 'ORGANISE_CONTENT',
@@ -5310,7 +5315,6 @@ var Circuit = (function (circuit) {
             UCAAS_ITSP: 'UCAAS_ITSP',
             UNIFIED_PLAN_SDP: 'UNIFIED_PLAN_SDP',
             VIDEO_PLAYER: 'VIDEO_PLAYER',
-            WHITEBOARD: 'WHITEBOARD',
             ZOOM_SCREEN_SHARE: 'ZOOM_SCREEN_SHARE'
         },
 
@@ -5345,17 +5349,27 @@ var Circuit = (function (circuit) {
         },
 
         ///////////////////////////////////////////////////////////////////////////
-        // Forms
+        // CPAAS
         ///////////////////////////////////////////////////////////////////////////
         CPaaSActionType: {
             SUBMIT_FORM_DATA: 'SUBMIT_FORM_DATA',
-            CREATE_OAUTH_APPLICATION: 'CREATE_OAUTH_APPLICATION',
             GET_OAUTH_APPLICATIONS: 'GET_OAUTH_APPLICATIONS',
+            CREATE_OAUTH_APPLICATION: 'CREATE_OAUTH_APPLICATION',
             GET_OAUTH_APPLICATION: 'GET_OAUTH_APPLICATION',
-            RECREATE_CLIENT_SECRET: 'RECREATE_CLIENT_SECRET',
+            DELETE_OAUTH_APPLICATION: 'DELETE_OAUTH_APPLICATION',
             SUSPEND_OAUTH_APPLICATION: 'SUSPEND_OAUTH_APPLICATION',
             UNSUSPEND_OAUTH_APPLICATION: 'UNSUSPEND_OAUTH_APPLICATION',
-            DELETE_OAUTH_APPLICATION: 'DELETE_OAUTH_APPLICATION'
+            UPDATE_OAUTH_APPLICATION: 'UPDATE_OAUTH_APPLICATION',
+            RECREATE_CLIENT_SECRET: 'RECREATE_CLIENT_SECRET',
+            DELETE_USER_FROM_OAUTH_APPLICATION: 'DELETE_USER_FROM_OAUTH_APPLICATION',
+            ADD_USER_TO_OAUTH_APPLICATION: 'ADD_USER_TO_OAUTH_APPLICATION',
+            CREATE_INCOMING_WEBHOOK: 'CREATE_INCOMING_WEBHOOK',
+            GET_INCOMING_WEBHOOK: 'GET_INCOMING_WEBHOOK',
+            GET_INCOMING_WEBHOOKS: 'GET_INCOMING_WEBHOOKS',
+            UPDATE_INCOMING_WEBHOOK: 'UPDATE_INCOMING_WEBHOOK',
+            DELETE_INCOMING_WEBHOOK: 'DELETE_INCOMING_WEBHOOK',
+            SUSPEND_INCOMING_WEBHOOK: 'SUSPEND_INCOMING_WEBHOOK',
+            UNSUSPEND_INCOMING_WEBHOOK: 'UNSUSPEND_INCOMING_WEBHOOK'
         },
 
         CPaaSEventType: {
@@ -5370,6 +5384,12 @@ var Circuit = (function (circuit) {
             DROPDOWN: 'DROPDOWN',
             INPUT: 'INPUT',
             SPACER: 'SPACER'
+        },
+
+        CPasSIncomingWebhookFilter: {
+            TENANT: 'TENANT',
+            USER: 'USER',
+            CONVERSATION: 'CONVERSATION'
         }
     });
 
@@ -5582,6 +5602,9 @@ var Circuit = (function (circuit) {
                     break;
                 case Constants.ConversationEventType.USER_DATA_CHANGED:
                     evtData = event.conversation.userDataChangedEvent;
+                    break;
+                case Constants.ConversationEventType.JOURNAL_ENTRY_DELETED:
+                    evtData = event.conversation.journalEntryDeletedEvent;
                     break;
                 }
                 evtData.convId = event.conversation.convId;
@@ -6572,6 +6595,16 @@ var Circuit = (function (circuit) {
                 return parsedSdp;
             },
 
+            isMultiplexEnabled: function (sdp) {
+                var parsedSdp = (typeof sdp === 'string') ? parseSdp(sdp) : sdp;
+                if (parsedSdp.a) {
+                    return parsedSdp.a.some(function (a) {
+                        return (a.field === 'group' && a.value && a.value.startsWith('BUNDLE'));
+                    });
+                }
+                return false;
+            },
+
             hasVideo: function (sdp) {
                 var parsedSdp = (typeof sdp === 'string') ? parseSdp(sdp) : sdp;
 
@@ -6910,28 +6943,6 @@ var Circuit = (function (circuit) {
             },
 
             /**
-             * This method removes empty attribute lines. E.g.: ice-ufrag, which can
-             * cause problems on the remote peer.
-             */
-            removeEmptyAttributeLines: function (sdp, attrFields) {
-                var parsedSdp = (typeof sdp === 'string') ? parseSdp(sdp) : sdp;
-                if (parsedSdp.m) {
-                    var attrFieldsMap = {};
-                    if (!Array.isArray(attrFields)) {
-                        attrFieldsMap[attrFields] = true;
-                    } else {
-                        attrFields.forEach(function (field) { attrFieldsMap[field] = true; });
-                    }
-                    parsedSdp.m.forEach(function (m) {
-                        m.a = m.a && m.a.filter(function (a) {
-                            return a.value || !attrFieldsMap[a.field];
-                        });
-                    });
-                }
-                return parsedSdp;
-            },
-
-            /**
              * This method validate if all m lines contains at least one UDP IceCandidate
              * Any TCP IceCandidates is removed from the result
              * if SDP is not valid the method returns null otherwise
@@ -6975,23 +6986,6 @@ var Circuit = (function (circuit) {
                     });
                 });
                 return candidates;
-            },
-
-            /**
-             * Removes any ssrc from m-lines that are 'recvonly'.
-             */
-            removeNotNeededSsrc: function (sdp) {
-                var parsedSdp = (typeof sdp === 'string') ? parseSdp(sdp) : sdp;
-                parsedSdp.m.forEach(function (m) {
-                    if (m.a.some(function (a) {
-                        return (a.field === 'recvonly');
-                    })) {
-                        m.a = m.a.filter(function (a) {
-                            return a.field !== 'ssrc';
-                        });
-                    }
-                });
-                return parsedSdp;
             },
 
             removeAudioMediaProtocols: function (sdp, protocols) {
@@ -7983,11 +7977,7 @@ var Circuit = (function (circuit) {
                 {noiseSuppression: true},
                 {googNoiseSuppression: true},
                 {googNoiseSuppression2: true},
-                {googHighpassFilter: true},
-                // Disable audio ducking
-                {googDucking: false},
-                // By default, use the output device associated to the microphone (useful for headsets)
-                {chromeRenderToAssociatedSink: true}
+                {googHighpassFilter: true}
             ]
         };
     };
@@ -8529,26 +8519,7 @@ var Circuit = (function (circuit) {
                         clearDeviceInfoCache();
                     },
                     getAudioOptions: function (config) {
-                        // Default options without chromeRenderToAssociatedSink since it no longer
-                        // works in Chrome and is causing problems in DA. It will be removed from getDefaultAudioOptions
-                        // as soon as we verify that removing it won't cause problems in the other platforms.
-                        var audio = {
-                            optional: [
-                                // Echo cancellation constraints
-                                {echoCancellation: true},
-                                {googEchoCancellation: true},
-                                {googEchoCancellation2: true},
-                                {autoGainControl: !!config.enableAudioAGC},
-                                {googAutoGainControl: !!config.enableAudioAGC},
-                                {googAutoGainControl2: !!config.enableAudioAGC},
-                                {noiseSuppression: true},
-                                {googNoiseSuppression: true},
-                                {googNoiseSuppression2: true},
-                                {googHighpassFilter: true},
-                                // Disable audio ducking
-                                {googDucking: false}
-                            ]
-                        };
+                        var audio = getDefaultAudioOptions(config);
 
                         if (config && config.sourceId && (config.sourceId !== 'default')) {
                             // Start out sourceId as mandatory, it will be moved to optional if it fails
@@ -9656,7 +9627,6 @@ var Circuit = (function (circuit) {
                                 };
                             }
                         }
-                        configuration.bundlePolicy = 'max-compat';
                         var pc = new RTCPeerConnection(configuration);
 
                         function hasToCopyDtls(parsedSdp) {
@@ -12210,6 +12180,10 @@ var Circuit = (function (circuit) {
         // (Only includes members which need to access private data)
         ///////////////////////////////////////////////////////////////////////////////////////
         this.setState = function (newState, bypassTerminate) {
+            if (!isRemote && newState !== CallState.Terminated && this.checkCstaState(CstaCallState.Holding)) {
+                newState = CallState.Holding;
+            }
+
             if (!newState || newState === _state) {
                 return;
             }
@@ -12220,7 +12194,7 @@ var Circuit = (function (circuit) {
             logger.debug('[BaseCall]: Changing call state from ' + _state.name + ' to ' + newState.name);
 
             // If it's an ATC call and the CSTA Established has not yet been received, don't set the established time
-            if (!this.establishedTime && newState.established && (!this.isATCCall || this.getCstaState().established)) {
+            if (!this.establishedTime && newState.established && (!this.atcCallInfo || this.atcCallInfo.cstaState.established)) {
                 this.establishedTime = Date.now();
             }
 
@@ -12814,7 +12788,7 @@ var Circuit = (function (circuit) {
         // Define the read-only properties to access the internal variables
         Object.defineProperties(this, {
             isPullAllowed: {
-                get: function () { return !this.pullNotAllowed && this.state === CallState.ActiveRemote; },
+                get: function () { return !this.pullNotAllowed && this.state === CallState.ActiveRemote && !this.pullBlocked; },
                 enumerable: true,
                 configurable: false
             }
@@ -12890,7 +12864,6 @@ var Circuit = (function (circuit) {
 })(Circuit || {});
 
 
-// Define globals for JSHint
 /*global Audio, window*/
 
 var Circuit = (function (circuit) {
@@ -12992,27 +12965,32 @@ var Circuit = (function (circuit) {
         // Internal Functions
         ///////////////////////////////////////////////////////////////////////////////////////
         function createSessionController() {
-            if (!_sessionCtrl) {
-                _sessionCtrl = new RtcSessionController({
-                    callId: _that.callId,
-                    isDirectCall: _that.isDirect,
-                    isTelephonyCall: _that.isTelephonyCall,
-                    isLargeConference: _that.isLarge,
-                    isAtcPullCall: options.isAtcPullCall,
-                    reuseDesktopStreamFrom: options.reuseDesktopStreamFrom,
-                    isSessionGuest: options.isSessionGuest,
-                    midMappingEnabled: options.midMappingEnabled
-                });
-                _sessionCtrl.onMediaUpdate = onMediaUpdate;
-                _sessionCtrl.onLocalVideoStream = onLocalVideoStream;
-                _sessionCtrl.onRemoteStreams = onRemoteStreams;
-                _sessionCtrl.onScreenSharePointerStatus = onScreenSharePointerStatus;
+            if (_sessionCtrl) {
+                return;
+            }
+            if (options.reuseSessionCtrl) {
+                _sessionCtrl = options.reuseSessionCtrl;
+                return;
+            }
+            _sessionCtrl = new RtcSessionController({
+                callId: _that.callId,
+                isDirectCall: _that.isDirect,
+                isTelephonyCall: _that.isTelephonyCall,
+                isLargeConference: _that.isLarge,
+                isAtcPullCall: options.isAtcPullCall,
+                reuseDesktopStreamFrom: options.reuseDesktopStreamFrom,
+                isSessionGuest: options.isSessionGuest,
+                midMappingEnabled: options.midMappingEnabled
+            });
+            _sessionCtrl.onMediaUpdate = onMediaUpdate;
+            _sessionCtrl.onLocalVideoStream = onLocalVideoStream;
+            _sessionCtrl.onRemoteStreams = onRemoteStreams;
+            _sessionCtrl.onScreenSharePointerStatus = onScreenSharePointerStatus;
 
-                if (!_that.isDirect) {
-                    // For group conversations tell the RTCSessionController to offer
-                    // additional recvonly media streams for video
-                    _sessionCtrl.setExtraVideoChannelsForParticipants(_that.numConvParticipants);
-                }
+            if (!_that.isDirect) {
+                // For group conversations tell the RTCSessionController to offer
+                // additional recvonly media streams for video
+                _sessionCtrl.setExtraVideoChannelsForParticipants(_that.numConvParticipants);
             }
         }
 
@@ -13193,7 +13171,7 @@ var Circuit = (function (circuit) {
             },
             isDtmfAllowed: {
                 get: function () {
-                    if (this.checkState([CallState.Active, CallState.Delivered])) {
+                    if (this.checkState([CallState.Active, CallState.Delivered]) || this.isOsBizFirstCall) {
                         if (!this.sessionCtrl.canSendDTMFDigits()) {
                             if (this.checkState(CallState.Active)) {
                                 return !!this.atcCallInfo; // For ATC calls we can use CSTA to generate digits (only in Active state)
@@ -13288,6 +13266,10 @@ var Circuit = (function (circuit) {
         // Current client ID associated to this call
         this.clientId = options.clientId;
 
+        // In case of OsBiz local call consultation, these flags indicate the first and seconds calls
+        this.isOsBizFirstCall = false;
+        this.isOsBizSecondCall = false;
+
         ///////////////////////////////////////////////////////////////////////////////////////
         // Public Members
         // (Only includes members which need to access private data)
@@ -13298,8 +13280,12 @@ var Circuit = (function (circuit) {
             }
 
             logger.debug('[LocalCall]: Terminating call with callId =', this.callId);
-            unregisterSessionController();
-            _sessionCtrl.terminate();
+            if (this.isOsBizSecondCall) {
+                _sessionCtrl = null;
+            } else {
+                unregisterSessionController();
+                _sessionCtrl.terminate();
+            }
 
             _localVideoUrl = '';
             _remoteAudioUrl = '';
@@ -15192,6 +15178,27 @@ var Circuit = (function (circuit) {
         return mediaType;
     }
 
+    function DisabledRemoteOfferMLines() {
+        var _list = {};
+        return {
+            add: function (index, mline) {
+                _list[index] = mline;
+            },
+            get: function (index) {
+                return _list[index];
+            },
+            remove: function (index) {
+                delete _list[index];
+            },
+            getAll: function () {
+                return _list;
+            },
+            removeAll: function () {
+                _list = {};
+            }
+        };
+    }
+
     /////////////////////////////////////////////////////////////////////////////////////////
     // RtcSessionController
     //
@@ -15292,7 +15299,9 @@ var Circuit = (function (circuit) {
                 connectedTimer: null,
                 // Contains the origin field of the local session description
                 localOrigin: null,
-                sentIceCandidates: []
+                sentIceCandidates: [],
+                // Disabled remote offer m-lines that need to be restored before sending the answer SDP back
+                disabledRemoteOfferMLines: new DisabledRemoteOfferMLines()
             },
             screenControl: {
                 trickleIceForOffer: !RtcSessionController.disableTrickleIce && !options.disableTrickleIce,
@@ -15307,10 +15316,6 @@ var Circuit = (function (circuit) {
 
         // Collect call statistics
         var _callStats = null;
-
-        // In case this client only supports 1 peer connection and we receive an extra m-line in the invite,
-        // we have to disable and save it here (we need it when sending the answer SDP back)
-        var _disabledVideoMline = null;
 
         var _turnUris = [];
         var _turnCredentials = {};
@@ -15407,6 +15412,10 @@ var Circuit = (function (circuit) {
         // SBC won't send it in the answer. So we need to set it until SBC adds support for it.
         // It's required for Firefox v63+ and Chrome (only if using Unified SDP)
         var _lastAudioOfferMidAttr = '';
+
+        // By default multiplex is disabled. But we enable it in certain call scenarios involving Edge browsers
+        // It's not being stored in _pcSettings because it needs to be set before the peer connections are created
+        var _enableMultiplex = false;
 
         /////////////////////////////////////////////////////////////////////////////
         // Media Capture and Streams
@@ -15759,6 +15768,11 @@ var Circuit = (function (circuit) {
             }
 
             var config = {};
+
+            if (_browser.edge && !_enableMultiplex) {
+                // If multiplex is not enabled, we have to explicitly set bundlePolicy to max-compat in Edge
+                config.bundlePolicy = 'max-compat';
+            }
 
             if (_isTelephonyCall) {
                 // RTCP MUX support is still being added to the SBC, so we need to negotiate it (https://groups.google.com/forum/m/#!topic/discuss-webrtc/eM57DEy89MY)
@@ -16185,10 +16199,22 @@ var Circuit = (function (circuit) {
                 var localSdp = pc.localDescription;
                 var parsed = sdpParser.parse(localSdp.sdp);
 
-                if (!_pc.desktopPeerConnection && _disabledVideoMline) {
-                    // Include the disabled video m-line from the offer
-                    parsed.m.splice(DIRECT_CALL_SDP_M_LINE_INDEX.video, 0, _disabledVideoMline);
-                    _disabledVideoMline = null;
+                if (localSdp.type === 'answer') {
+                    var disabledOfferMLines = getSetting(_pc, 'disabledRemoteOfferMLines');
+                    if (!_pc.desktopPeerConnection && disabledOfferMLines.get(DIRECT_CALL_SDP_M_LINE_INDEX.video)) {
+                        // Include the disabled video m-line from the offer
+                        parsed.m.splice(DIRECT_CALL_SDP_M_LINE_INDEX.video, 0, disabledOfferMLines.get(DIRECT_CALL_SDP_M_LINE_INDEX.video));
+                        disabledOfferMLines.remove(DIRECT_CALL_SDP_M_LINE_INDEX.video);
+                    }
+                    if (_browser.edge) {
+                        var list = disabledOfferMLines.getAll();
+                        var keys = Object.keys(list);
+                        keys.sort(); // We have to restore starting from the lowest indexed m-line
+                        keys.forEach(function (index) {
+                            parsed.m.splice(index, 0, list[index]);
+                        });
+                        disabledOfferMLines.removeAll();
+                    }
                 }
 
                 if (pc.desktopPeerConnection) {
@@ -16220,13 +16246,6 @@ var Circuit = (function (circuit) {
 
             var trickleIceEnabled = useTrickleIce(pc, sdp.type);
 
-            ///////////////////////////////////////////////////////////////////////////////////////////
-            // WORKAROUND!!!
-            // Chrome is incorrectly moving the position of the "b=" line in-between the "a=" lines.
-            // This is a violation of RFC4566 and causes the SBC to drop the call since it cannot
-            // parse the SDP. As a temporary workaround until Chrome is fixed, let's parse and then
-            // rebuild the SDP to ensure that it is correct.
-            // (Last verified in v36.0.1985.143)
             var parsedSdp = sdp.parsedSdp;
 
             // Remove the ssrc-audio-level attribute, which imposes a security risk.
@@ -16244,18 +16263,6 @@ var Circuit = (function (circuit) {
             } else if (isEndOfCandidates()) {
                 parsedSdp = sdpParser.addEndOfCandidatesLine(parsedSdp);
             }
-
-            ///////////////////////////////////////////////////////////////////////////////////////////
-            // WORKAROUND!!!
-            // If there's an inactive m-line, Chrome adds empty a=ice-ufrag and a=ice-pwd attributes,
-            // which is not accepted by the remote peer. So remove these lines.
-            parsedSdp = sdpParser.removeEmptyAttributeLines(parsedSdp, ['ice-ufrag', 'ice-pwd', 'ice-options']);
-
-            ///////////////////////////////////////////////////////////////////////////////////////////
-            // WORKAROUND!!!
-            // Firefox (as of v40) adds an ssrc to recvonly m-lines. Chrome doesn't like it,
-            // so remove it!
-            parsedSdp = sdpParser.removeNotNeededSsrc(parsedSdp);
 
             ///////////////////////////////////////////////////////////////////////////////////////////
             // WORKAROUND!!!
@@ -16292,7 +16299,8 @@ var Circuit = (function (circuit) {
                 } else {
                     handleFailure('res_RestartBrowser');
                 }
-            } else if (sdpParser.validateIceCandidates(parsedSdp) || (trickleIceEnabled && !isEndOfCandidates()) || _ignoreNextConnection) {
+            } else if (sdpParser.validateIceCandidates(parsedSdp, false, _enableMultiplex) ||
+                       (trickleIceEnabled && !isEndOfCandidates()) || _ignoreNextConnection) {
                 if (trickleIceEnabled && !isEndOfCandidates()) {
                     var settings = getSettings(pc);
                     if (settings) {
@@ -17205,11 +17213,19 @@ var Circuit = (function (circuit) {
 
             var hasVideo = false;
             var parsedSdp = sdpParser.parse(rtcSdp.sdp);
-            sdpParser.disableMultiplex(parsedSdp);
+
+            if (!_enableMultiplex) {
+                // By default browsers add a=group to the SDP, so remove it if multiplex is not enabled
+                sdpParser.disableMultiplex(parsedSdp);
+            } else {
+                logger.debug('[RtcSessionController]: Media multiplex enabled!');
+            }
 
             if (_isTelephonyCall) {
                 // Workaround: Chrome is now including UDP/TLS in the media protocols, which breaks outgoing calls to GTC/ATC
                 // For now, we're removing UDP/TLS until SBC (SSM) supports it
+                // Update 11/2018: SBC started supporting it in V9R2.20.00, but we still need to remove them until all SBCs in
+                // the field are upgraded.
                 sdpParser.removeAudioMediaProtocols(parsedSdp, ['UDP', 'TLS']);
 
                 if (pc.connectionBypassed && Utils.isMobile()) {
@@ -17236,8 +17252,10 @@ var Circuit = (function (circuit) {
             }
 
             if (_holding) {
-                sdpParser.setConnectionMode(parsedSdp, 'both', 'inactive');
-                logger.info('[RtcSessionController]: updateLocalDescription with Connection Mode Inactive');
+                if (!WebRTCAdapter.unifiedPlanEnabled) {
+                    sdpParser.setConnectionMode(parsedSdp, 'both', 'inactive');
+                    logger.info('[RtcSessionController]: updateLocalDescription with Connection Mode Inactive');
+                }
             } else if (_mediaConstraints.video || _mediaConstraints.desktop) {
                 hasVideo = sdpParser.hasVideo(parsedSdp);
             } else if (rtcSdp.type === 'answer') {
@@ -17284,6 +17302,31 @@ var Circuit = (function (circuit) {
             }
             logger.debug('[RtcSessionController]: updateRemoteDescription with mediaConstraints=', _mediaConstraints);
 
+            if (sdpType === 'offer' && pc === _pc) {
+                var disabledRemoteMLines = getSetting(pc, 'disabledRemoteOfferMLines');
+                disabledRemoteMLines.removeAll();
+                if (_isDirectCall && !pc.desktopPeerConnection && desktopSdpMline) {
+                    // This client only supports 1 peerconnection, so replace the video m-line with screenshare m-line
+                    // Set video m-line as inactive and save it for later. We need to send it back in the answer SDP.
+                    var disabledVideoMline = parsedSdp.m[DIRECT_CALL_SDP_M_LINE_INDEX.video];
+                    disabledVideoMline.port = 0;
+                    sdpParser.setConnectionMode({m: [disabledVideoMline]}, 'video', 'inactive');
+                    disabledRemoteMLines.add(DIRECT_CALL_SDP_M_LINE_INDEX.video, disabledVideoMline);
+                    parsedSdp.m[DIRECT_CALL_SDP_M_LINE_INDEX.video] = desktopSdpMline.sdp;
+                    logger.debug('[RtcSessionController]: Disabled and replaced video m-line with screenshare m-line');
+                }
+                if (_browser.edge) {
+                    // Edge doesn't support port=0 m-lines, so remove them here and restore them in the answer SDP
+                    for (var i = parsedSdp.m.length - 1; i >= 0; i--) {
+                        var m = parsedSdp.m[i];
+                        if (m.port === 0 && !m.a.some(function (a) {return a.field === 'bundle-only';})) {
+                            disabledRemoteMLines.add(i, parsedSdp.m[i]);
+                            parsedSdp.m.splice(i, 1);
+                        }
+                    }
+                }
+            }
+
             var allVideoRecvOnly = false;
             var hasVideo = sdpParser.hasVideo(parsedSdp);
             if (hasVideo) {
@@ -17324,15 +17367,6 @@ var Circuit = (function (circuit) {
                     var index = desktopSdpMline && desktopSdpMline.index;
                     parsedSdp = sdpParser.setVideoBandwidth(parsedSdp, maxBw, true, index);
                     sdpParser.setXGoogle(parsedSdp, xGoogle, index);
-                }
-
-                ///////////////////////////////////////////////////////////////////////////////////////////
-                // WORKAROUND!!!
-                // If the client is receiving an SDP Offer with *recvonly* video AND the client is not
-                // sending any video, disable all the video m-lines to avoid Chrome-Firefox
-                // interoperability issue.
-                if (_isDirectCall && sdpType === 'offer' && allVideoRecvOnly && !_mediaConstraints.video && !_mediaConstraints.desktop) {
-                    parsedSdp = sdpParser.removeVideo(parsedSdp);
                 }
             }
             sdpParser.setOpusParameters(parsedSdp, RtcSessionController.sdpParameters.audio);
@@ -17384,6 +17418,9 @@ var Circuit = (function (circuit) {
                     _activeMediaType = {audio: true, video: hasVideo};
                 }
             }
+
+            // Enable multiplex if the incoming direct call has it enabled
+            _enableMultiplex = _isDirectCall && sdpType === 'offer' && sdpParser.isMultiplexEnabled(parsedSdp);
 
             return parsedSdp;
         }
@@ -17659,15 +17696,6 @@ var Circuit = (function (circuit) {
                 };
 
                 if (_pc) {
-                    if (_isDirectCall && !_pc.desktopPeerConnection && desktopSdpMline) {
-                        // This client only supports 1 peerconnection, so replace the video m-line with screenshare m-line
-                        // Set video m-line as inactive and save it for later. We need to send it back in the answer SDP.
-                        _disabledVideoMline = parsedSdp.m[DIRECT_CALL_SDP_M_LINE_INDEX.video];
-                        _disabledVideoMline.port = 0;
-                        sdpParser.setConnectionMode({m: [_disabledVideoMline]}, 'video', 'inactive');
-                        parsedSdp.m[DIRECT_CALL_SDP_M_LINE_INDEX.video] = desktopSdpMline.sdp;
-                        logger.debug('[RtcSessionController]: Disabled and replaced video m-line with screenshare m-line');
-                    }
                     parsedSdp = updateRemoteDescription(_pc, parsedSdp, rtcSdp.type, desktopSdpMline);
                     var updatedMainSdp = new WebRTCAdapter.SessionDescription({
                         type: rtcSdp.type,
@@ -17713,6 +17741,8 @@ var Circuit = (function (circuit) {
             };
 
             try {
+                _enableMultiplex = _browser.edge && _isDirectCall;
+
                 _pc.createOffer(function (mainSdp) {
                     setLocalAndSendMessage(mainSdp);
                 }, function (error) {
@@ -17889,6 +17919,8 @@ var Circuit = (function (circuit) {
                         OfferToReceiveVideo: getOfferToReceiveVideo(_mediaConstraints)
                     }
                 };
+
+                _enableMultiplex = _browser.edge && _isDirectCall;
 
                 _pc.createOffer(function (mainSdp) {
                     setLocalAndSendMessage(mainSdp);
@@ -18831,7 +18863,7 @@ var Circuit = (function (circuit) {
         };
 
         this.canSendDTMFDigits = function () {
-            if (!_dtmfSender && !enableDTMFSender()) {
+            if (_browser.edge || (!_dtmfSender && !enableDTMFSender())) {
                 return false;
             }
             return _dtmfSender && _dtmfSender.canInsertDTMF;
@@ -20061,6 +20093,7 @@ var Circuit = (function (circuit) {
         var SP106_API_VERSION = 2090106; // 2.9.106-x
         var SP107_API_VERSION = 2090107; // 2.9.107-x
         var SP109_API_VERSION = 2090111; // 2.9.111-x
+        var SP110_API_VERSION = 2090112; // 2.9.112-x
 
         var NOP = function () {};
 
@@ -20483,6 +20516,14 @@ var Circuit = (function (circuit) {
 
         this.isDeviceStatusInResponseSupported = function () {
             return _clientApiVersion >= SP109_API_VERSION;
+        };
+
+        this.isIncomingWebhooksSupported = function () {
+            return _clientApiVersion > SP110_API_VERSION;
+        };
+
+        this.isDeleteCallJournalSupported = function () {
+            return _clientApiVersion > SP110_API_VERSION;
         };
 
         ///////////////////////////////////////////////////////////////////////////////
@@ -23014,6 +23055,19 @@ var Circuit = (function (circuit) {
             }, null, null, tenantContext);
         };
 
+        this.deleteCallLog = function (itemId, cb) {
+            var request = {
+                type: 'DELETE_JOURNAL_ENTRY',
+                deleteJournalEntry: {
+                    journalEntryId: itemId
+                }
+            };
+            sendRequest(Constants.ContentType.CONVERSATION, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null);
+                }
+            });
+        };
         ///////////////////////////////////////////////////////////////////////////////
         // Public RTCCall related interfaces
         ///////////////////////////////////////////////////////////////////////////////
@@ -26240,8 +26294,10 @@ var Circuit = (function (circuit) {
                 };
 
                 sendRequest(Constants.ContentType.ADMINISTRATION, request, function (err, rsp) {
-                    if (isResponseValid(err, rsp, cb, true)) {
-                        cb(null, rsp.administration.getCustomApps.customApps);
+                    if (!err && rsp.code === Constants.ReturnCode.NO_RESULT) {
+                        cb(null, {applications: []});
+                    } else if (isResponseValid(err, rsp, cb)) {
+                        cb(null, {applications: rsp.administration.getCustomApps.customApps});
                     }
                 });
             } else {
@@ -26251,8 +26307,8 @@ var Circuit = (function (circuit) {
                 };
 
                 sendRequest(Constants.ContentType.CPAAS, request, function (err, rsp) {
-                    if (isResponseValid(err, rsp, cb, true)) {
-                        cb(null, rsp.cpaas.getOauthApplicationsResult.applications);
+                    if (isResponseValid(err, rsp, cb)) {
+                        cb(null, rsp.cpaas.getOauthApplicationsResult);
                     }
                 }, null, null, tenantContext);
             }
@@ -26406,6 +26462,52 @@ var Circuit = (function (circuit) {
                     cb(null, rsp.cpaas.createOAuthApplicationResult);
                 }
             }, null, null, tenantContext);
+        };
+
+        this.updateApplication = function (modifiedApp, cb, tenantContext) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: updateApplication...');
+
+            if (!_self.isOauthApplicationsEditingSupported()) {
+                logger.warn('[ClientApiHandler]: The updateApplication operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            var request = {
+                type: Constants.CPaaSActionType.UPDATE_OAUTH_APPLICATION,
+                updateOAuthApplication: modifiedApp
+            };
+
+            sendRequest(Constants.ContentType.CPAAS, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null, rsp.cpaas.updateOAuthApplicationResult.application);
+                }
+            }, null, null, tenantContext);
+        };
+
+        ///////////////////////////////////////////////////////////////////////////////
+        // Webhooks
+        ///////////////////////////////////////////////////////////////////////////////
+        this.getIncomingWebhooks = function (searchCondition, cb) {
+            cb = cb || NOP;
+            logger.debug('[ClientApiHandler]: getIncomingWebhooks...');
+
+            if (!this.isIncomingWebhooksSupported()) {
+                logger.warn('[ClientApiHandler]: The getIncomingWebhooks operation is not supported by the backend');
+                sendAsyncResp(cb, Constants.ReturnCode.OPERATION_NOT_SUPPORTED);
+                return;
+            }
+
+            var request = {
+                type: Constants.CPaaSActionType.GET_INCOMING_WEBHOOKS,
+                getIncomingWebhooks: searchCondition
+            };
+            sendRequest(Constants.ContentType.CPAAS, request, function (err, rsp) {
+                if (isResponseValid(err, rsp, cb)) {
+                    cb(null, rsp.cpaas.getIncomingWebhooksResult);
+                }
+            });
         };
 
         ///////////////////////////////////////////////////////////////////////////////
@@ -27761,6 +27863,8 @@ var Circuit = (function (circuit) {
                     return genReconnectRequest(data);
                 case 'RetrieveCall':
                     return genRetrieveRequest(data);
+                case 'SetBusy':
+                    return genSetBusy(data);
                 case 'SetDoNotDisturb':
                     return genSetDoNotDisturb(data);
                 case 'SetForwarding':
@@ -27940,6 +28044,8 @@ var Circuit = (function (circuit) {
                     return parseReconnectResponse(json);
                 case 'RetrieveCall':
                     return parseRetrieveResponse(json);
+                case 'SetBusy':
+                    return parseSetBusyResponse(json);
                 case 'SetDoNotDisturb':
                     return parseSetDoNotDisturbResponse(json);
                 case 'SetForwarding':
@@ -28247,6 +28353,11 @@ var Circuit = (function (circuit) {
             return rs.RCRe;
         }
 
+        function parseSetBusyResponse(rs) {
+            logger.debug('[CstaParser]: Received CSTA Set Busy response: ', rs);
+            return rs.zSBNe;
+        }
+
         function parseSetDoNotDisturbResponse(rs) {
             logger.debug('[CstaParser]: Received CSTA Set Do Not Disturb response: ', rs);
             return rs.SDNDe;
@@ -28503,8 +28614,8 @@ var Circuit = (function (circuit) {
                 connection: data.cnncn,
                 divertingDevice: data.dvD.dIr || '',
                 newDestination: data.nD.dIr || '',
-                callingDevice: data.caD.dIr || '',
-                lastRedirectionDevice: data.lRD && data.lRD.nDd || '',
+                callingDevice: (data.caD && data.caD.dIr) || '',
+                lastRedirectionDevice: (data.lRD && data.lRD.nDd) || '',
                 localConnectionInfo: data.lCI,
                 cause: data.cs
             };
@@ -29015,6 +29126,15 @@ var Circuit = (function (circuit) {
                         'cID': data.callToBeRetrieved.cID,
                         'dID': data.callToBeRetrieved.dID
                     }
+                }
+            };
+        }
+
+        function genSetBusy(data) {
+            return {
+                'zSBN': {
+                    'dvc': data.device,
+                    'zbO': data.busyState
                 }
             };
         }
@@ -32634,6 +32754,8 @@ var Circuit = (function (circuit) {
 
         var _savedRoutingOption = null;
 
+        var _savedCallForwardingStatus = false;
+
         // Device type registering with ATC
         var _deviceType;
         if (Utils.isMobile()) {
@@ -32719,7 +32841,7 @@ var Circuit = (function (circuit) {
                     reroutingPhoneNumber: Utils.cleanPhoneNumber($rootScope.localUser.reroutingPhoneNumber),
                     onsHash: $rootScope.localUser.onsSipAuthenticationHash || undefined,
                     ondHash: $rootScope.localUser.ondSipAuthenticationHash || undefined,
-                    routeToDesk: $rootScope.localUser.selectedRoutingOption === RoutingOptions.DeskPhone.name,
+                    routeToDesk: $rootScope.localUser.selectedRoutingOption === RoutingOptions.DeskPhone.name && !$rootScope.localUser.callForwardingEnabled,
                     tcPool: $rootScope.localUser.associatedTelephonyTrunkGroupId,
                     pbxCallLog: true,
                     deviceType: _deviceType,
@@ -32746,6 +32868,7 @@ var Circuit = (function (circuit) {
             _atcRegistrationData.onsSipAuthenticationHash = $rootScope.localUser.onsSipAuthenticationHash;
             _atcRegistrationData.ondSipAuthenticationHash = $rootScope.localUser.ondSipAuthenticationHash;
             _savedRoutingOption = $rootScope.localUser.selectedRoutingOption;
+            _savedCallForwardingStatus = $rootScope.localUser.callForwardingEnabled;
 
             // Initialize to false when registering
             $rootScope.localUser.noCallLog = false;
@@ -32986,6 +33109,13 @@ var Circuit = (function (circuit) {
                 return;
             }
 
+            if (_savedCallForwardingStatus !== $rootScope.localUser.callForwardingEnabled) {
+                _savedCallForwardingStatus = $rootScope.localUser.callForwardingEnabled;
+                if ($rootScope.localUser.selectedRoutingOption === RoutingOptions.DeskPhone.name) {
+                    sendRouteToDeskInfoToAtc();
+                }
+            }
+
             if (($rootScope.localUser.associatedTelephonyUserID === _atcRegistrationData.associatedTelephonyUserID) &&
                 ($rootScope.localUser.cstaNumber === _atcRegistrationData.phoneNumber) &&
                 (Utils.cleanPhoneNumber($rootScope.localUser.reroutingPhoneNumber) === _atcRegistrationData.reroutingPhoneNumber) &&
@@ -33039,8 +33169,8 @@ var Circuit = (function (circuit) {
 
         function sendRouteToDeskInfoToAtc() {
             if (_atcRegState === AtcRegistrationState.Registered) {
-                var status = $rootScope.localUser.selectedRoutingOption === RoutingOptions.DeskPhone.name;
-                LogSvc.debug('[AtcRegistrationSvc]: Send SET_ROUTE_TO_DESK event to ATC. status = ');
+                var status = $rootScope.localUser.selectedRoutingOption === RoutingOptions.DeskPhone.name && !$rootScope.localUser.callForwardingEnabled;
+                LogSvc.debug('[AtcRegistrationSvc]: Send SET_ROUTE_TO_DESK event to ATC. status = ', status);
 
                 var data = {
                     content: {
@@ -34177,6 +34307,10 @@ var Circuit = (function (circuit) {
             if (call === _primaryLocalCall) {
                 simulateActiveSpeakers();
             }
+            if ($rootScope.localUser.isOsBizCTIEnabled && !call.isRemote && call !== _primaryLocalCall) {
+                _secondaryLocalCall = call;
+            }
+
             _lastEndedCall = null;
         }
 
@@ -34290,7 +34424,9 @@ var Circuit = (function (circuit) {
                 call.rejectGetScreenPromise = null;
             }
 
-            unregisterSessionController(call);
+            if (!call.isOsBizSecondCall) {
+                unregisterSessionController(call);
+            }
             removeCallFromList(call);
             call.terminate();
 
@@ -37468,6 +37604,11 @@ var Circuit = (function (circuit) {
                     cb('Missing Caller ID');
                     return false;
                 }
+                if ($rootScope.localUser.isOsBizCTIEnabled && !options.handover && conversation.call) {
+                    // If OsBiz CTI, do not allow initiating a second phone call
+                    cb('res_CannotJoinMultipleSessions');
+                    return false;
+                }
             }
             return true;
         }
@@ -38678,6 +38819,13 @@ var Circuit = (function (circuit) {
                     LogSvc.info('[CircuitCallControlSvc]: Publish /call/terminated. cause = ', cause);
                     PubSubSvc.publish('/call/terminated', [call, cause]);
                     terminateCall(call, Enums.CallServerTerminatedReason.SERVER_ENDED_PRFX + cause);
+                    if ($rootScope.localUser.isOsBizCTIEnabled) {
+                        var otherCall = call.isOsBizFirstCall ? _that.findOsBizSecondCall() : _that.findOsBizFirstCall();
+                        if (otherCall && !otherCall.checkState(Enums.CallState.Terminated)) {
+                            PubSubSvc.publish('/call/terminated', [otherCall]);
+                            terminateCall(otherCall);
+                        }
+                    }
                 });
 
             } catch (e) {
@@ -41913,6 +42061,39 @@ var Circuit = (function (circuit) {
             });
         };
 
+
+        this.addCallToList = addCallToList;
+
+        this.moveOsBizCalls = function (oldCall, newCall) {
+            LogSvc.debug('[CircuitCallControlSvc]: Move oldCall: ' + oldCall.callId + ' to newCall: ' + newCall.callId);
+            if (oldCall.isOsBizFirstCall) {
+                var newCallAtcCallInfo = newCall.atcCallInfo;
+                oldCall.atcCallInfo = newCallAtcCallInfo;
+                oldCall.setPeerUser(oldCall.atcCallInfo.peerDn, oldCall.atcCallInfo.peerName);
+                oldCall.setCstaState(Enums.CstaCallState.Active);
+                oldCall.setState(Enums.CallState.Active);
+                oldCall.isOsBizFirstCall = false;
+                terminateCall(newCall);
+            } else {
+                terminateCall(oldCall);
+                newCall.isOsBizFirstCall = false;
+                newCall.isOsBizSecondCall = false;
+            }
+        };
+
+        this.findOsBizFirstCall = function () {
+            return _calls.find(function (call) {
+                return call.isOsBizFirstCall;
+            }) || null;
+        };
+
+        this.findOsBizSecondCall = function () {
+            return _calls.find(function (call) {
+                return call.isOsBizSecondCall;
+            }) || null;
+        };
+
+
         ///////////////////////////////////////////////////////////////////////////////////////
         // Public Factory Interface for Angular
         ///////////////////////////////////////////////////////////////////////////////////////
@@ -41946,6 +42127,7 @@ var Circuit = (function (circuit) {
     var CstaCallState = circuit.Enums.CstaCallState;
     var CstaParser = circuit.CstaParser;
     var JournalEntryTypes = circuit.Enums.JournalEntryTypes;
+    var LocalCall = circuit.LocalCall;
     var MissedReasonTypes = circuit.Enums.MissedReasonTypes;
     var PhoneNumberFormatter = Circuit.PhoneNumberFormatter;
     var RedirectionTypes = Circuit.Enums.RedirectionTypes;
@@ -41992,6 +42174,7 @@ var Circuit = (function (circuit) {
         var MAX_NUMBER_OF_LOOPS = 3;
         var LOOP_DETECTION_WAIT_TIME = 60000; // Wait for 1 min before trying to set the timers again after loop detection
         var LOOP_DETECTION_INTERVAL = 2000; // 2s interval in which two subsequent Forwarding events indicate that there may be a loop
+        var OSBIZ_RECONNECT_TIMEOUT = 2000; // 2s Wait for 2 sec before reconnecting the first call after a failed consulted call
 
         ///////////////////////////////////////////////////////////////////////////
         // Local variables
@@ -42049,6 +42232,8 @@ var Circuit = (function (circuit) {
 
         var _regState = null;
         var _savedStaticOnd = null;
+
+        var _userBusyState = false;
 
         var _savedVMRingDuration = null;
 
@@ -42298,7 +42483,7 @@ var Circuit = (function (circuit) {
                 LogSvc.error('[CstaSvc]: No remoteCall');
                 return;
             }
-            if (!remoteCall.atcCallInfo.getIgnoreCall() && remoteCall.isAtcRemote) {
+            if (!remoteCall.atcCallInfo.getIgnoreCall() && (remoteCall.isAtcRemote || remoteCall.isOsBizSecondCall)) {
                 if (!_telephonyConversation) {
                     LogSvc.error('[CstaSvc]: No telephony conversation');
                     return;
@@ -42407,14 +42592,15 @@ var Circuit = (function (circuit) {
         }
 
         function findAtcRemoteCall(callId) {
-            for (var key in _atcRemoteCalls) {
-                if (_atcRemoteCalls.hasOwnProperty(key)) {
-                    if (_atcRemoteCalls[key].callId === callId) {
-                        return _atcRemoteCalls[key];
-                    }
-                }
-            }
-            return null;
+            return Object.values(_atcRemoteCalls).find(function (call) {
+                return call.callId === callId;
+            }) || null;
+        }
+
+        function findAtcRemoteHeldCall() {
+            return Object.values(_atcRemoteCalls).find(function (call) {
+                return call.isHolding();
+            }) || null;
         }
 
         function createAtcRemoteCall(callId) {
@@ -42765,9 +42951,11 @@ var Circuit = (function (circuit) {
             snapshotRemoteCalls();
             _that.getForwarding(handleGetForwardingResp);
 
-            // Do not send in case of OSBiz client - Not supported.
             if (!$rootScope.localUser.isOsBizCTIEnabled) {
+                // Do not send in case of OSBiz client - Not supported.
                 _that.getAgentState(handleGetAgentStateResponse);
+            } else {
+                _primaryClient && setBusy(_userBusyState);
             }
         }
 
@@ -42936,6 +43124,10 @@ var Circuit = (function (circuit) {
         }
 
         function syncRoutingOption() {
+            if ($rootScope.localUser.isOsBizCTIEnabled) {
+                // No Need to update Routing options for OSBiz
+                return;
+            }
             LogSvc.debug('[CstaSvc]: Synchronize the selected routing option');
             _that.updateRoutingOption($rootScope.localUser.selectedRoutingOption);
         }
@@ -42955,6 +43147,42 @@ var Circuit = (function (circuit) {
             } else {
                 return _osmoData.onsFQN;
             }
+        }
+
+        function moveOsBizCalls(callId) {
+            var localCall = CircuitCallControlSvc.findOsBizFirstCall();
+            var secondCall = CircuitCallControlSvc.findOsBizSecondCall();
+            if (localCall && secondCall) {
+                if (localCall.atcCallInfo.getCstaCallId() === callId) {
+                    LogSvc.debug('[CstaSvc]: First local call with callId: ', callId);
+                    LogSvc.debug('[CstaSvc]: Second local call with callId: ', secondCall.atcCallInfo.getCstaCallId());
+                    CircuitCallControlSvc.moveOsBizCalls(localCall, secondCall);
+                    return true;
+                } else if (secondCall.atcCallInfo.getCstaCallId() === callId) {
+                    LogSvc.debug('[CstaSvc]: Second local call with callId: ', callId);
+                    LogSvc.debug('[CstaSvc]: First local call with callId: ', localCall.atcCallInfo.getCstaCallId());
+                    CircuitCallControlSvc.moveOsBizCalls(secondCall, localCall);
+                    return true;
+                }
+            } else if (!localCall && !secondCall) {
+                var remoteCall = findWebRTCRemoteCall();
+                if (remoteCall && remoteCall.atcCallInfo && remoteCall.atcCallInfo.getCstaCallId() === callId) {
+                    LogSvc.debug('[CstaSvc]: Remote call with callId: ', callId);
+                    var remoteHeldCall = findAtcRemoteHeldCall();
+                    if (remoteHeldCall) {
+                        LogSvc.debug('[CstaSvc]: Second remote call with callId: ', remoteHeldCall.atcCallInfo.getCstaCallId());
+                        var origAtcCallInfo = remoteCall.atcCallInfo;
+                        remoteCall.atcCallInfo = remoteHeldCall.atcCallInfo;
+                        remoteCall.setPeerUser(remoteCall.atcCallInfo.peerDn, remoteCall.atcCallInfo.peerName);
+                        remoteHeldCall.atcCallInfo = origAtcCallInfo;
+                        delete _atcRemoteCalls[remoteCall.atcCallInfo.getCstaCallId()];
+                        _atcRemoteCalls[origAtcCallInfo.getCstaCallId()] = remoteHeldCall;
+                        removeAtcRemoteCall(remoteHeldCall.atcCallInfo.getCstaCallId());
+                        return true;
+                    }
+                }
+            }
+            return false;
         }
 
         ///////////////////////////////////////////////////////////////////////////
@@ -43237,15 +43465,25 @@ var Circuit = (function (circuit) {
                     }
                     call.clearAtcHandoverInProgress();
 
-                    if ($rootScope.localUser.isOsBizCTIEnabled && call.atcCallInfo.getCstaReconnectId().cID) {
-                        // Call is released but there is a pending consultation call (local call hold using consultationCall case). Release that too.
-                        // OSbiz will improve holdCall support with V2R7
-                        var data = {
-                            request: 'ClearConnection',
-                            connectionToBeCleared: call.atcCallInfo.getCstaReconnectId()
-                        };
-                        sendCstaRequest(data);
-                        call.atcCallInfo.setCstaReconnectId({});
+                    if ($rootScope.localUser.isOsBizCTIEnabled) {
+                        if (call.atcCallInfo.getCstaReconnectId().cID) {
+                            // Call is released but there is a pending consultation call (local call hold using consultationCall case). Release that too.
+                            // OSbiz will improve holdCall support with V2R7
+                            var data = {
+                                request: 'ClearConnection',
+                                connectionToBeCleared: call.atcCallInfo.getCstaReconnectId()
+                            };
+                            sendCstaRequest(data);
+                            call.atcCallInfo.setCstaReconnectId({});
+                        }
+
+                        if (_webrtcRemoteCall && _webrtcRemoteCall.checkState(CallState.ActiveRemote)) {
+                            _webrtcRemoteCall.pullBlocked = false;
+                        }
+
+                        if (moveOsBizCalls(callId)) {
+                            return;
+                        }
                     }
                 }
                 if (call.checkCstaState(CstaCallState.Busy) && call.atcCallInfo.isCallBackAllowed()) {
@@ -43341,6 +43579,7 @@ var Circuit = (function (circuit) {
                     call.atcCallInfo.setCstaConnection(localConnection);
                     call.atcCallInfo.setServicesPermitted(event.servicesPermitted);
                     call.setCstaState(CstaCallState.Ringing);
+                    publishOsBizCallState(call, CallState.Delivered);
                     position = call.isRemote ? Targets.Other : position;
                     call.atcCallInfo.setPosition(position);
                     if (display) {
@@ -43443,6 +43682,7 @@ var Circuit = (function (circuit) {
                     setRedirectingUser(call, divertingDeviceDisplay.dn, divertingDeviceDisplay.fqn, divertingDeviceDisplay.name, RedirectionTypes.CallForward);
                     newDestinationDisplay = getDisplayInfo(event.newDestination);
                     call.setPeerUser(newDestinationDisplay.dn, newDestinationDisplay.name);
+                    call.atcCallInfo.setOriginalPartnerDisplay(divertingDeviceDisplay);
                 }
                 return;
             }
@@ -43599,6 +43839,7 @@ var Circuit = (function (circuit) {
                     } else {
                         call.setCstaState(CstaCallState.Active);
                     }
+                    publishOsBizCallState(call, CallState.Active);
                     call.atcCallInfo.setPartnerDisplay(display);
                     call.atcCallInfo.setPosition(position);
                     call.clearAtcHandoverInProgress();
@@ -43709,6 +43950,12 @@ var Circuit = (function (circuit) {
                 // Add call to _atcRemoteCalls
                 _atcRemoteCalls[localConnection.cID] = call;
             }
+
+            if ($rootScope.localUser.isOsBizCTIEnabled && _webrtcRemoteCall) {
+                // For OsBiz, pull is blocked if the user has more than one calls
+                _webrtcRemoteCall.pullBlocked = true;
+            }
+
             LogSvc.debug('[CstaSvc]: Publish /atccall/info event');
             PubSubSvc.publish('/atccall/info', [call]);
         }
@@ -43740,6 +43987,9 @@ var Circuit = (function (circuit) {
                     break;
                 default:
                     call.setCstaState(CstaCallState.Holding);
+                    if (!call.isRemote && $rootScope.localUser.isOsBizCTIEnabled) {
+                        call.setState(CallState.Holding);
+                    }
                     break;
                 }
                 call.clearHoldInProgress();
@@ -43928,6 +44178,9 @@ var Circuit = (function (circuit) {
                 } else {
                     call.setCstaState(CstaCallState.Active);
                 }
+                if (!call.isRemote && $rootScope.localUser.isOsBizCTIEnabled) {
+                    call.setState(CallState.Active);
+                }
                 call.clearRetrieveInProgress();
                 call.atcCallInfo.setCstaReconnectId({});
             } else {
@@ -43980,6 +44233,7 @@ var Circuit = (function (circuit) {
                         LogSvc.info('[CstaSvc]: Set the CSTA connection ID for the call: ', event.initiatedConnection);
 
                         call.setCstaState(CstaCallState.Initiated);
+                        publishOsBizCallState(call, CallState.Delivered);
                         // update UI
                         LogSvc.debug('[CstaSvc]: Publish /atccall/info event');
                         PubSubSvc.publish('/atccall/info', [call]);
@@ -44143,10 +44397,11 @@ var Circuit = (function (circuit) {
         }
 
         function handleFailedEvent(event) {
-            var call, callId, display, position;
+            var call, display, position;
+            var callId = event.failedConnection.cID;
 
             if (event.localConnectionInfo === 'fail' && isMyDeviceId(event.failingDevice)) {
-                call = _atcRemoteCalls[event.failedConnection.cID];
+                call = _atcRemoteCalls[callId];
                 if (call && call.atcCallInfo && call.atcCallInfo.masterParallelHgCall) {
                     LogSvc.debug('[CstaSvc]: Ignore Failed event for master parallel hunt group');
                     return;
@@ -44161,11 +44416,10 @@ var Circuit = (function (circuit) {
                 switch (event.cause) {
                 case 'blocked':
                     // track the transfer result
-                    if (_trackTransferCallIds[event.failedConnection.cID]) {
+                    if (_trackTransferCallIds[callId]) {
                         LogSvc.debug('[CstaSvc]: Received Failed event for transfer, waiting for ConnectionCleared event');
                     }
                     if (!$rootScope.localUser.isOSV) {
-                        callId = event.failedConnection.cID;
                         position = getCallPosition(event.failedConnection.dID);
                         call = position === Targets.WebRTC ? findWebRTCCall(callId) : _atcRemoteCalls[callId];
                         if (call && call.isHandoverInProgress) {
@@ -44180,7 +44434,7 @@ var Circuit = (function (circuit) {
                 case 'doNotDisturb':
                     // ONS has DND active, the incoming call is blocked
                     // Raise an event to inform the user about the blocked call
-                    call = _atcRemoteCalls[event.failedConnection.cID];
+                    call = _atcRemoteCalls[callId];
                     if (call) {
                         LogSvc.debug('[CstaSvc]: Publish /atccall/info event');
                         PubSubSvc.publish('/atccall/info', [call]);
@@ -44189,7 +44443,7 @@ var Circuit = (function (circuit) {
                     }
                     break;
                 case 'reorderTone':
-                    call = _atcRemoteCalls[event.failedConnection.cID];
+                    call = _atcRemoteCalls[callId];
                     if (call) {
                         call.atcCallInfo.setMissedReason(MissedReasonTypes.REORDER_TONE);
                         LogSvc.debug('[CstaSvc]: Publish /atccall/info event');
@@ -44199,7 +44453,7 @@ var Circuit = (function (circuit) {
                     }
                     break;
                 case 'busy':
-                    call = _atcRemoteCalls[event.failedConnection.cID];
+                    call = _atcRemoteCalls[callId];
                     if (call) {
                         call.atcCallInfo.setMissedReason(MissedReasonTypes.BUSY);
                         // OS4K case where the call fails in the Offered state due to busy
@@ -44212,11 +44466,20 @@ var Circuit = (function (circuit) {
                         LogSvc.warn('[CstaSvc]: Busy call does not exist. Ignore Failed event');
                     }
                     break;
+                case 'destNotObtainable':
+                    call = findWebRTCCall(callId) || _atcRemoteCalls[callId];
+                    if (call) {
+                        $timeout(function () {
+                            if (call.isPresent()) {
+                                hangupOsBizFailedSecondCall(call);
+                            }
+                        }, OSBIZ_RECONNECT_TIMEOUT);
+                    }
+                    break;
                 default:
                     break;
                 }
             } else if (event.localConnectionInfo === 'connected' && isMyDeviceId(event.callingDevice)) {
-                callId = event.failedConnection.cID;
                 call = findWebRTCCall(callId);
                 if (!call || call.atcCallInfo.getCstaCallId() !== callId) {
                     call = _atcRemoteCalls[callId];
@@ -44340,7 +44603,7 @@ var Circuit = (function (circuit) {
                 return;
             }
             var found = _osmoData.forwardList.some(function (element) {
-                if (element.forwardingType === data.forwardingType) {
+                if (element.forwardingType === data.forwardingType || (isForwardingImmediate(element.forwardingType) && isForwardingImmediate(data.forwardingType))) {
                     element.forwardStatus = data.forwardStatus;
                     element.forwardDN = data.forwardTo;
                     return true;
@@ -44364,6 +44627,9 @@ var Circuit = (function (circuit) {
                 } else {
                     $rootScope.localUser.callForwardingToVMEnabled = data.forwardStatus;
                     $rootScope.localUser.callForwardingEnabled = false;
+                    if ($rootScope.localUser.isOsBizCTIEnabled) {
+                        $rootScope.localUser.callForwardingNumber = _osmoData.vm;
+                    }
                 }
             }
 
@@ -44544,9 +44810,28 @@ var Circuit = (function (circuit) {
             earlyAtcRemoteCall.atcCallInfo.setPartnerDisplay(display);
             earlyAtcRemoteCall.atcCallInfo.setIgnoreCall(true);
             _atcRemoteCalls[destination.dialedDn] = earlyAtcRemoteCall;
-            LogSvc.debug('[CstaSvc]: Publish /atccall/info event');
-            PubSubSvc.publish('/atccall/info', [earlyAtcRemoteCall]);
-            LogSvc.debug('[CstaSvc]: Created new Remote Call object: ', earlyAtcRemoteCall);
+
+            if ((target === Targets.WebRTC) && $rootScope.localUser.isOsBizCTIEnabled) {
+                var options = {reuseSessionCtrl: _activeCall && _activeCall.sessionCtrl};
+                var secondOsBizLocalCall = new LocalCall(_telephonyConversation, options);
+                secondOsBizLocalCall.atcCallInfo = earlyAtcRemoteCall.atcCallInfo;
+                setCallPeerUser(secondOsBizLocalCall, earlyAtcRemoteCall.peerUser.phoneNumber, null, earlyAtcRemoteCall.peerUser.displayName);
+                secondOsBizLocalCall.isOsBizSecondCall = true;
+                secondOsBizLocalCall.setState(CallState.Delivered);
+                secondOsBizLocalCall.direction = CallDirection.OUTGOING;
+                removeAtcRemoteCall(destination.dialedDn, true);
+                _telephonyConversation.call = secondOsBizLocalCall;
+                LogSvc.debug('[CstaSvc]: Publish /conversation/update event. convId = ', _telephonyConversation.convId);
+                PubSubSvc.publish('/conversation/update', [_telephonyConversation]);
+
+                CircuitCallControlSvc.addCallToList(secondOsBizLocalCall);
+                LogSvc.debug('[CstaSvc]: Publish /call/state event. callId = ' + secondOsBizLocalCall.callId + ', state = ' + secondOsBizLocalCall.state.name);
+                PubSubSvc.publish('/call/state', [secondOsBizLocalCall]);
+            } else {
+                LogSvc.debug('[CstaSvc]: Publish /atccall/info event');
+                PubSubSvc.publish('/atccall/info', [earlyAtcRemoteCall]);
+                LogSvc.debug('[CstaSvc]: Created new Remote Call object: ', earlyAtcRemoteCall);
+            }
         }
 
         function updateEarlyAtcRemoteCall(connection, destination, target) {
@@ -44722,6 +45007,9 @@ var Circuit = (function (circuit) {
                             $rootScope.localUser.callForwardingEnabled = element.forwardStatus;
                         } else {
                             $rootScope.localUser.callForwardingToVMEnabled = element.forwardStatus;
+                            if ($rootScope.localUser.isOsBizCTIEnabled) {
+                                $rootScope.localUser.callForwardingNumber = _osmoData.vm;
+                            }
                         }
                     }
                 });
@@ -44784,6 +45072,63 @@ var Circuit = (function (circuit) {
                     call.pickupNotificationShown = true;
                 }
             }
+        }
+
+        function setBusy(status, cb) {
+            if (!getRegistrationData(cb)) {
+                return;
+            }
+            var data = {
+                request: 'SetBusy',
+                device: getCstaDeviceId(),
+                busyState: status
+            };
+            sendCstaRequest(data, cb);
+        }
+
+        function checkBusyState() {
+
+            var hasCircuitCall = function () {
+                return CircuitCallControlSvc.getCalls().some(function (call) {
+                    return (!call.isTelephonyCall);
+                });
+            };
+
+            if (!$rootScope.localUser.isOsBizCTIEnabled) {
+                // No Need to update Busy State
+                return;
+            }
+            if ((_userBusyState && $rootScope.localUser.userPresenceState.state !== Constants.PresenceState.BUSY) ||
+                (!_userBusyState && $rootScope.localUser.userPresenceState.state === Constants.PresenceState.BUSY && hasCircuitCall())) {
+
+                _userBusyState = !_userBusyState;
+                if (_primaryClient) {
+                    LogSvc.debug('[CstaSvc]: Update busy state. New State: ', _userBusyState);
+                    setBusy(_userBusyState);
+                }
+            }
+        }
+
+        function publishOsBizCallState(call, state) {
+            if (call.isOsBizSecondCall) {
+                call.setState(state);
+                LogSvc.debug('[CstaSvc]: Publish /conversation/update event. convId = ', _telephonyConversation.convId);
+                PubSubSvc.publish('/conversation/update', [_telephonyConversation]);
+            }
+        }
+
+        function hangupOsBizFailedSecondCall(call, cb) {
+            var firstCall = call.isOsBizSecondCall ? CircuitCallControlSvc.findOsBizFirstCall() : findAtcRemoteHeldCall();
+            if (call && firstCall && getRegistrationData(cb)) {
+                var data = {
+                    request: 'ReconnectCall',
+                    heldCall: getCstaConnectionForRequest(firstCall.atcCallInfo),
+                    activeCall: getCstaConnectionForRequest(call.atcCallInfo)
+                };
+                sendCstaRequest(data, cb);
+                return;
+            }
+            cb && cb();
         }
 
         ///////////////////////////////////////////////////////////////////////////////////////
@@ -44877,6 +45222,9 @@ var Circuit = (function (circuit) {
                     _lastEndedCall = null;
                     _endedCallWaitTimer = null;
                 }, MAX_ENDED_CALL_WAIT_TIME);
+                if (call.isOsBizSecondCall) {
+                    createJournalEntry(call);
+                }
             }
             if (!call.isPickupNotification() && !call.isRemote) {
                 showPickupNotification();
@@ -44892,6 +45240,7 @@ var Circuit = (function (circuit) {
         PubSubSvc.subscribe('/localUser/update', function () {
             if ($rootScope.localUser.isATC) {
                 LogSvc.debug('[CstaSvc]: Received /localUser/update event');
+                checkBusyState();
                 syncRoutingOption();
             }
         });
@@ -44920,6 +45269,11 @@ var Circuit = (function (circuit) {
                     activeCall.clearHoldInProgress();
                     cb && cb('res_RetrieveCallFailed');
                 } else {
+                    if ($rootScope.localUser.isOsBizCTIEnabled) {
+                        _telephonyConversation.call = heldCall;
+                        LogSvc.debug('[CstaSvc]: Publish /conversation/update event. convId = ', _telephonyConversation.convId);
+                        PubSubSvc.publish('/conversation/update', [_telephonyConversation]);
+                    }
                     cb && cb(null);
                 }
             });
@@ -45442,8 +45796,12 @@ var Circuit = (function (circuit) {
                     newCall.atcCallInfo.setIgnoreCall(false);
                     removeAtcRemoteCall(destination.dialedDn);
                 } else {
-                    // Update the new call with the consultationCall response in order to show it in the UI
-                    updateEarlyAtcRemoteCall(rs.iC, destination, call.atcCallInfo.getPosition());
+                    if (!call.isRemote && $rootScope.localUser.isOsBizCTIEnabled) {
+                        call.isOsBizFirstCall = true;
+                    } else {
+                        // Update the new call with the consultationCall response in order to show it in the UI
+                        updateEarlyAtcRemoteCall(rs.iC, destination, call.atcCallInfo.getPosition());
+                    }
                     cb && cb();
                 }
             });
@@ -46137,7 +46495,8 @@ var Circuit = (function (circuit) {
                 publishConversationUpdate(conversation);
                 publishCallState(call);
                 // Set presence to busy if there is an active ATC remote call and the client is the primary
-                if (CstaSvc.isPrimaryClient() && call.state !== CallState.Ringing) {
+                if (CstaSvc.isPrimaryClient() && call.state !== CallState.Ringing &&
+                    !($rootScope.localUser.isOsBizCTIEnabled && CircuitCallControlSvc.getActiveRemoteCall())) {
                     UserProfileSvc.setPresenceWithLocation(Constants.PresenceState.BUSY);
                 }
             } else if (call.state === CallState.Idle || call.state === CallState.Terminated) {
@@ -46238,6 +46597,25 @@ var Circuit = (function (circuit) {
                 // We have no detailed user or conversation information
                 publishMobileBreakoutEvent(details);
             }
+        }
+
+        function getOsBizConsultationCalls() {
+            if (!$rootScope.localUser.isOsBizCTIEnabled) {
+                return null;
+            }
+            var firstCall = CircuitCallControlSvc.findOsBizFirstCall();
+            if (!firstCall) {
+                return null;
+            }
+            var secondCall = CircuitCallControlSvc.findOsBizSecondCall();
+            if (!secondCall) {
+                return null;
+            }
+            var firstCallHolding = firstCall.checkCstaState(Enums.CstaCallState.Holding);
+            return {
+                activeCall: firstCallHolding ? secondCall : firstCall,
+                heldCall: firstCallHolding ? firstCall : secondCall
+            };
         }
 
         ///////////////////////////////////////////////////////////////////////////////////////
@@ -46481,7 +46859,7 @@ var Circuit = (function (circuit) {
             if (destination.dtmfDigits) {
                 destination.dtmfDigits = Utils.cleanPhoneNumberDigitsWithPin(destination.dtmfDigits);
             }
-            var existingCallOnTarget = findAtcRemoteCallOnTarget(target);
+            var existingCallOnTarget = findAtcRemoteCallOnTarget(target) || ($rootScope.localUser.isOsBizCTIEnabled && _that.getActiveCall());
             if (existingCallOnTarget) {
                 if ($rootScope.localUser.isOsBizCTIEnabled && existingCallOnTarget.isHolding()) {
                     // OSBiz is not able to process consultationCall if the call is already on hold.
@@ -46573,13 +46951,13 @@ var Circuit = (function (circuit) {
 
                 if (conversation.call && conversation.call.consultation) {
                     var target = conversation.call.getPosition() || _defaultCallDevice;
-                    if (target && target !== Targets.WebRTC) {
+                    if (target && target !== Targets.WebRTC || $rootScope.localUser.isOsBizCTIEnabled) {
                         LogSvc.info('[CallControlSvc]: Start consultation from ' + target.name + ' to ', number);
                         _that.makeAtcCall(target, destination, cb);
                         conversation.call.consultation = false;
                         return;
                     }
-                } else if (_defaultCallDevice && _defaultCallDevice !== Targets.WebRTC) {
+                } else if (_defaultCallDevice && (_defaultCallDevice !== Targets.WebRTC || (conversation.call && $rootScope.localUser.isOsBizCTIEnabled))) {
                     LogSvc.info('[CallControlSvc]: Make call from ' + _defaultCallDevice.name + ' to ', number);
                     _that.makeAtcCall(_defaultCallDevice, destination, cb);
                     return;
@@ -46748,8 +47126,13 @@ var Circuit = (function (circuit) {
          */
         this.endCallWithCauseCode = function (callId, cause, cb) {
             var call = CircuitCallControlSvc.findCall(callId);
+
             if (call) {
-                if (call.isRemote) {
+                if (call.isOsBizFirstCall) {
+                    CstaSvc.reconnect(call, CircuitCallControlSvc.findOsBizSecondCall(), cb);
+                } else if (call.isOsBizSecondCall) {
+                    CstaSvc.reconnect(call, CircuitCallControlSvc.findOsBizFirstCall(), cb);
+                } else if (call.isRemote) {
                     CircuitCallControlSvc.endRemoteCall(callId, cb);
                 } else {
                     if (cause) {
@@ -46996,6 +47379,13 @@ var Circuit = (function (circuit) {
          * @param {String} callId The call ID of the ATC call that is on hold.
          */
         this.swapCall = function (callId, cb) {
+            var osBizCalls = getOsBizConsultationCalls();
+            if (osBizCalls) {
+                // This is a local OsBiz consultation call
+                CstaSvc.alternate(osBizCalls.heldCall, osBizCalls.activeCall, cb);
+                return;
+            }
+
             var call = CircuitCallControlSvc.findCall(callId);
             if (call && call.isTelephonyCall && !call.isRemote) {
                 CircuitCallControlSvc.swapCall(callId, cb);
@@ -47093,6 +47483,13 @@ var Circuit = (function (circuit) {
          * @param {String} callId The call ID of the remote ATC call to be merged.
          */
         this.transferCall = function (callId, number, cb) {
+            var osBizCalls = getOsBizConsultationCalls();
+            if (osBizCalls) {
+                // This is a local OsBiz consultation call
+                CstaSvc.consultationTransfer(osBizCalls.activeCall, osBizCalls.heldCall, cb);
+                return;
+            }
+
             var activeCall = CircuitCallControlSvc.findCall(callId);
             var localCalls = CircuitCallControlSvc.getPhoneCalls(true);
             var heldCall;
@@ -47825,6 +48222,8 @@ var Circuit = (function (circuit) {
          * @returns {Promise} Returns an object containing the assigned TURN servers and the gathered ICE candidates.
          */
         this.testCandidatesCollection = CircuitCallControlSvc.testCandidatesCollection;
+
+        this.findOsBizSecondCall = CircuitCallControlSvc.findOsBizSecondCall;
 
         ///////////////////////////////////////////////////////////////////////////////////////
         // Public Factory Interface for Angular
@@ -50353,10 +50752,10 @@ var Circuit = (function (circuit) {
             return new Promise(function (resolve, reject) {
                 _clientApiHandler.getUserSettings([Constants.UserSettingArea.ALL], function (err, settings) {
                     if (apiError(err, reject)) { return; }
-                    var statusMessage = settings && settings.find(function (s) {
+                    var res = settings && settings.find(function (s) {
                         return s.key === Constants.UserSettingKey.STATUS_MESSAGE_TEXT;
                     });
-                    resolve(statusMessage || '');
+                    resolve(res ? res.stringValue : '');
                 });
             });
         }
