@@ -14,7 +14,7 @@ module.exports = function FileUpload(config) {
     'use strict';
 
     var MAX_FILE_COUNT = 10;
-    var MAX_FILE_SIZE = 50000000;
+    var MAX_FILE_SIZE = 100000000;
     var stat = 0;
 
     var logger = NodeSDK.logger;
