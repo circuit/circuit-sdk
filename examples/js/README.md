@@ -16,7 +16,7 @@ All examples use OAuth. Use your own sandbox account, or one of the following pl
 
 ### Running github examples locally
 
-First register for a free developer account], then register for an OAuth client-side (Implicit) application providing a local redirect URL such as `http://localhost:7000`. See more info at https://circuit.github.io/
+First [register for a free developer account](https://www.circuit.com/web/developers/registration), then [register for an OAuth client-side (Implicit) application](https://circuit.github.io/oauth) providing a local redirect URL such as `http://localhost:7000`.
 
 Then clone the repo and serve the files using a webserver such as http-server:
 ```bash

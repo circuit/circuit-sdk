@@ -130,7 +130,7 @@
         $convId.textContent = '';
         $callButton.style.display = '';
         $endCallButton.style.display = 'none';
-        $remoteAudio.src = '';
+        $remoteAudio.srcObject = null;
       }
 
       function setCallUI(call) {
@@ -141,7 +141,7 @@
         $callButton.style.display = 'none';
         $endCallButton.style.display = '';
         if (_call.isEstablished) {
-          $remoteAudio.src = _call.remoteAudioUrl;
+          $remoteAudio.srcObject = _call.remoteAudioStream;
         }
       }
 

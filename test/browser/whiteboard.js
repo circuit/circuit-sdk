@@ -25,8 +25,9 @@ function loadXHR(url) {
                 else {reject('Loading error:' + xhr.statusText)}
             };
             xhr.send();
+        } catch(err) { 
+            reject(err.message);
         }
-        catch(err) {reject(err.message)}
     });
 }
 describe('Whiteboard tests', async function() {
@@ -49,7 +50,8 @@ describe('Whiteboard tests', async function() {
             }])
         ]);
         call = result[0];
-        document.querySelector('#localVideo').srcObject = call.localStreams.video;
+        document.querySelector('#localVideo').srcObject = call.localVideoStream;
+        await sleep(5000);
     });
 
     after(async function() {

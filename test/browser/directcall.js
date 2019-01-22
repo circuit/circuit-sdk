@@ -40,7 +40,7 @@ describe('Direct Call', async function() {
         ]);
         call = res[0];
         assert(call.callId);
-        document.querySelector('#localVideo').srcObject = call.localStreams.video;
+        document.querySelector('#localVideo').srcObject = call.localVideoStream;
     });
 
     it('function: answerCall, with event: callStatus with reasons: [remoteStreamUpdated, callStateChanged]', async () => {

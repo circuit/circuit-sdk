@@ -1,7 +1,7 @@
 'use strict';
 
 import { PeerUser } from '../peer-user.js';
-import { expectEvents, updateRemoteVideos, sleep, logEvents } from '../helper.js';
+import { expectEvents, sleep } from '../helper.js';
 import config from './config.js'
 
 const assert = chai.assert;
@@ -84,7 +84,8 @@ describe('Call Devices', async function() {
     it('function: getLocalAudioVideoStream', async () => {
         stream = await client.getLocalAudioVideoStream();
         assert(stream);
-    });    
+    });
+    
     it('function: setAudioVideoStream', async () => {
         await client.setAudioVideoStream(call.callId, stream);
     });
