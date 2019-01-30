@@ -53,6 +53,16 @@ describe('Conversation Items', () => {
         assert(item.itemId === content.itemId && item.text.content === textValue && item.text.subject === subject);
     });
 
+    it('functions: [addTextItem, getItemsByThread]', async () => {
+        const content = {
+            parentId: item.itemId,
+            content: `${Date.now()}item2`
+        }
+        const item2 = await client.addTextItem(conversation.convId, content);
+        const res = await client.getItemsByThread(conversation.convId, item.itemId);
+        assert(res && res.items.some(threadItem => threadItem.parentItemId === item.itemId && threadItem.itemId === item2.itemId));
+    });
+
     it('function: getConversationFeed', async () => {
         const res  = await client.getConversationFeed(conversation.convId);
         assert(res && res.threads.some(thread => thread.parentItem.convId === conversation.convId && thread.parentItem.itemid === item.itemid));
