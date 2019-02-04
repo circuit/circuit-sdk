@@ -168,7 +168,7 @@ describe('Search Tests', () => {
             searchContext: Circuit.Enums.SearchContext.MEETING_POINT,
             query: MEETING_POINT.query
         };
-        const res = await Promise.all([
+        await Promise.all([
             client.startAdvancedUserSearch(searchObj),
             helper.expectEvents(client, [{
                 type: 'searchStatus',
