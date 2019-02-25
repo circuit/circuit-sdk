@@ -7,10 +7,7 @@ Circuit JavaScript and Node.js SDK
 
 
 ### Prerequisites
-* [Register for a free developer account](https://yourcircuit.typeform.com/to/d3VDXN) on circuitsandbox.net.
-* [Register for a free OAuth app](https://yourcircuit.typeform.com/to/sxOjAg) to get a  `client_id` for your app.
-
-More details at https://circuit.github.io/
+* Register for a free developer account and create your own OAuth app to get a `client_id`. See [Getting Started](https://circuit.github.io/) for details.
 
 ### API Reference
 https://circuitsandbox.net/sdk/ with most APIs described in the [Client](https://circuitsandbox.net/sdk/classes/Client.html) class.
