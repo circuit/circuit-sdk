@@ -210,8 +210,8 @@
         $enableRecording.disabled = !(!call.isRemote && call.isEstablished);
 
         // Set local video and desktop streams
-        $localVideo.srcObject = call.localVideoStream;
-        // or $localVideo.srcObject = call.localStreams.video;
+        // older versions: $localVideo.srcObject = call.localVideoStream;
+        $localVideo.srcObject = call.localStreams && call.localStreams.video;
         $localDesktop.srcObject = call.localStreams && call.localStreams.desktop;
 
         // Enable video checkbox
