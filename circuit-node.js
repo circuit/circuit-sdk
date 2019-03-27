@@ -1,5 +1,5 @@
 /**
- *  Copyright 2018 Unify Software and Solutions GmbH & Co.KG.
+ *  Copyright 2019 Unify Software and Solutions GmbH & Co.KG.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
