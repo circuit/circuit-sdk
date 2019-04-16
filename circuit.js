@@ -30,10 +30,10 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- *  @version: 1.2.5601
+ *  @version: 1.2.5603
  */
 
-var Circuit = {}; Object.defineProperty(Circuit, 'version', { value: '1.2.5601'});
+var Circuit = {}; Object.defineProperty(Circuit, 'version', { value: '1.2.5603'});
 
 // Define external globals for JSHint
 /*global Buffer, clearInterval, clearTimeout, process, require, setInterval, setTimeout*/
@@ -35025,6 +35025,9 @@ var Circuit = (function (circuit) {
             if ($rootScope.localUser && $rootScope.localUser.helpUrl && Utils.DEFAULT_HELP_URL !== $rootScope.localUser.helpUrl) {
                 return $rootScope.localUser.helpUrl;
             }
+            if (articleId === 'HELP') {
+                return Utils.DEFAULT_HELP_URL;
+            }
             return 'https://www.circuit.com/unifyportalfaqdetail' + (articleId ? '?articleId=' + articleId : '');
         };
 
@@ -35327,7 +35330,7 @@ var Circuit = (function (circuit) {
             case UNIVERGEBLUE_HOSTNAME:
             case BLUEBETA_HOSTNAME:
                 id = 'jhpcobccapenojpdohnfmhmdmppngdad';
-                LogSvc.info('[ExtensionSvc]: Set extension ID to Univerge Blue TC extension: ', id);
+                LogSvc.info('[ExtensionSvc]: Set extension ID to UNIVERGE BLUE TC extension: ', id);
                 break;
             default:
                 id = 'mhkbaognlahkdimlfcfhbeihldmjofgg';
