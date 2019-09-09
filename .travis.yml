@@ -6,3 +6,20 @@ node_js:
 script:
 - npm install
 - npm test
+
+notifications:
+  email:
+    recipients:
+      - roger.urscheler@atos.net
+      - richard.fazzio@atos.net
+    on_success: never # default: change
+    on_failure: always # default: always
+    
+webhooks:
+    urls:
+      - https://beta.circuit.com/rest/v2/webhooks/incoming/20930210-39be-4b89-a9d7-eb941b5b5e2f
+    on_success: always # default: always
+    on_failure: always # default: always
+    on_start:   never # default: never
+    on_cancel:  always # default: always
+    on_error:   always # default: always
