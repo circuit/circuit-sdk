@@ -2,9 +2,6 @@
 // XMLHttpRequest for Circuit Node.js
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
-/* eslint-env node, es6 */
-/*global navigator*/
-
 var https = require('https');
 var nodeUrl = require('url');
 var NodeSDK = require('./NodeSDK');
