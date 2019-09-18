@@ -17,8 +17,7 @@ notifications:
     
 webhooks:
     urls:
-      - https://beta.circuit.com/rest/v2/webhooks/incoming/20930210-39be-4b89-a9d7-eb941b5b5e2f
-      - https://beta.circuit.com/rest/v2/webhooks/incoming/127298e2-0569-46f7-9c20-7eea1e3adcd6
+      - https://beta.circuit.com/rest/v2/webhooks/incoming/742bde9c-6a73-42aa-9bda-28c3eb78981d
     on_success: always # default: always
     on_failure: always # default: always
     on_start:   never # default: never
