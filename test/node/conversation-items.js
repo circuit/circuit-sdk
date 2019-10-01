@@ -162,7 +162,7 @@ describe('Conversation Items', () => {
             }),
             helper.expectEvents(client2, [{
                 type: 'mention',
-                predicate: evt => evt.mention.userReference.userId === user2.userId && evt.mention.itemReference.convId === conversation.convId
+                predicate: evt => evt.mention.userReference.userId === user.userId && evt.mention.itemReference.convId === conversation.convId
             }]) 
         ]);
         await client2.updateUser({
@@ -172,6 +172,6 @@ describe('Conversation Items', () => {
         });
         const mentionedItem = res[0];
         const mention = res[1].mention;
-        assert(mentionedItem.convId === conversation.convId && mentionedItem.creatorId === user.userId && mentionedItem.itemId === mention.itemReference.itemId && mention.userReference.userId === user2.userId);
+        assert(mentionedItem.convId === conversation.convId && mentionedItem.creatorId === user.userId && mentionedItem.itemId === mention.itemReference.itemId && mention.userReference.userId === user.userId);
     });
 });
