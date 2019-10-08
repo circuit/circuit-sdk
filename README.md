@@ -1,13 +1,15 @@
 Circuit JavaScript and Node.js SDK
 ==================================
 
-[![GitHub release](https://img.shields.io/github/release/circuit/circuit-sdk.svg)](https://github.com/circuit/circuit-sdk)
-[![Build Status](https://travis-ci.org/circuit/circuit-sdk.svg?branch=master)](https://travis-ci.org/circuit/circuit-sdk)
+[![NPM release](https://img.shields.io/npm/v/circuit-sdk/beta.svg)](https://www.npmjs.com/package/circuit-sdk)
+[![Build Status](https://travis-ci.org/circuit/circuit-sdk.svg?branch=beta)](https://travis-ci.org/circuit/circuit-sdk)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 
 ### Prerequisites
-* Register for a free developer account and create your own OAuth app to get a `client_id`. See [Getting Started](https://circuit.github.io/) for details.
+* Developer account on circuitsandbox.net. Get it for free at [developer registration](https://www.circuit.com/web/developers/registration).
+* OAuth 2.0 `client_id` and optionally `client_secret`. Get if for free at [circuit.github.com/oauth](https://circuit.github.com/oauth).
+
 
 ### API Reference
 https://circuitsandbox.net/sdk/ with most APIs described in the [Client](https://circuitsandbox.net/sdk/classes/Client.html) class.
@@ -17,14 +19,14 @@ https://circuitsandbox.net/sdk/ with most APIs described in the [Client](https:/
 #### JavaScript
 Add the the line below to the HTML file of your app. This will include the latest version of Circuit SDK and make the `Circuit` object available.
 ```html
-<script type="text/javascript" src="https://unpkg.com/circuit-sdk"></script>
+<script type="text/javascript" src="https://unpkg.com/circuit-sdk@beta"></script>
 ```
 
-> The JS SDK can now also be imported as CommonJS or AMD module. See [umd](https://github.com/circuit/umd) or [circuit-ionic-starter](https://github.com/circuit/circuit-ionic-starter) repos for examples.
+JS SDK can also be imported via CommonJS or AMD. View the repo [UMD](https://github.com/circuit/umd) for the different types of usage, or [circuit-ionic-start](https://github.com/circuit/circuit-ionic-starter) for example how import the SDK via `require` using webpack.
 
 #### Node.js
 ```bash
-npm install --save circuit-sdk
+npm install --save circuit-sdk@beta
 ```
 
 ### Application Types
@@ -33,7 +35,7 @@ The majority of apps fall in one of the three types below. Each type uses a diff
 1. **Client-side web applications** use the JavaScript SDK with the [OAuth 2.0 Implicit Grant](https://circuit.github.io/oauth.html#implicit).
    ```javascript
    // No client_secret needed for Implicit Grant. SDK will obtain access token.
-   const client = new Circuit.Client({
+   let client = new Circuit.Client({
      client_id: '<your client_id>',
      domain: 'circuitsandbox.net'
    });
@@ -45,7 +47,7 @@ The majority of apps fall in one of the three types below. Each type uses a diff
 Example apps: [node-linkify](https://github.com/circuit/node-linkify) or [circuit-google-assistant](https://github.com/circuit/circuit-google-assistant)
    ```javascript
    // access token is obtained and managed by server-side app
-   const client = new Circuit.Client({
+   let client = new Circuit.Client({
      client_id: '<your client_id>',
      domain: 'circuitsandbox.net'
    });
@@ -58,23 +60,16 @@ Example bots: [xlator-bot](https://github.com/circuit/xlator-bot) or [node-sdk-e
 Example electron bots: [webrtc-bot-example](https://github.com/circuit/webrtc-bot-example) or [live-cam-bot](https://github.com/circuit/live-cam-bot)
    ```javascript
    const Circuit = require('circuit-sdk');
-   const client = new Circuit.Client({
+   let client = new Circuit.Client({
      client_id: '<client_id>',
      client_secret: '<client_secret>',
      domain: 'circuitsandbox.net'
    });
    client.logon()
      .then(user => console.log('Logged on as bot: ' + user.emailAddress))
-     .catch(console.error);
    ```
 
-### Beta channel
-The official SDK release is aligned with the official production cloud system (eu.yourcircuit.com & na.yourcircuit.com).
 
-The beta channel of the SDK is aligned with the circuitsandbox and available at:
-
-* JS SDK: https://unpkg.com/circuit-sdk@beta
-* Node.js SDK: `npm install circuit-sdk@beta`
 
 ### Examples
 

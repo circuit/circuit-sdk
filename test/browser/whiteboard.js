@@ -171,16 +171,6 @@ describe('Whiteboard tests', async function() {
         assert(!whiteboard.elements);
     });
 
-    it('function: undoWhiteboard, raises event: whiteboardSync', async () => {
-        await Promise.all([
-            client.undoWhiteboard(call.callId, 1),
-            expectEvents(client, [{
-                type: 'whiteboardSync',
-                predicate: evt => evt.whiteboard.elements.some(elm => elm.elementId.xmlId === elementId.xmlId)
-            }])
-        ]);
-    });
-
     it('function: disableWhiteboard, raises event: whiteboardEnabled', async () => {
         await Promise.all([
             client.disableWhiteboard(call.callId),
