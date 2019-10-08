@@ -9,6 +9,7 @@ Circuit JavaScript and Node.js SDK
 ### Prerequisites
 * Register for a free developer account and create your own OAuth app to get a `client_id`. See [Getting Started](https://circuit.github.io/) for details.
 
+
 ### API Reference
 https://circuitsandbox.net/sdk/ with most APIs described in the [Client](https://circuitsandbox.net/sdk/classes/Client.html) class.
 
@@ -20,7 +21,7 @@ Add the the line below to the HTML file of your app. This will include the lates
 <script type="text/javascript" src="https://unpkg.com/circuit-sdk"></script>
 ```
 
-> The JS SDK can now also be imported as CommonJS or AMD module. See [umd](https://github.com/circuit/umd) or [circuit-ionic-starter](https://github.com/circuit/circuit-ionic-starter) repos for examples.
+JS SDK can also be imported via CommonJS or AMD. View the repo [UMD](https://github.com/circuit/umd) for the different types of usage, or [circuit-ionic-start](https://github.com/circuit/circuit-ionic-starter) for example how import the SDK via `require` using webpack.
 
 #### Node.js
 ```bash
@@ -65,16 +66,9 @@ Example electron bots: [webrtc-bot-example](https://github.com/circuit/webrtc-bo
    });
    client.logon()
      .then(user => console.log('Logged on as bot: ' + user.emailAddress))
-     .catch(console.error);
    ```
 
-### Beta channel
-The official SDK release is aligned with the official production cloud system (eu.yourcircuit.com & na.yourcircuit.com).
 
-The beta channel of the SDK is aligned with the circuitsandbox and available at:
-
-* JS SDK: https://unpkg.com/circuit-sdk@beta
-* Node.js SDK: `npm install circuit-sdk@beta`
 
 ### Examples
 
