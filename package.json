@@ -1,6 +1,6 @@
 {
   "name": "circuit-sdk",
-  "version": "1.2.6900",
+  "version": "1.2.7100",
   "description": "Circuit SDK",
   "main": "circuit-node.js",
   "scripts": {
@@ -10,9 +10,9 @@
   },
   "author": "Unify Inc.",
   "contributors": [
-    "Roger Urscheler <roger.urscheler@unify.com>",
-    "Rodrigo Pastro <rodrigo.pastro@unify.com>",
-    "Johannes Ruetschi <johannes.ruetschi@unify.com>"
+    "Roger Urscheler <roger.urscheler@atos.net>",
+    "Rodrigo Pastro <rodrigo.pastro@atos.net>",
+    "Johannes Ruetschi <johannes.ruetschi@atos.net>"
   ],
   "license": "Apache-2.0",
   "homepage": "https://github.com/circuit/circuit-sdk",
@@ -40,15 +40,16 @@
   },
   "unpkg": "circuit.min.js",
   "dependencies": {
-    "ws": "~7.1.2"
+    "mime": "^2.4.4",
+    "ws": "~3.3.3"
   },
   "devDependencies": {
-    "chai": "^4.2.0",
-    "express": "^4.17.1",
-    "globby": "^10.0.1",
+    "chai": "^4.1.2",
+    "express": "^4.16.2",
+    "globby": "^8.0.1",
     "minimist": "^1.2.0",
-    "mocha": "^6.2.1",
-    "puppeteer": "^1.20.0",
-    "serve-static": "^1.14.1"
+    "mocha": "^5.0.1",
+    "puppeteer": "^1.1.1",
+    "serve-static": "^1.13.2"
   }
 }

@@ -41,6 +41,7 @@ global.WebSocket = origWebSocket;
 
 // Global settings
 Circuit.NodeSDK = NodeSDK;
+Circuit.File = require('./File');
 
 // JS SDK depends on FileUpload to be globally defined
 Circuit.FileUpload = require('./FileUpload');
