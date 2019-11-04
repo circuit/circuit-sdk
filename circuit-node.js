@@ -15,8 +15,7 @@
  *
  */
 
-/* eslint-env node */
-/*global Circuit, exports, global, module, navigator, process, Promise, require, WebSocket, XMLHttpRequest*/
+/*global Circuit*/
 
 ///////////////////////////////////////////////////////////////////////////////////////
 // Global objects exposed for Node.js (WebSocket and XMLHttpRequest)
@@ -42,6 +41,7 @@ global.WebSocket = origWebSocket;
 
 // Global settings
 Circuit.NodeSDK = NodeSDK;
+Circuit.File = require('./File');
 
 // JS SDK depends on FileUpload to be globally defined
 Circuit.FileUpload = require('./FileUpload');

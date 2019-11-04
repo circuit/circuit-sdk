@@ -2,9 +2,6 @@
 // WebSocket for Circuit Node.js
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
-/* eslint-env node, es6 */
-/*global */
-
 var NodeWebSocket = require('ws');
 var NodeSDK = require('./NodeSDK');
 

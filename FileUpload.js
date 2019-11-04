@@ -2,9 +2,6 @@
 // FileUpload for Circuit Node.js
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
-/* eslint-env node, es6 */
-/*global navigator*/
-
 var nodeUrl = require('url');
 var fs = require('fs');
 var https = require('https');
