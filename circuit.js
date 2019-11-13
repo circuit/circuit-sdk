@@ -30,10 +30,10 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- *  @version: 1.2.7201
+ *  @version: 1.2.7203
  */
 
-var Circuit = {}; Object.defineProperty(Circuit, 'version', { value: '1.2.7201'});
+var Circuit = {}; Object.defineProperty(Circuit, 'version', { value: '1.2.7203'});
 
 // Define external globals for JSHint
 /*global Buffer, process, require*/
@@ -34605,7 +34605,6 @@ var Circuit = (function (circuit) {
 
     var AtcInfoMessage = Object.freeze({
         GET_GTC_VERSION_REQUEST: 'GET_GTC_VERSION_REQUEST',
-        GET_GTC_VERSION_RESPONSE: 'GET_GTC_VERSION_RESPONSE',
         SET_ROUTE_TO_DESK: 'SET_ROUTE_TO_DESK',
         ENABLE_PBX_CALL_LOG: 'ENABLE_PBX_CALL_LOG'
     });
@@ -58944,7 +58943,7 @@ var Circuit = (function (circuit) {
                 // maximum of 2147483647 (24 days). Only for client credentials grant.
                 _oauthRenewTokenTimer && window.clearTimeout(_oauthRenewTokenTimer);
                 var duration = _expiresAt - Date.now() - (60 * 1000);
-                duration = Math.min(2147483648, duration);
+                duration = Math.min(2147483647, duration);
                 if (duration > 0) {
                     _oauthRenewTokenTimer = window.setTimeout(renewToken, duration);
                 }
