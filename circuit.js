@@ -58285,7 +58285,7 @@ var Circuit = (function (circuit) {
                 // maximum of 2147483647 (24 days). Only for client credentials grant.
                 _oauthRenewTokenTimer && window.clearTimeout(_oauthRenewTokenTimer);
                 var duration = _expiresAt - Date.now() - (60 * 1000);
-                duration = Math.min(2147483648, duration);
+                duration = Math.min(2147483647, duration);
                 if (duration > 0) {
                     _oauthRenewTokenTimer = window.setTimeout(renewToken, duration);
                 }
