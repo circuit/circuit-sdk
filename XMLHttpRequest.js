@@ -62,7 +62,7 @@ module.exports = function (config) {
         }
     };
 
-    this.send = function (data) {
+    this.send = function (sendData) {
         logger.debug('[XMLHttpRequest]: send');
         var xhr = this;
         logger.debug('[XMLHttpRequest]: ' + JSON.stringify(this.httpReqOptions, null, 2));
@@ -85,9 +85,9 @@ module.exports = function (config) {
 
             res.setEncoding('utf8');
 
-            res.on('data', function (data) {
-                logger.debug('[XMLHttpRequest]: ready to call onload with ' + JSON.stringify(data, null, 2));
-                xhr.responseText = data;
+            res.on('data', function (rcvData) {
+                logger.debug('[XMLHttpRequest]: ready to call onload with ' + JSON.stringify(rcvData, null, 2));
+                xhr.responseText = rcvData;
                 xhr.onload();
             });
 
@@ -98,9 +98,9 @@ module.exports = function (config) {
 
         });
 
-        if (data) {
+        if (sendData) {
             logger.debug('[XMLHttpRequest]: sending data');
-            req.write(data);
+            req.write(sendData);
         }
 
         req.on('error', function (e) {
