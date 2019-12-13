@@ -15,7 +15,7 @@
  *
  */
 
-/*global Circuit*/
+/* global Circuit */
 
 ///////////////////////////////////////////////////////////////////////////////////////
 // Global objects exposed for Node.js (WebSocket and XMLHttpRequest)

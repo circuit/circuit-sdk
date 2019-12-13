@@ -22,7 +22,7 @@
             self.size = self.stat.size;
         }
 
-        if ('string' === typeof input) {
+        if (typeof input === 'string') {
             self.path = input;
         } else {
             Object.keys(input).forEach(function (k) {
