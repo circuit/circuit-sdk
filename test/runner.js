@@ -97,7 +97,6 @@ function initMocha(reporter) {
     Object.defineProperty(window, 'mocha', {
         get: function() { return undefined },
         set: function(m) {
-            debugger;
             shimMochaInstance(m);
             delete window.mocha;
             window.mocha = m
@@ -108,7 +107,6 @@ function initMocha(reporter) {
     Object.defineProperty(window, 'Mocha', {
         get: function() { return undefined },
         set: function(m) {
-            debugger;
             shimMochaProcess(m);
             delete window.Mocha;
             window.Mocha = m;

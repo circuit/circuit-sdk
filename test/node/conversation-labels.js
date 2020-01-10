@@ -23,7 +23,6 @@ describe('Conversation Labels', () => {
     });
 
     it('functions: [addLabels, getAllLabels], with event: labelsAdded', async () => {
-        debugger;
         if (!LABEL_SUPPORTED) {
             console.log('API not yet supported');
             assert(true);
@@ -35,10 +34,7 @@ describe('Conversation Labels', () => {
             client.addLabels([labelValue1, labelValue2]), 
             helper.expectEvents(client, [{
                 type: 'labelsAdded',
-                predicate: evt => {
-                    debugger;
-                    return evt.labels.every(label => label.value === labelValue1 || label.value === labelValue2)
-                }
+                predicate: evt => evt.labels.every(label => label.value === labelValue1 || label.value === labelValue2)
             }])
         ]);
         const addedLabels = res[0];
