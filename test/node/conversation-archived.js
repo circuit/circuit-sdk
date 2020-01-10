@@ -15,7 +15,7 @@ describe('Conversation Archived', () => {
         client = prep.client;
     });
 
-    it('functions: [archiveConversation, getArchivedConversations], with event: conversationArchived', async () => {
+    it('function: archiveConversation, with event: conversationArchived', async () => {
         await Promise.all([
             client.archiveConversation(conversation.convId),
             helper.expectEvents(client, [{
@@ -23,12 +23,15 @@ describe('Conversation Archived', () => {
                 predicate: evt => evt.convId === conversation.convId
             }]) 
         ]);
+    });
+
+    it('function: getArchivedConversations', async () => {
         await helper.sleep(3000);
         const res = await client.getArchivedConversations();
         assert(res && res.some(conv => conv.convId === conversation.convId));
-    });
+    }).timeout(7000);    
 
-    it('functions: [unarchiveConversation, getArchivedConversations], with event: conversationUnarchived', async () => {
+    it('function: unarchiveConversation, with event: conversationUnarchived', async () => {
         await Promise.all([
             client.unarchiveConversation(conversation.convId),
             helper.expectEvents(client, [{
@@ -36,8 +39,11 @@ describe('Conversation Archived', () => {
                 predicate: evt => evt.convId === conversation.convId
             }]) 
         ]);
+    });
+
+    it('function: getArchivedConversations', async () => {
         await helper.sleep(3000);
         const res = await client.getArchivedConversations();
         assert(res && !res.some(conv => conv.convId === conversation.convId));
-    });
+    }).timeout(7000);
 });
