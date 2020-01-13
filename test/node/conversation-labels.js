@@ -126,8 +126,7 @@ describe('Conversation Labels', () => {
             retrieveAction: Circuit.Enums.RetrieveAction.CONVERSATIONS
         });
         assert(res.find(conv => conv.convId === conversation.convId));
-
-    });
+    }).timeout(7000);
 
     it('function: getConversationsByLabel', async () => {
         if (!LABEL_SUPPORTED) {
