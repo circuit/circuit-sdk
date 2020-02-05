@@ -46,7 +46,7 @@ module.exports = function (config) {
 
         this.httpReqOptions = {
             host: parts.hostname,
-            port: (parts.port) ? parts.port : '443',
+            port: parts.port ? parts.port : '443',
             path: parts.path,
             method: method,
             headers: {
