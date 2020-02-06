@@ -30,10 +30,10 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- *  @version: 1.2.7900
+ *  @version: 1.2.7901
  */
 
-var Circuit = {}; Object.defineProperty(Circuit, 'version', { value: '1.2.7900'});
+var Circuit = {}; Object.defineProperty(Circuit, 'version', { value: '1.2.7901'});
 
 // Define external globals for JSHint
 /*global Buffer, process, require*/
@@ -40284,7 +40284,10 @@ var Circuit = (function (circuit) {
                 user.canUseHDVideo = user.hasPermission(Circuit.Enums.SystemPermission.HD_VIDEO);
                 user.canUseHDScreenShare = user.hasPermission(Circuit.Enums.SystemPermission.HD_SCREENSHARE);
 
+                $rootScope.localUser = user;
+
                 // Initialize call forwarding data on local user object
+                $rootScope.localUser.cfData = {};
                 Object.keys(CallForwardingTypes).forEach(function (key) {
                     $rootScope.localUser.cfData[key] = {
                         cfwType: key,
@@ -40292,7 +40295,6 @@ var Circuit = (function (circuit) {
                     };
                 });
 
-                $rootScope.localUser = user;
                 UserProfile.syncTelephonyConfig(user);
                 updateTelephonyNumbers();
             }
