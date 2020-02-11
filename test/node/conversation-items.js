@@ -174,4 +174,19 @@ describe('Conversation Items', () => {
         const mention = res[1].mention;
         assert(mentionedItem.convId === conversation.convId && mentionedItem.creatorId === user.userId && mentionedItem.itemId === mention.itemReference.itemId && mention.userReference.userId === user.userId);
     });
+
+    it('function: deleteTextItem, with event: itemUpdated', async () => {
+        if (!client.deleteTextItem) {
+            console.log('API not yet supported');
+            assert(true);
+            return;
+        }
+        await Promise.all([
+            client.deleteTextItem(item.itemId),
+            helper.expectEvents(client, [{
+                type: 'itemUpdated',
+                predicate: evt => evt.item.itemId === item.itemId && evt.item.text.state === Circuit.Constants.TextItemState.DELETED
+            }]) 
+        ]);
+    });
 });
