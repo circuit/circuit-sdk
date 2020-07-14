@@ -51,7 +51,7 @@ module.exports = function FileUpload(config) {
             rejectUnauthorized: NodeSDK.rejectUnauthorized,
             agent: NodeSDK.proxyAgent,
             host: parts.hostname,
-            port: (parts.port) ? parts.port : '443',
+            port: parts.port ? parts.port : '443',
             path: parts.path,
             method: 'POST',
             headers: {
