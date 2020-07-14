@@ -67,16 +67,24 @@ Circuit.setLogger = function setLogger(appLogger) {
     var logError = appLogger.error || logWarning;
 
     Circuit.logger.debug = function () {
-        logDebug.apply(appLogger, Array.prototype.slice.apply(arguments));
+        if (this.getLevel() <= Circuit.Enums.LogLevel.Debug) {
+            logDebug.apply(appLogger, Array.prototype.slice.apply(arguments));
+        }
     };
     Circuit.logger.info = function () {
-        logInfo.apply(appLogger, Array.prototype.slice.apply(arguments));
+        if (this.getLevel() <= Circuit.Enums.LogLevel.Info) {
+            logInfo.apply(appLogger, Array.prototype.slice.apply(arguments));
+        }
     };
     Circuit.logger.warning = function () {
-        logWarning.apply(appLogger, Array.prototype.slice.apply(arguments));
+        if (this.getLevel() <= Circuit.Enums.LogLevel.Warning) {
+            logWarning.apply(appLogger, Array.prototype.slice.apply(arguments));
+        }
     };
     Circuit.logger.warn = function () {
-        logWarning.apply(appLogger, Array.prototype.slice.apply(arguments));
+        if (this.getLevel() <= Circuit.Enums.LogLevel.Warning) {
+            logWarning.apply(appLogger, Array.prototype.slice.apply(arguments));
+        }
     };
     Circuit.logger.error = function (error, obj) {
         var args = [(error && error.stack) || error];
@@ -87,10 +95,14 @@ Circuit.setLogger = function setLogger(appLogger) {
         logError.apply(appLogger, args);
     };
     Circuit.logger.msgSend = function () {
-        logInfo.apply(appLogger, Array.prototype.slice.apply(arguments));
+        if (this.getLevel() <= Circuit.Enums.LogLevel.Debug) {
+            logInfo.apply(appLogger, Array.prototype.slice.apply(arguments));
+        }
     };
     Circuit.logger.msgRcvd = function () {
-        logInfo.apply(appLogger, Array.prototype.slice.apply(arguments));
+        if (this.getLevel() <= Circuit.Enums.LogLevel.Debug) {
+            logInfo.apply(appLogger, Array.prototype.slice.apply(arguments));
+        }
     };
 
     // Set logger for use by XMLHttpRequest, WebSocket and FileUpload
