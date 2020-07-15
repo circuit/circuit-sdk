@@ -1,7 +1,7 @@
 language: node_js
 
 node_js:
-- "8"
+- "10"
 
 script:
 - npm install
@@ -11,7 +11,6 @@ notifications:
   email:
     recipients:
       - roger.urscheler@atos.net
-      - richard.fazzio@atos.net
     on_success: never # default: change
     on_failure: always # default: always
     
