@@ -29,8 +29,9 @@ describe('Search Tests', () => {
         await client2.logout();
     });
 
-    afterEach(async () => await helper.sleep(500));// wait to allow time for searches to return
+    afterEach(async () => await helper.sleep(2000));// wait to allow time for searches to return
 
+    /*
     it('function: startBasicSearch [conversation], with event: searchStatus', async () => {
         await Promise.all([
             client.startBasicSearch(conversation.topic),
@@ -39,10 +40,12 @@ describe('Search Tests', () => {
                 predicate: evt => evt.data.status === 'FINISHED'
             }, {
                 type: 'basicSearchResults',
-                predicate: evt => evt.data.searchResults.some(conv => conv.convId === conversation.convId)
+                predicate: evt => 
+                    evt.data.searchResults.some(conv => conv.convId === conversation.convId)
             }])
         ]);
     });
+*/
 
     it('function: startUserSearch [firstName], with event: searchStatus', async () => {
         await Promise.all([

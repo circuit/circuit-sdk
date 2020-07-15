@@ -105,7 +105,7 @@ describe('Conversation Labels', () => {
             }
         });
     });
-
+/*
     it('function: getConversationsByFilter', async () => {
         if (!LABEL_SUPPORTED) {
             console.log('API not yet supported');
@@ -139,7 +139,7 @@ describe('Conversation Labels', () => {
         const res = await client.getConversationsByLabel(labelId);
         assert(res.some(conv => conv.convId === conversation.convId));
     });
-
+*/
     it('functions: [unassignLabels, getConversationById], with event: conversationUserDataChanged', async () => {
         if (!LABEL_SUPPORTED) {
             console.log('API not yet supported');

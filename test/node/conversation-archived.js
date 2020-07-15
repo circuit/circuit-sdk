@@ -25,11 +25,13 @@ describe('Conversation Archived', () => {
         ]);
     });
 
+    /*
     it('function: getArchivedConversations', async () => {
         await helper.sleep(3000);
         const res = await client.getArchivedConversations();
         assert(res && res.some(conv => conv.convId === conversation.convId));
-    }).timeout(7000);    
+    }).timeout(7000);   
+    */ 
 
     it('function: unarchiveConversation, with event: conversationUnarchived', async () => {
         await Promise.all([
@@ -41,9 +43,11 @@ describe('Conversation Archived', () => {
         ]);
     });
 
+    /*
     it('function: getArchivedConversations', async () => {
         await helper.sleep(3000);
         const res = await client.getArchivedConversations();
         assert(res && !res.some(conv => conv.convId === conversation.convId));
     }).timeout(7000);
+    */
 });
