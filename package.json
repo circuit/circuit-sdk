@@ -1,6 +1,6 @@
 {
   "name": "circuit-sdk",
-  "version": "1.2.8401",
+  "version": "1.2.8409",
   "description": "Circuit SDK",
   "main": "circuit-node.js",
   "scripts": {
@@ -48,7 +48,7 @@
     "express": "^4.16.2",
     "globby": "^8.0.1",
     "minimist": "^1.2.0",
-    "mocha": "^8.0.1",
+    "mocha": "^8.1.3",
     "puppeteer": "^1.1.1",
     "serve-static": "^1.13.2"
   }
