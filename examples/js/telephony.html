@@ -176,7 +176,8 @@
         _client = new Circuit.Client({
           domain: $domain.value,
           client_id: '78cafde2f6854ad5ad80a67c532687bc',
-          scope: 'ALL' // Asking for ALL permissions because all these examples use the same domain
+          scope: 'ALL', // Asking for ALL permissions because all these examples use the same domain
+         enableTelephony: true
         });
         addClientEventListeners();
 
